@@ -82,3 +82,12 @@ def get_root_objs(file: SerializedFile) -> Iterator[GameObject]:
             parent = transform.m_Father.get_obj()
             if parent is None:
                 yield transform.m_GameObject.read()
+
+
+def get_root_objs2(objects: dict) -> Iterator[GameObject]:
+    for obj in objects.values():
+        if obj.class_id == 4:
+            transform: Transform = obj.read()
+            parent = transform.m_Father.get_obj()
+            if parent is None:
+                yield transform.m_GameObject.read()
