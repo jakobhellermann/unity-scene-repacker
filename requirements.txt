@@ -1,0 +1,2 @@
+UnityPy==1.10
+unityparser==4.0.0
