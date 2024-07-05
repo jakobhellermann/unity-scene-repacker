@@ -14,11 +14,8 @@ def prune(scene: SerializedFile, keep_paths: list[str]):
 
     while queue:
         node = queue.popleft()
-
         include.add(node.path_id)
 
-        # if isinstance(node, GameObject):
-        # print(node.m_Components)
         for reachable in iterate_visible(node):
             if reachable.path_id not in include:
                 queue.append(reachable)
@@ -29,7 +26,8 @@ def prune(scene: SerializedFile, keep_paths: list[str]):
     for id, obj in old_objects.items():
         if id not in new_objects:
             if obj.type in [ClassIDType.Material]:
-                new_objects[id] = obj
+                pass
+                # new_objects[id] = obj
 
     scene.objects = dict(sorted(new_objects.items()))
 
@@ -38,6 +36,18 @@ def prune(scene: SerializedFile, keep_paths: list[str]):
     #     tt = invalid_parent.read_typetree()
     #     tt["m_Father"] = {"m_FileID": 0, "m_PathID": 0}
     #     invalid_parent.save_typetree(tt)
+
+    # remove unused types
+    type_index = 0
+    type_mapping = {}
+    new_types = []
+    for used_type in set(obj.type_id for obj in scene.objects.values()):
+        type_mapping[used_type] = type_index
+        new_types.append(scene.types[used_type])
+        type_index += 1
+    for obj in scene.objects.values():
+        obj.type_id = type_mapping[obj.type_id]
+    scene.types = new_types
 
 
 def iterate_visible(obj: ObjectReader):
@@ -102,31 +112,6 @@ def lookup_path_in(orig: str, path: list[str], current: Transform, report_errors
         return lookup_path_in(orig, rest, candidate, report_errors)
 
 
-# def lookup_path_in(orig, path: list[str], go: GameObject):
-#     current: Transform = go.m_Transform.read()
-#
-#     while path:
-#         segment = path.pop(0)
-#         print(segment)
-#
-#         found = None
-#         for child in current.m_Children:
-#             child: Transform = child.read()
-#             if child.m_GameObject.read().name == segment:
-#                 if found is not None:
-#                     raise Exception(f"Ambiguous child '{segment}' in '{orig}'")
-#
-#                 found = child
-#                 current = child
-#
-#         if found is None:
-#             raise Exception(f"path '{orig}' not found at {segment}")
-#         else:
-#             current = found
-#
-#     return current.m_GameObject.read()
-
-
 def lookup_path(path: str, root_objs: list[GameObject]):
     root, *rest = path.split("/")
 
@@ -141,15 +126,6 @@ def lookup_path(path: str, root_objs: list[GameObject]):
 
 def get_root_objs(file: SerializedFile) -> Iterator[GameObject]:
     for obj in file.objects.values():
-        if obj.class_id == 4:
-            transform: Transform = obj.read()
-            parent = transform.m_Father.get_obj()
-            if parent is None:
-                yield transform.m_GameObject.read()
-
-
-def get_root_objs2(objects: dict) -> Iterator[GameObject]:
-    for obj in objects.values():
         if obj.class_id == 4:
             transform: Transform = obj.read()
             parent = transform.m_Father.get_obj()

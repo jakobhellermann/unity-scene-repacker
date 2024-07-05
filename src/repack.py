@@ -3,13 +3,8 @@ from UnityPy.environment import SerializedFile
 from UnityPy.files import BundleFile
 from UnityPy.enums import ArchiveFlags
 from UnityPy.classes import AssetBundle
-import copy
 
-
-class Fake(object):
-    def __init__(self, _class, **kwargs):
-        self.__class__ = _class
-        self.__dict__.update(kwargs)
+from utils import Fake
 
 
 def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
