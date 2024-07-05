@@ -10,7 +10,6 @@ monster_preloads = json.load(open("in/monsters.json", "r"))
 # keys = ["A9_S1_Remake_4wei", "A0_S4_tutorial"]
 # monster_preloads = { key: monster_preloads[key] for key in monster_preloads if key in keys }
 
-
 out_path = Path("out/outbundle_filtered")
 project = Path("/home/jakob/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data")
 
@@ -19,19 +18,19 @@ levels = [f"level{scene_map[name]}" for name in level_names]
 paths = [str(project.joinpath(level)) for level in levels]
 
 env = Environment()
-for i, path in enumerate(paths):
-    print(f"{i+1}/{len(paths)}")
+for i, (path, name) in enumerate(zip(paths, level_names)):
+    print(f"Loading {i+1}/{len(paths)} [{name}]                     ", end="\r")
     env.load_file(path)
+print()
 
 serialized_files = [env.files[path] for path in paths]
-
 for level_name, file in zip(level_names, serialized_files):
+    print(f"Pruning {i+1}/{len(paths)} [{name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
-
     prune(file, level_monsters)
+print()
 
 new_bundle = repack_scene_bundle(dict(zip(level_names, serialized_files)))
-
 
 if __name__ == "__main__":
     out_path.parent.mkdir(parents=True, exist_ok=True)
