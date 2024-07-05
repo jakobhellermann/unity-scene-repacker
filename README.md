@@ -39,7 +39,7 @@ monsters.json
 ```
 
 ```sh
-python src/cli_filterdown.py \
+python src/cli.py \
     --scene-defs ninesols/scenes.json \
     --preloads ninesols/monsters.json \
     --output out/preloads.bundle \
