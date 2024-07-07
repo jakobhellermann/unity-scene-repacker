@@ -5,8 +5,15 @@ from UnityPy.enums import ClassIDType
 from collections import deque
 
 
-def prune(scene: SerializedFile, keep_paths: list[str]):
-    root_objs = list(get_root_objs(scene))
+def disable_objects(scene: SerializedFile, new_roots: list[GameObject]):
+    for obj in get_root_object_readers(scene):
+        tt = obj.read_typetree()
+        tt["m_IsActive"] = False
+        obj.save_typetree(tt)
+
+
+def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
+    root_objs = list(get_root_objects(scene))
     keep_new_root = [lookup_path(keep, root_objs) for keep in keep_paths]
 
     include: set[int] = set()
@@ -31,11 +38,11 @@ def prune(scene: SerializedFile, keep_paths: list[str]):
 
     scene.objects = dict(sorted(new_objects.items()))
 
-    # for keep in keep_new_root:
-    #     invalid_parent = keep.m_Transform.get_obj()
-    #     tt = invalid_parent.read_typetree()
-    #     tt["m_Father"] = {"m_FileID": 0, "m_PathID": 0}
-    #     invalid_parent.save_typetree(tt)
+    for keep in keep_new_root:
+        keep = keep.reader
+        tt = keep.read_typetree()
+        tt["m_Father"] = {"m_FileID": 0, "m_PathID": 0}
+        keep.save_typetree(tt)
 
     # remove unused types
     type_index = 0
@@ -48,6 +55,8 @@ def prune(scene: SerializedFile, keep_paths: list[str]):
     for obj in scene.objects.values():
         obj.type_id = type_mapping[obj.type_id]
     scene.types = new_types
+
+    return keep_new_root
 
 
 def iterate_visible(obj: ObjectReader):
@@ -124,10 +133,15 @@ def lookup_path(path: str, root_objs: list[GameObject]):
     return lookup_path_in(path, rest, root_obj.m_Transform.read())
 
 
-def get_root_objs(file: SerializedFile) -> Iterator[GameObject]:
+def get_root_objects(file: SerializedFile) -> Iterator[GameObject]:
+    for reader in get_root_object_readers(file):
+        yield reader.read()
+
+
+def get_root_object_readers(file: SerializedFile) -> Iterator[ObjectReader]:
     for obj in file.objects.values():
         if obj.class_id == 4:
             transform: Transform = obj.read()
             parent = transform.m_Father.get_obj()
             if parent is None:
-                yield transform.m_GameObject.read()
+                yield transform.m_GameObject.get_obj()

@@ -5,7 +5,7 @@ import json
 import argparse
 
 from repack import repack_scene_bundle
-from prune import prune
+from prune import prune, disable_objects
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--game-dir", help="game directory where the levels are, i.e. Game/Game_Data", required=True)
@@ -23,13 +23,16 @@ parser.add_argument(
     help="path to json file, containg map from scene name to list of gameobject paths to include in the assetbundle",
     default="preloads.bundle",
 )
-
+parser.add_argument(
+    "--disable",
+    action=argparse.BooleanOptionalAction,
+)
 args = parser.parse_args()
 
 scene_map = json.load(open(args.scene_defs, "r"))
 monster_preloads = json.load(open(args.preloads, "r"))
 # keys = ["A9_S1_Remake_4wei", "A0_S4_tutorial"]
-# monster_preloads = { key: monster_preloads[key] for key in monster_preloads if key in keys }
+# monster_preloads = {key: monster_preloads[key] for key in monster_preloads if key in keys}
 
 out_path = Path(args.output)
 project = Path(args.game_dir)
@@ -47,8 +50,12 @@ serialized_files = [env.files[path] for path in paths]
 for level_name, file in zip(level_names, serialized_files):
     print(f"Pruning {i+1}/{len(paths)} [{name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
-    prune(file, level_monsters)
+    new_roots = prune(file, level_monsters)
+
+    if args.disable:
+        disable_objects(file, new_roots)
 print()
+
 
 new_bundle = repack_scene_bundle(dict(zip(level_names, serialized_files)))
 
