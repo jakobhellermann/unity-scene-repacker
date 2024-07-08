@@ -5,13 +5,6 @@ from UnityPy.enums import ClassIDType
 from collections import deque
 
 
-def disable_objects(scene: SerializedFile, new_roots: list[GameObject]):
-    for obj in get_root_object_readers(scene):
-        tt = obj.read_typetree()
-        tt["m_IsActive"] = False
-        obj.save_typetree(tt)
-
-
 def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
     root_objs = list(get_root_objects(scene))
     keep_new_root = [lookup_path(keep, root_objs) for keep in keep_paths]

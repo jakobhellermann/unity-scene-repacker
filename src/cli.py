@@ -5,7 +5,7 @@ import json
 import argparse
 
 from repack import repack_scene_bundle
-from prune import prune, disable_objects
+from prune import prune, get_root_objects, get_root_object_readers
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--game-dir", help="game directory where the levels are, i.e. Game/Game_Data", required=True)
@@ -47,14 +47,24 @@ for i, (path, name) in enumerate(zip(paths, level_names)):
 print()
 serialized_files = [env.files[path] for path in paths]
 
+
+def rename(name: str) -> str:
+    name, *rest = name.split(" (")
+    print(name, rest)
+    return name
+
+
 for level_name, file in zip(level_names, serialized_files):
     print(f"Pruning {i+1}/{len(paths)} [{name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
     new_roots = prune(file, level_monsters)
 
-    if args.disable:
-        disable_objects(file, new_roots)
-print()
+    for obj in get_root_object_readers(file):
+        tt = obj.read_typetree()
+        tt["m_Name"] = rename(tt["m_Name"])
+        if args.disable:
+            tt["m_IsActive"] = False
+        obj.save_typetree(tt)
 
 
 new_bundle = repack_scene_bundle(dict(zip(level_names, serialized_files)))
@@ -62,3 +72,10 @@ new_bundle = repack_scene_bundle(dict(zip(level_names, serialized_files)))
 out_path.parent.mkdir(parents=True, exist_ok=True)
 with open(out_path, "wb") as f:
     f.write(new_bundle.save())
+
+    for name, file in Environment(str(out_path)).file.files.items():
+        if name.endswith("sharedAssets"):
+            continue
+
+        for root in get_root_objects(file):
+            print(root.name)
