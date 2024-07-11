@@ -1,6 +1,6 @@
 from pathlib import Path
 from UnityPy.environment import Environment
-from UnityPy.files import SerializedFile, ObjectReader
+from UnityPy.files import File, SerializedFile, ObjectReader
 from UnityPy.classes import GameObject, Transform, Object
 from UnityPy.enums import ClassIDType
 from collections.abc import Iterator

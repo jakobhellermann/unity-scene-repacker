@@ -32,8 +32,8 @@ args = parser.parse_args()
 
 scene_map = json.load(open(args.scene_defs, "r"))
 monster_preloads = json.load(open(args.preloads, "r"))
-# keys = ["A9_S1_Remake_4wei", "A0_S4_tutorial"]
-# monster_preloads = {key: monster_preloads[key] for key in monster_preloads if key in keys}
+keys = ["A9_S1_Remake_4wei", "A0_S4_tutorial"]
+monster_preloads = {key: monster_preloads[key] for key in monster_preloads if key in keys}
 
 out_path = Path(args.output)
 project = Path(args.game_dir)
