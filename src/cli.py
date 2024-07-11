@@ -1,3 +1,4 @@
+import UnityPy
 from UnityPy.environment import Environment
 from pathlib import Path
 import json
