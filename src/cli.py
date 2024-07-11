@@ -5,7 +5,8 @@ import json
 import argparse
 
 from repack import repack_scene_bundle
-from prune import prune, get_root_objects, get_root_object_readers
+from prune import prune
+from utils import get_root_objects, get_root_object_readers
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--game-dir", help="game directory where the levels are, i.e. Game/Game_Data", required=True)

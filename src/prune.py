@@ -1,8 +1,8 @@
-from collections.abc import Iterator
 from UnityPy.files import SerializedFile, ObjectReader
 from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr
 from UnityPy.enums import ClassIDType
 from collections import deque
+from utils import lookup_path, get_root_objects
 
 
 def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
@@ -69,72 +69,3 @@ def iterate_visible(obj: ObjectReader):
         obj: RectTransform = obj.read()
         yield obj.m_GameObject
         yield from obj.m_Children
-
-
-def flatten(nested):
-    for item in nested:
-        if item is None:
-            pass
-        elif isinstance(item, list):
-            yield from nested
-        else:
-            yield item
-
-
-def lookup_path_in(orig: str, path: list[str], current: Transform, report_errors=True):
-    segment, *rest = path
-
-    candidates = []
-    for child in current.m_Children:
-        child: Transform = child.read()
-
-        if child.m_GameObject.read().name == segment:
-            candidates.append(child)
-
-    if len(candidates) == 0:
-        if not report_errors:
-            return None
-        raise Exception("todo")
-    elif len(candidates) > 1:
-        if rest:
-            candidates = list(flatten([lookup_path_in(orig, rest, candidate, False) for candidate in candidates]))
-
-        if len(candidates) == 1:
-            return candidates[0]
-        if report_errors:
-            print(f"found {len(candidates)} candidates for '{orig}', choosing first")
-            return candidates[0]
-        else:
-            return candidates
-    else:
-        candidate = candidates[0]
-
-        if not rest:
-            return candidate
-        return lookup_path_in(orig, rest, candidate, report_errors)
-
-
-def lookup_path(path: str, root_objs: list[GameObject]):
-    root, *rest = path.split("/")
-
-    root_obj = next(filter(lambda obj: obj.name == root, root_objs), None)
-    assert root_obj is not None
-
-    if not rest:
-        return root_obj.m_Transform.read()
-
-    return lookup_path_in(path, rest, root_obj.m_Transform.read())
-
-
-def get_root_objects(file: SerializedFile) -> Iterator[GameObject]:
-    for reader in get_root_object_readers(file):
-        yield reader.read()
-
-
-def get_root_object_readers(file: SerializedFile) -> Iterator[ObjectReader]:
-    for obj in file.objects.values():
-        if obj.class_id == 4:
-            transform: Transform = obj.read()
-            parent = transform.m_Father.get_obj()
-            if parent is None:
-                yield transform.m_GameObject.get_obj()
