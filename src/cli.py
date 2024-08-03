@@ -58,7 +58,7 @@ def rename(name: str) -> str:
 for level_name, file in zip(level_names, serialized_files):
     print(f"Pruning {i+1}/{len(paths)} [{name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
-    new_roots = prune(file, level_monsters)
+    prune(file, level_monsters)
 
     for obj in get_root_object_readers(file):
         tt = obj.read_typetree()
