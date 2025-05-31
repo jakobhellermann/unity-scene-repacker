@@ -1,10 +1,11 @@
 import UnityPy
 from UnityPy.environment import SerializedFile
-from UnityPy.files import BundleFile
+from UnityPy.files import BundleFile, ObjectReader
 from UnityPy.enums import ArchiveFlags
 from UnityPy.classes import AssetBundle
 
-from utils import Fake
+from unity_scene_repacker.utils import Fake
+from typing import cast
 
 
 def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
@@ -13,7 +14,7 @@ def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
     emptybundle: BundleFile = UnityPy.load(emptybundle_path).file
     shared_assets: SerializedFile = emptybundle.files["BuildPlayer-EmptyScene.sharedAssets"]
 
-    assetbundle_meta: AssetBundle = shared_assets.objects[2]
+    assetbundle_meta: ObjectReader[AssetBundle] = shared_assets.objects[2]
     assetbundle_meta.save_typetree(
         {
             "m_Name": "scenebundle",
@@ -58,14 +59,17 @@ def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
         files[f"BuildPlayer-{name}.sharedAssets"] = scene_shared_assets
         files[f"BuildPlayer-{name}"] = scene
 
-    return Fake(
+    return cast(
         BundleFile,
-        signature="UnityFS",
-        version=8,
-        version_player="5.x.x",
-        version_engine="2022.3.18f1",
-        dataflags=ArchiveFlags.BlocksAndDirectoryInfoCombined | ArchiveFlags.BlockInfoNeedPaddingAtStart | 3,
-        _block_info_flags=64,
-        _uses_block_alignment=True,
-        files=files,
+        Fake(
+            BundleFile,
+            signature="UnityFS",
+            version=8,
+            version_player="5.x.x",
+            version_engine="2022.3.18f1",
+            dataflags=ArchiveFlags.BlocksAndDirectoryInfoCombined | ArchiveFlags.BlockInfoNeedPaddingAtStart | 3,
+            _block_info_flags=64,
+            _uses_block_alignment=True,
+            files=files,
+        ),
     )

@@ -23,10 +23,7 @@ parser.add_argument(
     help="path to json file, containg map from scene name to list of gameobject paths to include in the assetbundle",
     default="preloads.bundle",
 )
-parser.add_argument(
-    "--disable",
-    action=argparse.BooleanOptionalAction,
-)
+parser.add_argument("--disable", action=argparse.BooleanOptionalAction, default=True)
 args = parser.parse_args()
 
 scene_map = json.load(open(args.scene_defs, "r"))
@@ -50,14 +47,16 @@ serialized_files = [env.files[path] for path in paths]
 
 def rename(name: str) -> str:
     name, *rest = name.split(" (")
-    print(name, rest)
     return name
 
 
-for level_name, file in zip(level_names, serialized_files):
-    print(f"Pruning {i + 1}/{len(paths)} [{name}]                     ", end="\r")
+objectCountBefore = sum(len(x.objects.values()) for x in serialized_files)
+
+for i, (file, level_name) in enumerate(zip(serialized_files, level_names)):
+    print(f"Pruning {i + 1}/{len(paths)} [{level_name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
-    prune(file, level_monsters)
+
+    pruned = prune(file, level_monsters)
 
     for obj in get_root_object_readers(file):
         tt = obj.read_typetree()
@@ -65,17 +64,22 @@ for level_name, file in zip(level_names, serialized_files):
         if args.disable:
             tt["m_IsActive"] = False
         obj.save_typetree(tt)
+print()
 
+objectCountAfter = sum(len(x.objects.values()) for x in serialized_files)
+print(f"Pruned {objectCountBefore} -> {objectCountAfter} objects")
 
-new_bundle = repack_scene_bundle(dict(zip(level_names, serialized_files)))
+prefix = "bundle"
+new_bundle = repack_scene_bundle(dict(zip([f"{prefix}_{name}" for name in level_names], serialized_files)))
 
 out_path.parent.mkdir(parents=True, exist_ok=True)
 with open(out_path, "wb") as f:
     f.write(new_bundle.save())
 
+    print("All included objects:")
     for name, file in Environment(str(out_path)).file.files.items():
         if name.endswith("sharedAssets"):
             continue
 
         for root in get_root_objects(file):
-            print(root.m_Name)
+            print(f"- '{root.m_Name}'")

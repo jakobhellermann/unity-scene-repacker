@@ -12,7 +12,7 @@ class Fake(object):
         self.__dict__.update(kwargs)
 
 
-def load_bundle(path):
+def load_bundle(path: Path | str):
     if isinstance(path, Path):
         path = str(path)
     return Environment(path).file
@@ -59,26 +59,27 @@ def get_root_object_readers(file: SerializedFile) -> Iterator[ObjectReader]:
         if obj.class_id == ClassIDType.Transform:
             transform: Transform = obj.read()
             if transform.m_Father.m_PathID != 0 and transform.m_Father.m_PathID not in transform.assets_file.objects:
-                # print(f"Error: {transform.m_GameObject.read().m_Name}'s parent not in same asset file?")
-                continue
-            if transform.m_Father.m_PathID == 0 or transform.m_Father.read() is None:
+                # save_typetree only changes the underlying file, no what is accessible through python apparently
+                # so these are the newly unparented filtered objects
+                yield transform.m_GameObject.deref()
+            elif transform.m_Father.m_PathID == 0 or transform.m_Father.read() is None:
                 yield transform.m_GameObject.deref()
 
 
-def components_in_children(object: GameObject, *, type: ClassIDType = None) -> Iterator[Object]:
-    for c in object.m_Components:
+def components_in_children(obj: GameObject, *, ty: ClassIDType | None = None) -> Iterator[Object]:
+    for c in obj.m_Components:
         c: ObjectReader = c.deref()
-        if type is None or c.type == type:
-            yield c
+        if ty is None or c.type == ty:
+            yield c.read()
 
-    for child in object.m_Transform.read().m_Children:
-        yield from components_in_children(child.read().m_GameObject.read(), type=type)
+    for child in obj.m_Transform.read().m_Children:
+        yield from components_in_children(child.read().m_GameObject.read(), ty=ty)
 
 
-def path(object: GameObject) -> str:
+def get_path(obj: GameObject) -> str:
     path = []
 
-    current = object
+    current = obj
 
     while True:
         path.append(current.m_Name)
@@ -109,8 +110,8 @@ def lookup_path_in(orig: str, path: list[str], current: Transform, report_errors
     segment, *rest = path
 
     candidates = []
-    for child in current.m_Children:
-        child: Transform = child.read()
+    for c in current.m_Children:
+        child: Transform = c.read()
 
         if child.m_GameObject.read().m_Name == segment:
             candidates.append(child)

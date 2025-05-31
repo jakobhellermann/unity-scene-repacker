@@ -3,7 +3,7 @@ from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr, 
 from UnityPy.enums import ClassIDType
 from collections import deque
 from collections.abc import Iterator
-from utils import lookup_path, get_root_objects
+from unity_scene_repacker.utils import lookup_path, get_root_objects
 
 
 def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
@@ -25,15 +25,15 @@ def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
 
 def prune_reachable(scene: SerializedFile, reachable: list[ObjectReader[Transform]]):
     include: set[int] = set()
-    queue: deque[ObjectReader] = deque(reachable)
+    queue: deque[ObjectReader[Object] | PPtr[Object]] = deque(reachable)
 
     while queue:
         node = queue.popleft()
         include.add(node.path_id)
 
-        for reachable in iterate_visible(node):
-            if reachable.path_id not in include:
-                queue.append(reachable)
+        for r in iterate_visible(node):
+            if r.path_id not in include:
+                queue.append(r)
 
     old_objects = scene.objects
     new_objects = {key: old_objects[key] for key in include}
@@ -53,7 +53,7 @@ def prune_reachable(scene: SerializedFile, reachable: list[ObjectReader[Transfor
     scene.types = new_types
 
 
-def iterate_visible(obj: ObjectReader) -> Iterator[Object]:
+def iterate_visible(obj: ObjectReader) -> Iterator[PPtr[Object]]:
     # if isinstance(obj, PPtr):
     # obj = obj.get_obj()
 
