@@ -1,3 +1,4 @@
+from UnityPy.enums import ClassIDType
 from UnityPy.environment import Environment
 from pathlib import Path
 import json
@@ -56,7 +57,7 @@ for i, (file, level_name) in enumerate(zip(serialized_files, level_names)):
     print(f"Pruning {i + 1}/{len(paths)} [{level_name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
 
-    pruned = prune(file, level_monsters)
+    pruned = prune(file, level_monsters, [ClassIDType.RenderSettings])
 
     for obj in get_root_object_readers(file):
         tt = obj.read_typetree()

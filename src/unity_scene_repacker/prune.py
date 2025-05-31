@@ -1,18 +1,20 @@
-from UnityPy.files import SerializedFile, ObjectReader
-from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr, SpriteAtlas
-from UnityPy.enums import ClassIDType
 from collections import deque
 from collections.abc import Iterator
+
+from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr, SpriteAtlas
+from UnityPy.enums import ClassIDType
+from UnityPy.files import SerializedFile, ObjectReader
+
 from unity_scene_repacker.utils import lookup_path, get_root_objects
 
 
-def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
+def prune(scene: SerializedFile, keep_paths: list[str], always_include: list[ClassIDType] = None) -> list[Transform]:
     root_objs = list(get_root_objects(scene))
     if len(root_objs) == 0:
         print(scene)
     keep_new_root = [lookup_path(keep, root_objs) for keep in keep_paths]
     reachable = [keep.object_reader for keep in keep_new_root]
-    prune_reachable(scene, reachable)
+    prune_reachable(scene, reachable, always_include)
 
     for keep in keep_new_root:
         keep = keep.object_reader
@@ -23,7 +25,9 @@ def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
     return keep_new_root
 
 
-def prune_reachable(scene: SerializedFile, reachable: list[ObjectReader[Transform]]):
+def prune_reachable(
+    scene: SerializedFile, reachable: list[ObjectReader[Transform]], always_include: list[ClassIDType] = None
+):
     include: set[int] = set()
     queue: deque[ObjectReader[Object] | PPtr[Object]] = deque(reachable)
 
@@ -35,8 +39,10 @@ def prune_reachable(scene: SerializedFile, reachable: list[ObjectReader[Transfor
             if r.path_id not in include:
                 queue.append(r)
 
-    old_objects = scene.objects
-    new_objects = {key: old_objects[key] for key in include}
+    if always_include:
+        include.update(i for i in scene.objects if scene.objects[i].type in always_include)
+
+    new_objects = {key: scene.objects[key] for key in include}
 
     scene.objects = dict(sorted(new_objects.items()))
 
