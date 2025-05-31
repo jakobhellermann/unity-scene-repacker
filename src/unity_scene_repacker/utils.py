@@ -24,7 +24,7 @@ def load_scenes(project: Path, level_names: list[str], scene_map: dict[str, str]
     env = Environment()
     env.load_file(str(project.joinpath("globalgamemanagers.assets")))
     for i, (path, name) in enumerate(zip(paths, level_names)):
-        print(f"Loading {i+1}/{len(paths)} [{name}]                     ", end="\r")
+        print(f"Loading {i + 1}/{len(paths)} [{name}]                     ", end="\r")
         env.load_file(path)
     print()
     return [env.files[path] for path in paths]
@@ -37,16 +37,18 @@ def get_root_objects(file: SerializedFile) -> Iterator[GameObject]:
 
 def get_root_object_readers(file: SerializedFile) -> Iterator[ObjectReader]:
     for obj in file.objects.values():
-        if obj.class_id == 4:
+        if obj.class_id == ClassIDType.Transform:
             transform: Transform = obj.read()
-            parent = transform.m_Father.get_obj()
-            if parent is None:
-                yield transform.m_GameObject.get_obj()
+            if transform.m_Father.m_PathID != 0 and transform.m_Father.m_PathID not in transform.assets_file.objects:
+                # print(f"Error: {transform.m_GameObject.read().m_Name}'s parent not in same asset file?")
+                continue
+            if transform.m_Father.m_PathID == 0 or transform.m_Father.read() is None:
+                yield transform.m_GameObject.deref()
 
 
 def components_in_children(object: GameObject, *, type: ClassIDType = None) -> Iterator[Object]:
     for c in object.m_Components:
-        c: ObjectReader = c.get_obj()
+        c: ObjectReader = c.deref()
         if type is None or c.type == type:
             yield c
 
@@ -60,9 +62,9 @@ def path(object: GameObject) -> str:
     current = object
 
     while True:
-        path.append(current.name)
-        father = current.m_Transform.read().m_Father.get_obj()
-        if father is None:
+        path.append(current.m_Name)
+        father = current.m_Transform.read().m_Father
+        if father is None or father.path_id == 0:
             break
         current = father.read().m_GameObject.read()
 
@@ -73,8 +75,10 @@ def path(object: GameObject) -> str:
 def lookup_path(path: str, root_objs: list[GameObject]) -> Transform:
     root, *rest = path.split("/")
 
-    root_obj = next(filter(lambda obj: obj.name == root, root_objs), None)
-    assert root_obj is not None
+    root_obj = next(filter(lambda obj: obj.m_Name == root, root_objs), None)
+    assert root_obj is not None, (
+        f"Root object not found: {root} of {path} in {list(map(lambda x: x.m_Name, root_objs))}"
+    )
 
     if not rest:
         return root_obj.m_Transform.read()
@@ -89,7 +93,7 @@ def lookup_path_in(orig: str, path: list[str], current: Transform, report_errors
     for child in current.m_Children:
         child: Transform = child.read()
 
-        if child.m_GameObject.read().name == segment:
+        if child.m_GameObject.read().m_Name == segment:
             candidates.append(child)
 
     if len(candidates) == 0:

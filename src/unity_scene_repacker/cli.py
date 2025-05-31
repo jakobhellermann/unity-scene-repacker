@@ -1,4 +1,3 @@
-import UnityPy
 from UnityPy.environment import Environment
 from pathlib import Path
 import json
@@ -43,7 +42,7 @@ paths = [str(project.joinpath(f"level{scene_map[name]}")) for name in level_name
 
 env = Environment()
 for i, (path, name) in enumerate(zip(paths, level_names)):
-    print(f"Loading {i+1}/{len(paths)} [{name}]                     ", end="\r")
+    print(f"Loading {i + 1}/{len(paths)} [{name}]                     ", end="\r")
     env.load_file(path)
 print()
 serialized_files = [env.files[path] for path in paths]
@@ -56,7 +55,7 @@ def rename(name: str) -> str:
 
 
 for level_name, file in zip(level_names, serialized_files):
-    print(f"Pruning {i+1}/{len(paths)} [{name}]                     ", end="\r")
+    print(f"Pruning {i + 1}/{len(paths)} [{name}]                     ", end="\r")
     level_monsters = monster_preloads[level_name]
     prune(file, level_monsters)
 
@@ -79,4 +78,4 @@ with open(out_path, "wb") as f:
             continue
 
         for root in get_root_objects(file):
-            print(root.name)
+            print(root.m_Name)

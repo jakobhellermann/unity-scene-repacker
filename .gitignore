@@ -1,4 +1,5 @@
 /out
+/.idea
 /.ruff_cache
 /.mypy_cache
 __pycache__

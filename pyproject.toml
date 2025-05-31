@@ -1,3 +1,21 @@
+[project]
+name = "unity-scene-repacker"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Jakob Hellermann", email = "jakob.hellermann@protonmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = ["UnityPy"]
+
+[project.scripts]
+unity-asset-repacker = "cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [tool.ruff]
 line-length = 120
 

@@ -39,7 +39,7 @@ monsters.json
 ```
 
 ```sh
-python src/cli.py \
+uv run src/unity_scene_repacker/cli.py \
     --scene-defs ninesols/scenes.json \
     --preloads ninesols/monsters.json \
     --output out/preloads.bundle \

@@ -1,6 +1,5 @@
-from UnityPy.classes.SpriteAtlas import SpriteAtlas
 from UnityPy.files import SerializedFile, ObjectReader
-from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr
+from UnityPy.classes import Object, GameObject, Transform, RectTransform, PPtr, SpriteAtlas
 from UnityPy.enums import ClassIDType
 from collections import deque
 from collections.abc import Iterator
@@ -9,21 +8,22 @@ from utils import lookup_path, get_root_objects
 
 def prune(scene: SerializedFile, keep_paths: list[str]) -> list[Transform]:
     root_objs = list(get_root_objects(scene))
+    if len(root_objs) == 0:
+        print(scene)
     keep_new_root = [lookup_path(keep, root_objs) for keep in keep_paths]
-    reachable = [keep.reader for keep in keep_new_root]
+    reachable = [keep.object_reader for keep in keep_new_root]
     prune_reachable(scene, reachable)
 
     for keep in keep_new_root:
-        keep = keep.reader
-        print(keep)
+        keep = keep.object_reader
         tt = keep.read_typetree()
         tt["m_Father"] = {"m_FileID": 0, "m_PathID": 0}
         keep.save_typetree(tt)
 
-
     return keep_new_root
 
-def prune_reachable(scene: SerializedFile, reachable: list):
+
+def prune_reachable(scene: SerializedFile, reachable: list[ObjectReader[Transform]]):
     include: set[int] = set()
     queue: deque[ObjectReader] = deque(reachable)
 
@@ -54,8 +54,8 @@ def prune_reachable(scene: SerializedFile, reachable: list):
 
 
 def iterate_visible(obj: ObjectReader) -> Iterator[Object]:
-    if isinstance(obj, PPtr):
-        obj = obj.get_obj()
+    # if isinstance(obj, PPtr):
+    # obj = obj.get_obj()
 
     if obj.type == ClassIDType.GameObject:
         go: GameObject = obj.read()
