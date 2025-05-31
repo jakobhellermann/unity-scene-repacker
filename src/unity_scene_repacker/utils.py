@@ -1,7 +1,7 @@
 from pathlib import Path
 from UnityPy.environment import Environment
 from UnityPy.files import SerializedFile, ObjectReader
-from UnityPy.classes import GameObject, Transform, Object
+from UnityPy.classes import GameObject, Transform, Object, BuildSettings
 from UnityPy.enums import ClassIDType
 from collections.abc import Iterator
 
@@ -28,6 +28,25 @@ def load_scenes(project: Path, level_names: list[str], scene_map: dict[str, str]
         env.load_file(path)
     print()
     return [env.files[path] for path in paths]
+
+
+def get_scene_names(globalgamemanagers: SerializedFile) -> list[str] | None:
+    for obj in globalgamemanagers.objects.values():
+        if obj.type == ClassIDType.BuildSettings:
+            settings: BuildSettings = obj.read()
+            return [Path(scene).stem for scene in settings.scenes]
+    return None
+
+
+def get_root_object(file: SerializedFile, name: str) -> GameObject | None:
+    for root in get_root_objects(file):
+        if root.m_Name == name:
+            return root
+    return None
+
+
+def get_child_names(obj: GameObject) -> list[str]:
+    return [child.read().m_GameObject.read().m_Name for child in obj.m_Transform.read().m_Children]
 
 
 def get_root_objects(file: SerializedFile) -> Iterator[GameObject]:
