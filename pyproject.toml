@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["UnityPy==1.22.5"]
 
 [project.scripts]
-unity-asset-repacker = "cli:main"
+unity-asset-repacker = "unity_scene_repacker.cli:main"
 
 [build-system]
 requires = ["hatchling"]
