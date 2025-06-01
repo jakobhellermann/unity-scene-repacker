@@ -7,7 +7,7 @@ authors = [
     { name = "Jakob Hellermann", email = "jakob.hellermann@protonmail.com" }
 ]
 requires-python = ">=3.10"
-dependencies = ["UnityPy"]
+dependencies = ["UnityPy==1.22.5"]
 
 [project.scripts]
 unity-asset-repacker = "cli:main"

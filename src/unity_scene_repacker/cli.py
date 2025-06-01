@@ -6,13 +6,10 @@ import argparse
 
 from repack import repack_scene_bundle
 from prune import prune
-from utils import get_root_objects, get_root_object_readers
+from utils import get_root_objects, get_root_object_readers, get_scene_names
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--game-dir", help="game directory where the levels are, i.e. Game/Game_Data", required=True)
-parser.add_argument(
-    "--scene-defs", help="path to json file, containing a map from scene name to build index", required=True
-)
 parser.add_argument(
     "--preloads",
     help="path to json file, containg map from scene name to list of gameobject paths to include in the assetbundle",
@@ -27,18 +24,18 @@ parser.add_argument(
 parser.add_argument("--disable", action=argparse.BooleanOptionalAction, default=True)
 args = parser.parse_args()
 
-scene_map = json.load(open(args.scene_defs, "r"))
 monster_preloads = json.load(open(args.preloads, "r"))
-# keys = ["A9_S1_Remake_4wei", "A0_S4_tutorial"]
-# monster_preloads = {key: monster_preloads[key] for key in monster_preloads if key in keys}
 
 out_path = Path(args.output)
 project = Path(args.game_dir)
 
-level_names = [name for name, _ in monster_preloads.items()]
+env = Environment()
+ggm = env.load_file(str(project.joinpath("globalgamemanagers")))
+
+scene_map = {name: i for i, name in enumerate(get_scene_names(ggm))}
+level_names = monster_preloads.keys()
 paths = [str(project.joinpath(f"level{scene_map[name]}")) for name in level_names]
 
-env = Environment()
 for i, (path, name) in enumerate(zip(paths, level_names)):
     print(f"Loading {i + 1}/{len(paths)} [{name}]                     ", end="\r")
     env.load_file(path)
