@@ -7,11 +7,14 @@ from UnityPy.classes import AssetBundle
 from unity_scene_repacker.utils import Fake
 from typing import cast
 
+import importlib.resources
+
 
 def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
-    emptybundle_path = "in/empty_scene_bundle"
+    with importlib.resources.open_binary("unity_scene_repacker.data", "empty_scene_bundle.unity3d") as f:
+        emptybundle_bin = f.read()
 
-    emptybundle: BundleFile = UnityPy.load(emptybundle_path).file
+    emptybundle: BundleFile = UnityPy.load(emptybundle_bin).file
     shared_assets: SerializedFile = emptybundle.files["BuildPlayer-EmptyScene.sharedAssets"]
 
     assetbundle_meta: ObjectReader[AssetBundle] = shared_assets.objects[2]

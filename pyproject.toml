@@ -1,6 +1,6 @@
 [project]
 name = "unity-scene-repacker"
-version = "0.1.0"
+version = "0.1.1"
 description = "Add your description here"
 readme = "README.md"
 authors = [
@@ -8,13 +8,21 @@ authors = [
 ]
 requires-python = ">=3.10"
 dependencies = ["UnityPy==1.22.5"]
+license = "MIT"
+
+[project.urls]
+homepage = "https://github.com/jakobhellermann/unity-scene-repacker"
+
 
 [project.scripts]
-unity-asset-repacker = "unity_scene_repacker.cli:main"
+unity-scene-repacker = "unity_scene_repacker.cli:main"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["flit_core >=3.12,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.sdist]
+include = ["src/unity_scene_repacker/data/*"]
 
 [tool.ruff]
 line-length = 120
