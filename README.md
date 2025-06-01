@@ -9,7 +9,7 @@ This project lets you read scenes from the distributed game, take only what you 
 ## Usage
 
 ```json
-monsters.json
+objects.json
 {
     "A6_S3_Tutorial_And_SecretBoss_Remake": [
         "A6_S3/Room/Prefab/Enemy/StealthGameMonster_RunningHog (3)",
@@ -26,8 +26,8 @@ monsters.json
 ```
 
 ```sh
-uv run src/unity_scene_repacker/cli.py \
-    --preloads ninesols/bosses.json \
-    --output out/preloads.bundle \
-    --game-dir '~/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data/'
+uvx unity-scene-repacker 
+    --game-dir "C:/Program Files (x86)/Steam/steamapps/common/Nine Sols-Speedrunpatch/NineSols_Data" \
+    --objects objects.json \
+    --output mybundle.unity3d
 ```

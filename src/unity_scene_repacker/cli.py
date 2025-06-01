@@ -20,7 +20,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--game-dir", help="game directory where the levels are, i.e. Game/Game_Data", required=True)
     parser.add_argument(
-        "--preloads",
+        "--objects",
         help="path to json file, containg map from scene name to list of gameobject paths to include in the assetbundle",
         required=True,
     )
@@ -28,12 +28,12 @@ def main():
         "-o",
         "--output",
         help="path to json file, containg map from scene name to list of gameobject paths to include in the assetbundle",
-        default="preloads.bundle",
+        default="out.unity3d",
     )
     parser.add_argument("--disable", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
 
-    monster_preloads = json.load(open(args.preloads, "r"))
+    scene_objects = json.load(open(args.objects, "r"))
 
     out_path = Path(args.output)
     project = Path(args.game_dir)
@@ -42,10 +42,10 @@ def main():
     ggm = env.load_file(str(project.joinpath("globalgamemanagers")))
 
     scene_map = {name: i for i, name in enumerate(get_scene_names(ggm))}
-    level_names = monster_preloads.keys()
-    paths = [str(project.joinpath(f"level{scene_map[name]}")) for name in level_names]
+    scene_names = scene_objects.keys()
+    paths = [str(project.joinpath(f"level{scene_map[name]}")) for name in scene_names]
 
-    for i, (path, name) in enumerate(zip(paths, level_names)):
+    for i, (path, name) in enumerate(zip(paths, scene_names)):
         print(f"Loading {i + 1}/{len(paths)} [{name}]                     ", end="\r")
         env.load_file(path)
     print()
@@ -53,9 +53,9 @@ def main():
 
     object_count_before = sum(len(x.objects.values()) for x in serialized_files)
 
-    for i, (file, level_name) in enumerate(zip(serialized_files, level_names)):
+    for i, (file, level_name) in enumerate(zip(serialized_files, scene_names)):
         print(f"Pruning {i + 1}/{len(paths)} [{level_name}]                     ", end="\r")
-        level_monsters = monster_preloads[level_name]
+        level_monsters = scene_objects[level_name]
 
         prune(file, level_monsters, [ClassIDType.RenderSettings])
 
@@ -71,7 +71,7 @@ def main():
     print(f"Pruned {object_count_before} -> {object_count_after} objects")
 
     prefix = "bundle"
-    new_bundle = repack_scene_bundle(dict(zip([f"{prefix}_{name}" for name in level_names], serialized_files)))
+    new_bundle = repack_scene_bundle(dict(zip([f"{prefix}_{name}" for name in scene_names], serialized_files)))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "wb") as f:
