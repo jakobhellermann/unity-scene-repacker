@@ -8,7 +8,7 @@ import argparse
 
 from unity_scene_repacker.repack import repack_scene_bundle
 from unity_scene_repacker.prune import prune
-from unity_scene_repacker.utils import get_root_objects, get_root_object_readers, get_scene_names
+from unity_scene_repacker.utils import get_root_object_readers, get_scene_names, format_size
 
 
 def rename(name: str) -> str:
@@ -45,9 +45,11 @@ def main():
     scene_names = scene_objects.keys()
     paths = [str(project.joinpath(f"level{scene_map[name]}")) for name in scene_names]
 
+    i = 0
     for i, (path, name) in enumerate(zip(paths, scene_names)):
         print(f"Loading {i + 1}/{len(paths)} [{name}]                     ", end="\r")
         env.load_file(path)
+    print(f"Loading {i + 1}/{len(paths)}                              ", end="\r")
     print()
     serialized_files = [env.files[path] for path in paths]
 
@@ -65,30 +67,28 @@ def main():
             if args.disable:
                 tt["m_IsActive"] = False
             obj.save_typetree(tt)
+    print(f"Pruning {i + 1}/{len(paths)}                                    ", end="\r")
     print()
 
     object_count_after = sum(len(x.objects.values()) for x in serialized_files)
+    print()
     print(f"Pruned {object_count_before} -> {object_count_after} objects")
+
+    size_before = sum(os.path.getsize(path) for path in paths)
+
 
     prefix = "bundle"
     new_bundle = repack_scene_bundle(dict(zip([f"{prefix}_{name}" for name in scene_names], serialized_files)))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "wb") as f:
-        f.write(new_bundle.save())
-        f.flush()
+        f.write(new_bundle.save("lz4"))
 
-        size_bytes = os.path.getsize(f.name)
-        size_mb = size_bytes / (1024 * 1024)
+    size_after = os.path.getsize(f.name)
+    print(f"{format_size(size_before)} -> {format_size(size_after)}")
 
-        print()
-        print(f"{out_path} ({size_mb:.2f}MiB):")
-        for name, file in Environment(str(out_path)).file.files.items():
-            if name.endswith("sharedAssets"):
-                continue
-
-            for root in get_root_objects(file):
-                print(f"- '{root.m_Name}'")
+    print()
+    print(f"{out_path}")
 
 
 if __name__ == "__main__":

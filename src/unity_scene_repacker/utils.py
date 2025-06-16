@@ -147,3 +147,13 @@ def flatten(nested):
             yield from nested
         else:
             yield item
+
+def format_size(bytes_size):
+    if bytes_size < 1024:
+        return f"{bytes_size} B"
+    elif bytes_size < 1024 ** 2:
+        return f"{bytes_size / 1024:.2f} KiB"
+    elif bytes_size < 1024 ** 3:
+        return f"{bytes_size / 1024 ** 2:.2f} MiB"
+    else:
+        return f"{bytes_size / 1024 ** 3:.2f} GiB"
