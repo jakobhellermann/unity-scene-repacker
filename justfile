@@ -10,3 +10,9 @@ monsters:
         --objects ninesols/monsters.json \
         --output out/monsters.unity3d
 
+hk:
+    uv run src/unity_scene_repacker/cli.py \
+        --game-dir "C:/Program Files (x86)/Steam/steamapps/common/Hollow Knight/hollow_knight_Data" \
+        --objects hollowknight/hk.json \
+        --output out/hollowknight.unity3d
+

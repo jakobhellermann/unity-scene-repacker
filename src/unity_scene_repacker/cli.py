@@ -82,7 +82,8 @@ def main():
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "wb") as f:
-        f.write(new_bundle.save("lz4"))
+        packer = None # "lz4
+        f.write(new_bundle.save(packer))
 
     size_after = os.path.getsize(f.name)
     print(f"{format_size(size_before)} -> {format_size(size_after)}")
