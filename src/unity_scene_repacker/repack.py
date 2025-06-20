@@ -3,6 +3,7 @@ from UnityPy.environment import SerializedFile
 from UnityPy.files import BundleFile, ObjectReader
 from UnityPy.enums import ArchiveFlags
 from UnityPy.classes import AssetBundle
+import copy
 
 from unity_scene_repacker.utils import Fake
 from typing import cast
@@ -49,14 +50,14 @@ def repack_scene_bundle(scenes: dict[str, SerializedFile]) -> BundleFile:
     )
 
     files = {}
-    # first = True
+    first = True
     for name, scene in scenes.items():
         scene_shared_assets = shared_assets
-        # if not first:
-        #     scene_shared_assets = copy.copy(shared_assets)
-        #     scene_shared_assets.objects = copy.copy(scene_shared_assets.objects)
-        #     assert scene_shared_assets.objects.pop(2).class_id == 142  # AssetBundle
-        #     first = False
+        if not first:
+            scene_shared_assets = copy.copy(shared_assets)
+            scene_shared_assets.objects = copy.copy(scene_shared_assets.objects)
+            assert scene_shared_assets.objects.pop(2).class_id == 142  # AssetBundle
+        first = False
 
         scene.flags = 4
         files[f"BuildPlayer-{name}.sharedAssets"] = scene_shared_assets
