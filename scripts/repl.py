@@ -4,8 +4,9 @@ from UnityPy.files import BundleFile
 from unity_scene_repacker import utils
 
 # path = "C:/Users/Jakob/Documents/dev/nine-sols/NineSols-ExampleMod/Resources/preloads.bundle"
-path = "C:/Users/Jakob/Documents/dev/nine-sols/NineSols-ExampleMod/Resources/preloads.bundle"
-# path = "C:/Program Files (x86)/Steam/steamapps/common/Nine Sols-Speedrunpatch/NineSols_Data/level10"
+path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor/out/BuildPlayer-bundle_Dream_Final_Boss.sharedAssets"
+path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor/rust.unity3d"
 
 env = Environment()
 file = env.load_file(path)
+print(file.files)
