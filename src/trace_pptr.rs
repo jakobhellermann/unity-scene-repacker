@@ -74,9 +74,10 @@ pub fn trace_pptrs(tt: &TypeTreeNode, reader: &mut (impl Read + Seek)) -> Result
                     }
                     _ => {
                         others = true;
-                        map.next_value_seed(CollectPPtrDeser {
+                        // TODO: figure out int3_storage thing
+                        let _ = map.next_value_seed(CollectPPtrDeser {
                             output: self.output,
-                        })?;
+                        });
                     }
                 }
             }

@@ -92,13 +92,7 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
         while let Some(node) = queue.pop_front() {
             include.insert(node);
 
-            let reachable = match self.reachable_one(node, reader) {
-                Ok(reachable) => reachable,
-                Err(e) => {
-                    eprintln!("[Warn]: {e}");
-                    continue;
-                }
-            };
+            let reachable = self.reachable_one(node, reader)?;
             for reachable in reachable {
                 if !reachable.is_local() {
                     continue;

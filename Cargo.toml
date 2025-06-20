@@ -9,6 +9,7 @@ description = "Repack unity level files into filtered asset bundles you can load
 [dependencies]
 anyhow = "1.0"
 byteorder = "1.5"
+clap = { version = "4.5", features = ["derive", "unstable-markdown"] }
 elsa = "1.11"
 indexmap = { version = "2.9", features = ["serde"] }
 json5 = "0.4"
@@ -17,6 +18,7 @@ rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", 
     "serde_path_to_error",
 ] }
 rustc-hash = "2.1"
+paris = { version = "1.5", features = ["macros", "no_logger"] }
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 
