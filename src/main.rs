@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use indexmap::IndexMap;
 use memmap2::Mmap;
+use paris::{error, info, success};
 use rabex::files::SerializedFile;
 use rabex::files::bundlefile::{self, BundleFileHeader, CompressionType};
 use rabex::files::serialzedfile::{self, TypeTreeProvider};
@@ -28,25 +29,57 @@ use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData};
 use crate::utils::friendly_size;
 
 #[derive(Parser, Debug)]
-#[command(version, about)]
+#[command(version)]
 struct Args {
+    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
     #[arg(long)]
     game_dir: PathBuf,
+    /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
+    /// ```json
+    /// {
+    ///   "Fungus1_12": [
+    ///     "simple_grass",
+    ///     "green_grass_2",
+    ///   ],
+    ///   "White_Palace_01": [
+    ///     "WhiteBench",
+    ///   ]
+    /// }
+    /// ```
     #[arg(long)]
     objects: PathBuf,
+    /// When true, all gameobjects in the scene will start out disabled
     #[arg(long, default_value = "false")]
     disable: bool,
+    /// Compression level to apply
+    #[arg(long, default_value = "none")]
+    compression: Compression,
     #[arg(long, short = 'o', default_value = "out.unity3d")]
     output: PathBuf,
+}
+
+#[derive(Debug, Clone, clap::ValueEnum)]
+pub enum Compression {
+    None = 0,
+    Lzma = 1,
+    Lz4 = 2,
+    /// Best compression at the cost of speed
+    Lz4hc = 3,
+    // Lzham = 4,
 }
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
-fn main() -> Result<()> {
+fn main() {
+    if let Err(e) = run() {
+        error!("{:?}", e);
+        std::process::exit(1);
+    }
+}
+fn run() -> Result<()> {
     let args = Args::parse();
-    dbg!(&args);
 
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
@@ -80,9 +113,14 @@ fn main() -> Result<()> {
         })
         .collect();
 
+    let obj_count = preloads
+        .iter()
+        .map(|(_, objects)| objects.len())
+        .sum::<usize>();
+    info!("Repacking {obj_count} objects in {} scenes", preloads.len());
+
     let mut repack_scenes = Vec::new();
     for (scene_name, paths) in preloads {
-        println!("{scene_name}");
         let scene_index = scenes[scene_name.as_str()];
         let path = args.game_dir.join(format!("level{scene_index}"));
 
@@ -93,11 +131,18 @@ fn main() -> Result<()> {
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
-    let out_path = Path::new("rust.unity3d");
-    let mut out = BufWriter::new(File::create(out_path)?);
+    let mut out = BufWriter::new(File::create(&args.output)?);
 
+    let compression = match args.compression {
+        Compression::None => CompressionType::None,
+        Compression::Lzma => CompressionType::Lzma,
+        Compression::Lz4 => CompressionType::Lz4,
+        Compression::Lz4hc => CompressionType::Lz4hc,
+        // Compression::Lzham => CompressionType::Lzham,
+    };
     let stats = repack_bundle(
         &mut out,
+        compression,
         &tpk,
         &typetree_provider,
         unity_version,
@@ -105,20 +150,20 @@ fn main() -> Result<()> {
     )
     .context("trying to repack bundle")?;
 
-    println!(
-        "Pruned {} -> {} objects",
+    info!(
+        "Pruned {} -> <b>{}</b> objects",
         stats.objects_before, stats.objects_after
     );
-    println!(
-        "{} -> {}",
+    info!(
+        "{} -> <b>{}</b> raw size",
         friendly_size(stats.size_before),
         friendly_size(stats.size_after)
     );
     println!();
 
-    println!(
-        "Repacked into {} ({}) in {:.2?}",
-        out_path.display(),
+    success!(
+        "Repacked into <b>{}</b> <i>({})</i> in {:.2?}",
+        args.output.display(),
         friendly_size(out.get_ref().metadata()?.len() as usize),
         start.elapsed()
     );
@@ -170,6 +215,7 @@ struct Stats {
 
 fn repack_bundle<W: Write + Seek>(
     writer: W,
+    compression: CompressionType,
     tpk: &TpkTypeTreeBlob,
     typetree_provider: &impl TypeTreeProvider,
     unity_version: UnityVersion,
@@ -275,7 +321,7 @@ fn repack_bundle<W: Write + Seek>(
         &header,
         writer,
         CompressionType::Lz4hc,
-        CompressionType::None, // TODO lz4
+        compression,
         files.into_iter(),
     )?;
 

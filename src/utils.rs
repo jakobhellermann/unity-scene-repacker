@@ -9,8 +9,8 @@ pub fn friendly_size(size: usize) -> String {
     }
 
     if unit == 0 {
-        format!("{}{}", size as usize, UNITS[unit])
+        format!("{} {}", size as usize, UNITS[unit])
     } else {
-        format!("{:.2}{}", size, UNITS[unit])
+        format!("{:.2} {}", size, UNITS[unit])
     }
 }
