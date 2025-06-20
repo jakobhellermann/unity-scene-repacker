@@ -1,0 +1,17 @@
+{
+  "A3_S5_BossGouMang_Final": [
+    "A3_S5_BossGouMang_GameLevel/Room/StealthGameMonster_GouMang Variant"
+  ],
+  "A11_S0_Boss_YiGung_\u56de\u84ec\u840a": [
+    "GameLevel/Room/Prefab/EventBinder/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/Boss_Yi Gung"
+  ],
+  "A10_S5_Boss_Jee": [
+    "A10S5/Room/Boss And Environment Binder/General Boss Fight FSM Object \u59ec Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_Boss_Jee"
+  ],
+  "A5_S5_JieChuanHall": [
+    "A5_S5/Room/EventBinder/General Boss Fight FSM Object_\u7d50\u6b0a/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_Boss_JieChuan"
+  ],
+  "A4_S5_DaoTrapHouse_Final": [
+    "MechClaw Game Play/Monster_GiantMechClaw"
+  ]
+}
