@@ -6,6 +6,7 @@ mod unity;
 mod utils;
 
 use anyhow::{Context, Result};
+use clap::Parser;
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use rabex::files::SerializedFile;
@@ -26,23 +27,34 @@ use crate::unity::pptr::PPtr;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData};
 use crate::utils::friendly_size;
 
+#[derive(Parser, Debug)]
+#[command(version, about)]
+struct Args {
+    #[arg(long)]
+    game_dir: PathBuf,
+    #[arg(long)]
+    objects: PathBuf,
+    #[arg(long, default_value = "false")]
+    disable: bool,
+    #[arg(long, short = 'o', default_value = "out.unity3d")]
+    output: PathBuf,
+}
+
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn main() -> Result<()> {
+    let args = Args::parse();
+    dbg!(&args);
+
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
 
     let start = Instant::now();
 
-    let preload_path = "/home/jakob/dev/unity/unity-scene-repacker/preloads/hk-palecourt.json";
-    let game_directory = Path::new(
-        "/home/jakob/.local/share/Steam/steamapps/common/Hollow Knight/hollow_knight_Data",
-    );
-
-    let preloads = std::fs::read_to_string(preload_path)
-        .with_context(|| format!("couldn't find preload json '{preload_path}'"))?;
+    let preloads = std::fs::read_to_string(&args.objects)
+        .with_context(|| format!("couldn't find object json '{}'", args.objects.display()))?;
     let preloads: IndexMap<String, Vec<String>> = json5::from_str(&preloads)?;
 
     let mut tpk_file = File::open("lz4.tpk").map_err(|_| {
@@ -52,7 +64,7 @@ fn main() -> Result<()> {
     let tpk = tpk_file.as_type_tree()?.unwrap();
     let typetree_provider = TypeTreeCache::new(&tpk);
 
-    let mut ggm_reader = File::open(game_directory.join("globalgamemanagers"))
+    let mut ggm_reader = File::open(args.game_dir.join("globalgamemanagers"))
         .context("couldn't find globalgamemanagers in game directory")?;
     let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
@@ -72,7 +84,7 @@ fn main() -> Result<()> {
     for (scene_name, paths) in preloads {
         println!("{scene_name}");
         let scene_index = scenes[scene_name.as_str()];
-        let path = game_directory.join(format!("level{scene_index}"));
+        let path = args.game_dir.join(format!("level{scene_index}"));
 
         let (serialized, all_reachable) =
             prune_scene(&scene_name, &path, &typetree_provider, &paths)?;
