@@ -1,0 +1,13 @@
+/target
+
+/out
+/*.unity3d
+/*.bundle
+
+__pycache__
+*.pyc
+
+/.idea
+/.vscode
+
+/*.tpk

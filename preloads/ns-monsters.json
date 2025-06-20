@@ -1,0 +1,244 @@
+{
+    "A9_S1_Remake_4wei": [
+        "A9_S1/Room/Prefab/AllMonsters/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/1_StealthMonster_\u4e00\u9583\u602a (1)",
+        "A9_S1/Room/Prefab/AllMonsters/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/[\u50b3\u9001\u7bc4\u570d]/1_StealthMonster_\u9023\u64ca\u602a",
+        "A9_S1/Room/Prefab/AllMonsters/[Set] CloseDoorFight View&Wave (1)/Monster Wave Sequence Spawner Variant/FSM Animator/LogicRoot/MonsterRegisterNode/Wave1/ [1] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]GameMonster_Turret_Danger_Bullet \u7832\u53f0 (3)/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/GameMonster_Turret_Danger_Bullet \u7832\u53f0 (3)",
+        "A9_S1/Room/Prefab/GameMonster_Turret_Danger_Bullet \u7832\u53f0 \u55ae\u5411\u9580",
+        "A9_S1/Room/Prefab/WaterFallEventBinder/LootProvider \u5f13\u7bad\u5f37\u5ea6 \u7384\u9435/General Boss Fight FSM Object_A9_S1_\u5927\u9318\u5175 (1)/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/Hammer FatGuy \u5927\u9318\u5175",
+        "A9_S1/Room/Prefab/AllMonsters/Monster_FlyingMonster_FlyingSwordMan",
+        "A9_S1/Room/Prefab/A9_MonsterCandidate/StealthGameMonster_AirSpiderMotherShip",
+        "A9_S1/Room/Prefab/AllMonsters/EngagingToken (1)/StealthGameMonster_Dog Variant Shield",
+        "A9_S1/Room/Prefab/AllWaters/StealthGameMonster_Double_Axe_Fat",
+        "A9_S1/Room/Prefab/AllMonsters/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/StealthGameMonster_GroundRollingAttackShip (2)",
+        "A9_S1/Room/Prefab/AllMonsters/StealthGameMonster_GroundRollingFlameAttackSpider",
+        "A9_S1/Room/Prefab/A9_MonsterCandidate/StealthGameMonster_GunBoyElite",
+        "A9_S1/Room/Prefab/AllMonsters/EngagingToken (3)/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario(\u770b\u5b88\u7684\u4eba)/StealthGameMonster_GunBoyElite Fire",
+        "A9_S1/Room/Prefab/A9_MonsterCandidate/StealthGameMonster_GunBoyElite Shield",
+        "A9_S1/Room/Prefab/AllMonsters/StealthGameMonster_Minion_Plus (3)",
+        "A9_S1/Room/Prefab/Shield Giant Bot Control Provider Variant/StealthGameMonster_Shield Bot Giant (1)",
+        "A9_S1/Room/Prefab/AllMonsters/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_Sniper \u72d9\u64ca\u624bNo Teleport  Variant",
+        "A9_S1/Room/Prefab/Treasure \u5bf6\u7bb1 Chests/StatueEventBinder \u5927\u9322\u888b & \u4e2d\u91cf\u91d1/StealthGameMonster_Statue_Counter Variant_M (1)",
+        "A9_S1/Room/Prefab/Treasure \u5bf6\u7bb1 Chests/StatueEventBinder \u5927\u9322\u888b & \u4e2d\u91cf\u91d1/StealthGameMonster_Statue_Shield Variant_M",
+        "A9_S1/Room/Prefab/A9_MonsterCandidate/StealthGameMonster_\u56db\u9023\u64ca\u602a",
+        "A9_S1/Room/Prefab/A9_MonsterCandidate/StealthMonster_AirSpider_ReflectAndExplode \u7a7a\u96f7",
+        "A9_S1/Room/Prefab/AllMonsters/StealthMonster_Flying Teleport Wizard Duo Attack (1)",
+        "A9_S1/Room/Prefab/AllMonsters/[\u81ea\u7136\u5de1\u908f\u6846\u67b6] (1)/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/TrapMonster_Robot_Crawler (1)",
+        "A9_S1/Room/Prefab/AllMonsters/TrapMonster_SpiderMine \u8718\u86db\u96f7"
+    ],
+    "A10_S3_HistoryTomb_Right": [
+        "A10_S3/Room/AllTreasure \u5bf6\u7bb1 Chests/LootProvider \u85e5\u6597\u529f\u7387/Chest Runner SpiderMine Spawner \u76dc\u5bf6\u54e5\u5e03\u6797 \u4e1f\u8718\u86db\u96f7 (1)",
+        "A10_S3/Room/[Set] CloseDoorFight View&Wave/Monster Wave Sequence Spawner Variant/FSM Animator/LogicRoot/MonsterRegisterNode/Wave1/ [0] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]StealthGameMonster_NinjaWaterGhost_Summoner Variant/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/NinjaWaterGhost_Summoner\u6b98\u5f71\u6c34\u9b3c (1)",
+        "A10_S3/Room/AllMonsters/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/StealthGameMonster_FatGuy \u7d05\u80a5 (1)",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_FlyingShooter_Farm",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_GunBoy",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_Minion_prefab",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_Minion_prefab_withShield",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_MonsterNest",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_NinjaWaterGhost",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_NinjaWaterGhostElite",
+        "A10_S3/Room/[Set] CloseDoorFight View&Wave/Monster Wave Sequence Spawner Variant/FSM Animator/LogicRoot/MonsterRegisterNode/Wave2/ [2] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]StealthGameMonster_NinjaWaterGhostElite_Summoner Variant/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/StealthGameMonster_NinjaWaterGhostElite_Summoner Variant",
+        "A10_S3/Room/AllMonsters/[\u89f8\u767c\u6846\u67b6] (1)/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_NinjaWaterGhost_Summoner Variant (1)",
+        "A10_S3/Room/Enemy/StealthGameMonster_Shield Totem (2)",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_Spearman",
+        "A10_S3/Room/CullingGroup/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/StealthGameMonster_SpearmanElite \u9577\u69cd\u83c1\u82f1",
+        "A10_S3/Room/MonsterRoster/StealthGameMonster_Sword Elite",
+        "A10_S3/Room/CullingGroup/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/StealthGameMonster_Sword Elite \u83c1\u82f1\u528d\u5175",
+        "A10_S3/Room/AllMonsters/[\u50b3\u9001\u7bc4\u570d]/StealthMonster_Flying Teleport Wizard_Circle (1)",
+        "A10_S3/Room/AllMonsters/Engaging Group/TrapMonster_Lurker (4)"
+    ],
+    "A11_S1_Hospital_remake": [
+        "A11_S1/Room/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/NinjaWaterGhostElite_Phantom Summoner Variant (1)",
+        "A11_S1/Room/StealthGameMonster_ MeteorHammer (1)",
+        "A11_S1/Room/Phase\u76f8\u95dc\u5207\u63dbGameplay----------------/General FSM Object_On And Off Switch \u6700\u7d42\u968e\u6bb5\u5207\u63db Variant/FSM Animator/LogicRoot/Phase3_Off/Phase3_Off/EngageToken/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u770b\u5b88\u7684\u4eba)/StealthGameMonster_GrenadeThrower (1)",
+        "A11_S1/Room/StealthGameMonster_MonsterNest_Virtual",
+        "A11_S1/Room/\u5c71\u6d779000\u7d50\u5c40/Rebind/A11Pod_Z\u885d\u51fa\u5929\u798d\u602aFSM_Prototype_Chaser \u5c0f\u5029Variant/FSM Animator/LogicRoot/LevelDesign/ [0] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]StealthGameMonster/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/StealthGameMonster_ZombieChaser_\u8ffd\u9010\u5929\u798d",
+        "A11_S1/Room/\u5c71\u6d779000\u7d50\u5c40/Rebind/A11Pod_Z\u885d\u51fa\u5929\u798d\u602aFSM_Prototype_Chaser \u5c0f\u5029Variant/FSM Animator/LogicRoot/LootProvider_\u5c0f\u5029\u7167\u7247/StealthGameMonster_ZombieChaser_\u8ffd\u9010\u5929\u798d \u5c0f\u5029",
+        "A11_S1/Room/Phase\u76f8\u95dc\u5207\u63dbGameplay----------------/General FSM Object_On And Off Switch \u6700\u7d42\u968e\u6bb5\u5207\u63db Variant/FSM Animator/LogicRoot/Phase3_Off/Phase3_Off/StealthGameMonster_ZombieChaser_\u8ffd\u9010\u5929\u798d \u7206\u70b8 (2)",
+        "A11_S1/Room/MonsterGameplay_2/StealthGameMonster_ZombieSlow \u5929\u798d (4)",
+        "A11_S1/Room/Phase\u76f8\u95dc\u5207\u63dbGameplay----------------/General FSM Object_On And Off Switch \u6700\u7d42\u968e\u6bb5\u5207\u63db Variant/FSM Animator/LogicRoot/Phase3_On/Phase2_\u904a\u6232\u6700\u7d42\u968e\u6bb5 /EngageToken/StealthGameMonster_ZombieSlow \u5929\u798d \u7206\u70b8 (7)",
+        "A11_S1/Room/StealthGameMonster_Zombie_Crawler (1)",
+        "A11_S1/Room/Prefab/CullingGroup_AlienGameplay_1/Alien Egg FSM Floor (2)/FSM Animator/LogicRoot/EggCore/TrapMonster_AlienChainEgg",
+        "A11_S1/Room/TrapMonster_ExplodeSnail \u8778\u725b (2)",
+        "A11_S1/Room/Phase\u76f8\u95dc\u5207\u63dbGameplay----------------/General FSM Object_On And Off Switch \u6700\u7d42\u968e\u6bb5\u5207\u63db Variant/FSM Animator/LogicRoot/Phase3_Off/Phase3_Off/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/TrapMonster_Robot_Crawler_withShield \u91d1\u96fb\u87f2 (1)"
+    ],
+    "A3_S2_GreenHouse_Final": [
+        "A3_S2/Room/Prefab/Gameplay_9/[MonsterBehaviorProvider] EngagingToken/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/Dragon_Snake",
+        "A3_S2/Room/Prefab/Gameplay_3/StealthGameMonster_Farm_AirDrone Shooter (1)",
+        "A3_S2/Room/Prefab/Gameplay_4/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/StealthGameMonster_FatGuy_Farm",
+        "A3_S2/Room/Prefab/Gameplay_5/StealthGameMonster_FlyingShooter",
+        "A3_S2/Room/Prefab/Gameplay_8/RCGEventSharingGroup/LootProvider \u8caa\u8ca1\u7389/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_NinjaWaterGhostMiniBoss",
+        "A3_S2/Room/Prefab/Gameplay_8/RCGEventSharingGroup/LootProvider \u8caa\u8ca1\u7389/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_NinjaWaterGhostMiniBoss \u6c34\u9b3c\u5c0f\u738b \u69b4\u5f48",
+        "A3_S2/Room/Prefab/Gameplay_1/StealthGameMonster_ShieldMinion",
+        "A3_S2/Room/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u770b\u5b88\u7684\u4eba)/StealthGameMonster_Spearman_withShield",
+        "A3_S2/Room/Prefab/Gameplay_4/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/TrapMonster_ExplodeFrog \u9752\u86d9",
+        "A3_S2/Room/Prefab/Gameplay_3/TrapMonster_ExplodeSnail (2)",
+        "A3_S2/Room/Prefab/Gameplay_5/Climbable_RopeC/ClimbRopeView/Hooks/TrapMonster_Exploder (4)",
+        "A3_S2/Room/Prefab/Gameplay_9/Climbable_RopeC/ClimbRopeView/Hooks/TrapMonster_ExploderOnRope"
+    ],
+    "A5_S2_Jail_Remake_Final": [
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/1F Gameplay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_Dog Mrx_A5_S2_Low_Eyesight Variant",
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/1F Gameplay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario(\u770b\u5b88\u7684\u4eba)/StealthGameMonster_GunBoy_A5_S2_Low_Eyesight Variant",
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/3F Gameplay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_GunBoy_A5_S2_Low_Eyesight Variant Variant",
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/1F Gameplay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario(\u770b\u5b88\u7684\u4eba)/StealthGameMonster_Minion_prefab_A5_S2_Low_Eyesight Variant",
+        "A5_S2/Room/JailBossRoom/LootProvider/Boss Fight FSM MrX/FSM Animator/LogicRoot/AnimatorControlNode(Note)/StealthGameMonster_MrX Variant",
+        "A5_S2/A5_S2_BossFight_Logic/StealthGameMonster_MrX Variant(BossFight)",
+        "A5_S2/Room/Prefab/EventBinder(\u6478\u904e\u5b58\u64cb\u9ede)/\u5b58\u64cb\u9ede\u7684\u7bc0\u9ede\u958b\u95dc/FSM Animator/LogicRoot/[Off]Node/DisEngageGroup(\u5178\u7344\u9577\u908f\u8f2f)/MrX Central Controller/Switcher/\u5178\u7344\u9577\u521d\u767b\u5834/GamePlay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_MrX Variant(Chase)",
+        "A5_S2/A5_S2_BossFight_Logic/StealthGameMonster_MrX_TrueBody_Room Variant",
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/3F Gameplay/EngagingGroup/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_Spearman_A5_S2_Low_Eyesight Variant Variant",
+        "A5_S2/Room/Prefab/MonsterGroup_AnyEngaging_A5_S2\u53eb\u5178\u7344\u9577 Variant/Monsters/2F Gameplay/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthMonster_EyeObserver (1)",
+        "A5_S2/Room/Prefab/TrapMonster_SpiderMine (1)"
+    ],
+    "A4_S4_Container_Final": [
+        "A4_S4/Room/Prefab/Room_4/Enemy/EngagingToken (2)/StealthGameMonster_Boomerang (1)",
+        "A4_S4/Room/Prefab/Room_3/Enemy/StealthGameMonster_Boomerang Stand",
+        "A4_S4/Room/Prefab/Room_1/Enemy/StealthGameMonster_Phoenix_AirDrone Dasher",
+        "A4_S4/Room/Prefab/Room_2/Enemy/StealthGameMonster_Phoenix_AirDrone Shooter",
+        "A4_S4/Room/Prefab/Room_4/Enemy/StealthMonster_AirSpider_ReflectAndExplode (4)",
+        "A4_S4/Room/Prefab/Room_2/Enemy/StealthMonster_Flying Teleport Wizard (2)",
+        "A4_S4/Room/Prefab/Room_1/Enemy/[\u89f8\u767c\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] LevelDesign_WanderingGroup/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthMonster_FlyingBase_FlyingTeleportWizard Variant (1)",
+        "A4_S4/Room/Prefab/Room_1/Enemy/TrapMonster_Broken Robot mini (2)",
+        "A4_S4/Room/Prefab/Room_4/Enemy/TrapMonster_Robot_Crawler_withShield (1)"
+    ],
+    "A2_S3_ReactorLeft_Final": [
+        "A2_S3/Room/Prefab/GameMonster_Turrent_Danger_Bullet (1)",
+        "A2_S3/Room/Prefab/Gameplay_3/EngagingToken (2)/StealthGameMonster_Dog",
+        "A2_S3/Room/Prefab/Gameplay_6/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario /[MonsterBehaviorProvider] LevelDesign_WanderingGroup (\u5de1\u908f\u7684\u4eba)/[MonsterBehaviorProvider] EngagingToken/StealthGameMonster_Elite (1)",
+        "A2_S3/Room/Prefab/Gameplay_6/StealthGameMonster_Minion",
+        "A2_S3/Room/Prefab/Gameplay_3/[MonsterBehaviorProvider] EngagingToken/[\u81ea\u7136\u5de1\u908f\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario (\u770b\u5b88\u7684\u4eba)/StealthGameMonster_Phoenix_AirDroneHack Variant (3)",
+        "A2_S3/Room/Prefab/\u5bf6\u7bb1 Chests/EventBinder \u4e2d\u9322\u888b/StealthGameMonster_Statue_DangerJumpKickStatue_M",
+        "A2_S3/Room/Prefab/DroneTunnel_Entrance/StealthGameMonster_Turrent Variant"
+    ],
+    "A6_S3_Tutorial_And_SecretBoss_Remake": [
+        "A6_S3/Room/LootProvider/General Boss Fight FSM Object Variant \u85e5\u8349\u50ac\u5316\u5668/FSM Animator/LogicRoot/---Boss---/[\u50b3\u9001\u7bc4\u570d]/1_StealthMonster_\u9023\u64ca\u602a_\u7926\u5751\u7248",
+        "A6_S3/Room/Prefab/Enemy_2/Chest Runner Shield Crawler Spawner \u76dc\u5bf6\u54e5\u5e03\u6797 \u4e1f\u91d1\u96fb\u87f2",
+        "A6_S3/Room/Prefab/Enemy_2/StealthGameMonster_Phoenix_AirDrone Dasher Variant",
+        "A6_S3/Room/Prefab/Enemy/StealthGameMonster_RunningHog (3)",
+        "A6_S3/Room/Prefab/Enemy_2/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_\u5c71\u6d1e\u8ff7\u5f69\u5fcd\u8005cave Invisible ninja Variant (1)",
+        "A6_S3/Room/Prefab/Enemy_2/\u5f29\u83c1\u82f1"
+    ],
+    "A5_S4_CastleMid_Remake_5wei": [
+        "A5_S4/Room/GameMonster_AirTurrent_ReflectAndInstantKill (1)",
+        "A5_S4/Room/Prefab/\u5bf6\u7bb1 Chest/A5\u5730\u5716\u9b5a\u66b4\u8d70\u60c5\u5883 FSM Object Variant A5\u5c71\u6d77RAM/FSM Animator/LogicRoot/LootProvider/StealthGameMonster_GuideFish",
+        "A5_S4/Room/StealthGameMonster_Phoenix_AirDrone Shooter \u9cf3\u51f0\u5c04",
+        "A5_S4/Room/SniperTeleportGroup (1)/StealthGameMonster_Sniper (1)",
+        "A5_S4/Room/LootProvider/General Boss Fight FSM Object_\u9577\u69cdMiniBoss \u6539 \u7206\u528d\u7389/FSM Animator/LogicRoot/---Boss---/StealthGameMonster_SpearmanMiniBoss \u9577\u69cd\u5c0f\u738b\u5b8c\u6574\u7248 (1)",
+        "A5_S4/Room/Prefab/StealthGameMonster_ZombieGrabber (17)"
+    ],
+    "A10_SG2_Cave2": [
+        "A10_SG2/Room/Prefab/A10_SG2_StatueFight_And_HackButtonSet/StatueFight FSM A10_SG2/FSM Animator/LogicRoot/ [2] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]CaveStatue_Reflect/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/CaveStatue_Reflect",
+        "A10_SG2/Room/GameObject/CaveStatue_Shield",
+        "A10_SG2/Room/Prefab/A10_SG2_StatueFight_And_HackButtonSet/StatueFight FSM A10_SG2/FSM Animator/LogicRoot/ [3] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]CaveStatue_Counter/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/[\u53e4\u4ee3\u7e7c\u627f] CaveStatue_Counter",
+        "A10_SG2/Room/Prefab/A10_SG2_StatueFight_And_HackButtonSet/StatueFight FSM A10_SG2/FSM Animator/LogicRoot/ [4] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]CaveStatue_JumpKick/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/[\u53e4\u4ee3\u7e7c\u627f] CaveStatue_JumpKick",
+        "A10_SG2/Room/Prefab/A10_SG2_StatueFight_And_HackButtonSet/StatueFight FSM A10_SG2/FSM Animator/LogicRoot/ [1] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]CaveStatue_Parry/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/[\u53e4\u4ee3\u7e7c\u627f] CaveStatue_Parry Variant"
+    ],
+    "A7_S3_Butterfly": [
+        "A7_ButterflyTest/Room/Prefab/Period Cycle Acitvate Group/FSMs/Period Cycle FSM_Shoot Jump Ball Variant/FSM Animator/AbstractRoot/StealthGameMonster_DummyMonster_For\u6a5f\u95dc \u5e73\u884c\u5b87\u5b99 Variant",
+        "A7_ButterflyTest/StealthGameMonster_Minion_A7_LightMask Variant/[Monsters&Interactables]/StealthGameMonster_Minion_A7_LightMask",
+        "A7_ButterflyTest/Room/Prefab/StealthGameMonster_Invisible_Ninja/StealthGameMonster_Invisible_Ninja (6)/StealthGameMonster_NinjaWaterGhost_Invisible Variant",
+        "A7_ButterflyTest/Room/Prefab/StealthMonster_ParrallelUniverse_FollowingGhost/StealthMonster_ParrallelUniverse_FollowingGhost"
+    ],
+    "A1_S1_HumanDisposal_Final": [
+        "A1_S1_GameLevel/Room/A1_S1_Tutorial_Logic/StealthGameMonster_Minion_Tutorial1",
+        "A1_S1_GameLevel/Room/A1_S1_Tutorial_Logic/StealthGameMonster_Minion_Tutorial2",
+        "A1_S1_GameLevel/Room/GamePlayS3_2/TrapMonster_Mutant (6)",
+        "A1_S1_GameLevel/Room/GamePlayS2_1/TrapMonster_Mutant Mini (3)"
+    ],
+    "A9_S3": [
+        "A9_S3/Room/Prefab/GrassAndSwordmanPair_FSM (1)/FSM Animator/LogicRoot/StealthGameMonster_BlindSwordMan (2)",
+        "A9_S3/Room/Prefab/GrassAndSwordmanPair_FSM (1)/FSM Animator/LogicRoot/TeleportSniperPosSet4/StealthGameMonster_Sniper \u72d9\u64ca\u624b (5)",
+        "A9_S3/Room/Prefab/StealthGameMonster_ZombieChaser_\u5929\u798d (5)"
+    ],
+    "A3_S5_BossGouMang_Final": [
+        "A3_S5_BossGouMang_GameLevel/Room/StealthGameMonster_BossZombieHammer",
+        "A3_S5_BossGouMang_GameLevel/Room/StealthGameMonster_BossZombieSpear",
+        "A3_S5_BossGouMang_GameLevel/Room/StealthGameMonster_GouMang Variant"
+    ],
+    "A2_S1_ReactorMiddle_Final": [
+        "A2_S1/Room/Prefab/Gameplay2/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_FatGuy",
+        "A2_S1/Room/Prefab/Gameplay1/[Mech]LockedByMonster/Monsters/StealthGameMonster_Statue_DangerJumpKickStatue",
+        "A2_S1/Room/Prefab/Gameplay5/TrapMonster_Broken Robot"
+    ],
+    "A10_S1_TombEntrance_remake": [
+        "A10_S1/Room/Prefab/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/Dragon_Snake_withShield (1)",
+        "A10_S1/Room/Prefab/CullingGroup AutoReset/TrapMonster_ExplodeEgg (11)"
+    ],
+    "A9_S5_\u98a8\u6c0f": [
+        "P2_R22_Savepoint_GameLevel/Room/Prefab/EventBinder (Boss Fight \u76f8\u95dc)/General Boss Fight FSM Object_\u98a8\u6c0f\u5144\u59b9/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_\u4f0f\u7fb2_\u65b0",
+        "P2_R22_Savepoint_GameLevel/Room/Prefab/EventBinder (Boss Fight \u76f8\u95dc)/General Boss Fight FSM Object_\u98a8\u6c0f\u5144\u59b9/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_\u65b0\u5973\u5aa7 Variant"
+    ],
+    "A6_S1_AbandonMine_Remake_4wei": [
+        "A6_S1/Room/Prefab/\u5bf6\u7bb1 Chests/StatueTreasureEventBinder \u8abf\u606f\u7389 /StealthGameMonster_Statue_Parry Variant_M",
+        "A6_S1/Room/Prefab/\u5bf6\u7bb1 Chests/LootProvider \u4e2d\u9322\u888b/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/StealthMonster_GiantBladeWithDropTrap"
+    ],
+    "A5_S3_UnderCastle_Remake_4wei": [
+        "A5_S3/Room/Prefab/GameMonster_Turrent_Danger_Bullet \u7832\u53f0 \u55ae\u5411\u9580 (3)",
+        "A5_S3/Room/Prefab/StealthGameMonster_Sniper \u72d9\u64ca\u624bNo Teleport "
+    ],
+    "A4_S2_RouteToControlRoom_Final": [
+        "A4_S2/Room/Prefab/\u5bf6\u7bb1 Chests/LootProvider \u98a8\u706b\u74b0/General Boss Fight FSM Object_\u9cf3\u51f0\u98db\u5175\u5c0f\u738b Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthMonster_Flying Teleport Wizard_MiniBoss_\u5f31\u5316",
+        "A4_S2/Room/Prefab/\u5bf6\u7bb1 Chests/EventBinder \u85e5\u8349\u50ac\u5316\u5668/e_Parry Variant_Mr_Statue_Parry Variant_M"
+    ],
+    "A2_S2_ReactorRight_Final": [
+        "A2_S2/Room/Prefab/\u5bf6\u7bb1 Chests/LootProvider \u6536\u91d1\u7389/Chest Runner SpiderMine Spawner \u76dc\u5bf6\u54e5\u5e03\u6797 \u4e0d\u4e1f\u6771\u897f (1)",
+        "A2_S2/Room/Prefab/\u5bf6\u7bb1 Chests/EventBinder_\u958b\u555f\u6a4b\u5f8c\u89f8\u767cBoss Fight \u7b97\u529b\u5143\u4ef6/LootProvider \u7b97\u529b\u5143\u4ef6/General Boss Fight FSM Object Variant Variant/FSM Animator/LogicRoot/---Boss---/StealthGameMonster_SpearmanMiniBoss \u9577\u69cd\u5c0f\u738b\u57fa\u672c Variant"
+    ],
+    "A0_S9_AltarReturned": [
+        "GameLevel/Room/Prefab/ [2] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]StealthGameMonster_GroundRollingFlameAttackSpider Fire \u706b\u8718\u86db/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/StealthGameMonster_GroundRollingFlameAttackSpider Fire \u706b\u8718\u86db",
+        "GameLevel/Room/Prefab/LootProvider \u7384\u9435/EvenBinder/General Boss Fight FSM A0_S9 GiantBladeFire/FSM Animator/LogicRoot/---Boss---/StealthMonster_GiantBlade_FireBlade_A0_S9"
+    ],
+    "A0_S7_CaveReturned": [
+        "A0_S7/Room/Prefab/LootProvider \u5927\u9f8d\u86c7FSM/\u9f8d\u86c7\u51fa\u73fe\u8207\u5426FSM/FSM Animator/LogicRoot/[On]Node/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/Dragon_Snake_Cave_Giant Variant",
+        "A0_S7/Room/StealthGameMonster_TutorialDummyNonAttack"
+    ],
+    "AG_SG1": [
+        "AG_SG1/Room/Shield Crawler Spawner \u4e1f\u91d1\u96fb\u87f2"
+    ],
+    "A11_SG1_ShinTenRoom": [
+        "A11_SG1/Room/Prefab/LootProvider/EventBinder/General Boss Fight FSM Object Variant_Headless\u5211\u5929 Variant/FSM Animator/LogicRoot/---Boss---/StealthGameMonster_ShingTen Variant"
+    ],
+    "A11_S2_Laboratory_remake": [
+        "A11_S2/Room/Prefab/Phase\u76f8\u95dc\u5207\u63dbGameplay----------------/[Set] CloseDoorFight View&Wave_2/Monster Wave Sequence Spawner Variant/FSM Animator/LogicRoot/MonsterRegisterNode/Wave1/ [0] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]StealthGameMonster_Zombie_Crawler\u80a5\u8718\u86db/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/StealthGameMonster_Zombie_Crawler\u80a5\u8718\u86db"
+    ],
+    "A11_S0_Boss_YiGung_\u56de\u84ec\u840a": [
+        "GameLevel/Room/Prefab/EventBinder/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/Boss_Yi Gung"
+    ],
+    "A10_SG4_Cave4": [
+        "A10_SG4/Room/Prefab/A10_SG4_StatueFight_And_HackButtonSet/StatueFight FSM A10_SG4 Variant/FSM Animator \u95dc\u5361\u8a2d\u8a08/LogicRoot/ [2] [\u95dc\u9580\u6230\u51fa\u5834\u60c5\u5883]CaveStatue_Laser Variant_2-1/[MonsterBehaviorProvider] LevelDesign_Spawner/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_SpawnDoorProvider/[\u53e4\u4ee3\u7e7c\u627f] CaveStatue_Laser Variant"
+    ],
+    "A10_SG1_Cave1": [
+        "A10_SG1_Cave1/Room/Prefab/[\u89f8\u767c\u6846\u67b6]/[MonsterBehaviorProvider] LevelDesign_CullingAndResetGroup/[MonsterBehaviorProvider] LevelDesign_Init_Scenario/[MonsterBehaviorProvider] LevelDesign_PlayerSensor/StealthGameMonster_Statue_ReflectProjectile Variant"
+    ],
+    "A10_S5_Boss_Jee": [
+        "A10S5/Room/Boss And Environment Binder/General Boss Fight FSM Object \u59ec Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_Boss_Jee"
+    ],
+    "A10_S4_HistoryTomb_Left": [
+        "A10_S4/Room/MiniBossLearDoorEventBinder/General Boss Fight FSM Object_\u6b98\u50cfMiniboss/FSM Animator/LogicRoot/---Boss---/LootProvider/[\u50b3\u9001\u7bc4\u570d]/StealthGameMonster_NinjaWaterGhostMiniBoss \u6c34\u9b3c\u5c0f\u738b \u6b98\u5f71Phantom Summoner"
+    ],
+    "A9_S4": [
+        "A9_S4/Room/Prefab/TrapMonster_AlienBlob \u5929\u798d\u5c0f\u602a (1)"
+    ],
+    "A7_S5_Boss_ButterFly": [
+        "P2_R22_Savepoint_GameLevel/EventBinder/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/ButterFly_BossFight_Logic/StealthGameMonster_Boss_ButterFly Variant (2)"
+    ],
+    "A7_S2_SectionF_MiniBossFight": [
+        "A2_Stage_Remake/Room/Prefab/[EventBinder]BossFight/General Boss Fight FSM Object_\u9cf3\u51f0\u98db\u5175\u5c0f\u738b Variant (1)/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthMonster_Flying Teleport Wizard_MiniBoss \u5e7b\u8c61\u5340\u5e73\u884c\u5b87\u5b99\u7248 Variant"
+    ],
+    "A5_S5_JieChuanHall": [
+        "A5_S5/Room/EventBinder/General Boss Fight FSM Object_\u7d50\u6b0a/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_Boss_JieChuan"
+    ],
+    "A4_S5_DaoTrapHouse_Final": [
+        "MechClaw Game Play/Monster_GiantMechClaw"
+    ],
+    "A2_S6_LogisticCenter_Final": [
+        "A2_S6/Room/Prefab/\u5bf6\u7bb1 Chests/MiniBossFight \u5927\u9322\u888b/LootProvider \u5927\u9322\u888b/General Boss Fight FSM Object Variant/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthMonster_GiantBlade_FireBlade"
+    ],
+    "A1_S3_InnerHumanDisposal_Final": [
+        "A1_S3_GameLevel/Room/Prefab/EventBinder/LootProvider \u85e5\u8349\u50ac\u5316\u5668/General Boss Fight FSM Object_A1_S3_\u6c34\u9b3c/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_NinjaWaterGhostMiniBoss \u6c34\u9b3c\u5c0f\u738b"
+    ],
+    "A1_S2_ConnectionToElevator_Final": [
+        "A1_S2_GameLevel/Room/Prefab/Gameplay5/EventBinder/LootProvider/General Boss Fight FSM ObjectA1_S2_\u5927\u528d\u5175/FSM Animator/LogicRoot/---Boss---/BossShowHealthArea/StealthGameMonster_Samurai_General_Boss Variant"
+    ],
+    "A0_S4_tutorial": [
+        "A0_S4 gameLevel/Room/StealthGameMonster_RunningHog \u6e2c\u8a66\u7528"
+    ]
+}

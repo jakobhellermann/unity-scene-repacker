@@ -1,0 +1,21 @@
+[package]
+name = "unity-scene-repacker"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0"
+byteorder = "1.5"
+elsa = "1.11"
+indexmap = { version = "2.9", features = ["serde"] }
+json5 = "0.4"
+memmap2 = "0.9"
+rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all" }
+serde = { version = "1.0", default-features = false }
+serde_derive = "1.0"
+
+[features]
+dhat-heap = []
+
+[lints.clippy]
+redundant_pattern_matching = "allow"
