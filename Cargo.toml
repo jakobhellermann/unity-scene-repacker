@@ -21,6 +21,7 @@ rustc-hash = "2.1"
 paris = { version = "1.5", features = ["macros", "no_logger"] }
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
+steamlocate = "2.0"
 
 [features]
 dhat-heap = []

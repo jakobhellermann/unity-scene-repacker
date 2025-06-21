@@ -4,8 +4,8 @@ mod typetree_cache;
 mod unity;
 mod utils;
 
-use anyhow::{Context, Result};
-use clap::Parser;
+use anyhow::{Context, Result, ensure};
+use clap::{Args, Parser};
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use paris::{error, info, success, warn};
@@ -17,6 +17,7 @@ use rabex::objects::ClassId;
 use rabex::objects::pptr::PPtr;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use std::collections::{BTreeSet, HashMap};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -27,12 +28,23 @@ use crate::typetree_cache::TypeTreeCache;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData};
 use crate::utils::friendly_size;
 
-#[derive(Parser, Debug)]
-#[command(version)]
-struct Args {
+#[derive(Args, Debug)]
+#[group(required = true, multiple = false)]
+struct GameArgs {
     /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
     #[arg(long)]
-    game_dir: PathBuf,
+    game_dir: Option<PathBuf>,
+    #[arg(long)]
+    /// App ID or search term for the steam game to detect
+    steam_game: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+#[command(version)]
+struct Arguments {
+    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
+    #[clap(flatten)]
+    game: GameArgs,
     /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
     /// ```json
     /// {
@@ -77,8 +89,71 @@ fn main() {
         std::process::exit(1);
     }
 }
+
+fn locate(game: &str) -> Result<PathBuf> {
+    let steam = steamlocate::SteamDir::locate()?;
+
+    let game = game.to_ascii_lowercase();
+
+    let (app, library) = if let Ok(app_id) = game.parse() {
+        steam
+            .find_app(app_id)?
+            .with_context(|| format!("Could not locate game with app id {}", app_id))?
+    } else {
+        steam
+            .libraries()?
+            .filter_map(Result::ok)
+            .find_map(|library| {
+                let app = library.apps().filter_map(Result::ok).find(|app| {
+                    let name = app.name.as_ref().unwrap_or(&app.install_dir);
+                    name.to_ascii_lowercase().contains(&game)
+                })?;
+                Some((app, library))
+            })
+            .with_context(|| format!("Didn't find any steam game matching '{}'", game))?
+    };
+
+    let install_dir = library.resolve_app_dir(&app);
+    let name = app.name.as_ref().unwrap_or(&app.install_dir);
+    info!("Detected game '{}' at '{}'", name, install_dir.display());
+
+    let data_dir = std::fs::read_dir(&install_dir)?
+        .filter_map(Result::ok)
+        .find(|entry| {
+            entry
+                .path()
+                .file_name()
+                .and_then(OsStr::to_str)
+                .map_or(false, |name| name.ends_with("_Data"))
+                && entry.file_type().map_or(false, |ty| ty.is_dir())
+        })
+        .with_context(|| {
+            format!(
+                "Did not find unity 'game_Data' directory in '{}'. Is {} a unity game?",
+                install_dir.display(),
+                name
+            )
+        })?;
+
+    Ok(data_dir.path())
+}
 fn run() -> Result<()> {
-    let args = Args::parse();
+    let args = Arguments::parse();
+
+    let game_dir = match args.game.game_dir {
+        Some(game_dir) => {
+            ensure!(
+                game_dir.exists(),
+                "Game directory '{}' does not exist",
+                game_dir.display()
+            );
+            game_dir
+        }
+        None => {
+            let game = args.game.steam_game.unwrap();
+            locate(&game)?
+        }
+    };
 
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
@@ -96,7 +171,7 @@ fn run() -> Result<()> {
     let tpk = tpk_file.as_type_tree()?.unwrap();
     let typetree_provider = TypeTreeCache::new(&tpk);
 
-    let mut ggm_reader = File::open(args.game_dir.join("globalgamemanagers"))
+    let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
         .context("couldn't find globalgamemanagers in game directory")?;
     let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
@@ -121,7 +196,7 @@ fn run() -> Result<()> {
     let mut repack_scenes = Vec::new();
     for (scene_name, paths) in preloads {
         let scene_index = scenes[scene_name.as_str()];
-        let path = args.game_dir.join(format!("level{scene_index}"));
+        let path = game_dir.join(format!("level{scene_index}"));
 
         let (serialized, all_reachable) =
             prune_scene(&scene_name, &path, &typetree_provider, &paths)?;
