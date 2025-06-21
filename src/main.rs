@@ -17,7 +17,7 @@ use rabex::objects::ClassId;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -206,7 +206,15 @@ fn run() -> Result<()> {
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
-    let mut out = BufWriter::new(File::create(&args.output)?);
+    if let Some(parent) = args.output.parent() {
+        DirBuilder::new()
+            .recursive(true)
+            .create(&parent)
+            .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
+    }
+
+    let mut out =
+        BufWriter::new(File::create(&args.output).context("Could not write to output file")?);
 
     let compression = match args.compression {
         Compression::None => CompressionType::None,
