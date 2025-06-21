@@ -59,7 +59,7 @@ impl ClassIdType for Transform {
     const CLASS_ID: ClassId = ClassId::Transform;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GameObject {
     pub m_Component: Vec<ComponentPair>,
     pub m_Layer: u32,
@@ -71,7 +71,7 @@ impl ClassIdType for GameObject {
     const CLASS_ID: ClassId = ClassId::GameObject;
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ComponentPair {
     pub component: PPtr,
 }

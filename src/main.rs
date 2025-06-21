@@ -14,8 +14,11 @@ use rabex::files::bundlefile::{self, BundleFileHeader, CompressionType};
 use rabex::files::serialzedfile::builder::SerializedFileBuilder;
 use rabex::files::serialzedfile::{self, TypeTreeProvider};
 use rabex::objects::ClassId;
-use rabex::objects::pptr::PPtr;
+use rabex::objects::pptr::{PPtr, PathId};
+use rabex::serde_typetree;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
+use rustc_hash::FxHashMap;
+use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsStr;
 use std::fs::{DirBuilder, File};
@@ -25,7 +28,9 @@ use std::time::Instant;
 
 use crate::scene_lookup::SceneLookup;
 use crate::typetree_cache::TypeTreeCache;
-use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData};
+use crate::unity::types::{
+    AssetBundle, AssetInfo, BuildSettings, GameObject, PreloadData, Transform,
+};
 use crate::utils::friendly_size;
 
 #[derive(Args, Debug)]
@@ -204,9 +209,9 @@ fn run() -> Result<()> {
         let scene_index = scenes[scene_name.as_str()];
         let path = game_dir.join(format!("level{scene_index}"));
 
-        let (serialized, all_reachable) =
+        let (serialized, all_reachable, roots) =
             prune_scene(&scene_name, &path, &typetree_provider, &paths)?;
-        repack_scenes.push((scene_name, serialized, path, all_reachable));
+        repack_scenes.push((scene_name, serialized, path, all_reachable, roots));
     }
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
@@ -234,7 +239,8 @@ fn run() -> Result<()> {
         &tpk,
         &typetree_provider,
         unity_version,
-        &mut repack_scenes,
+        args.disable,
+        repack_scenes.as_mut_slice(),
     )
     .context("trying to repack bundle")?;
 
@@ -265,7 +271,7 @@ fn prune_scene(
     path: &Path,
     typetree_provider: impl TypeTreeProvider,
     retain_paths: &[String],
-) -> Result<(SerializedFile, BTreeSet<i64>)> {
+) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<PathId>)> {
     let file = File::open(path)?;
     let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
 
@@ -292,7 +298,26 @@ fn prune_scene(
         all_reachable.insert(settings.m_PathID);
     }
 
-    Ok((serialized, all_reachable))
+    Ok((serialized, all_reachable, new_roots.into_iter().collect()))
+}
+
+fn disable_objects(
+    tpk: &TpkTypeTreeBlob,
+    serialized: &mut SerializedFile,
+    data: &mut Cursor<Mmap>,
+    root: i64,
+) -> std::result::Result<(i64, Vec<u8>), anyhow::Error> {
+    let root_transform = serialized.get_object(root).unwrap();
+    let root_transform = serialized.read::<Transform>(root_transform, tpk, data)?;
+
+    let go_info = root_transform.m_GameObject.deref_local(serialized);
+    let tt = serialized.get_typetree_for(&go_info, tpk)?;
+
+    let mut go = serialized.read_as::<GameObject>(&go_info, &tt, data)?;
+    go.m_IsActive = false;
+
+    let modified = serde_typetree::to_vec_endianed(&go, &tt, serialized.m_Header.m_Endianess)?;
+    Ok((go_info.m_PathID, modified))
 }
 
 #[derive(Debug)]
@@ -309,7 +334,14 @@ fn repack_bundle<W: Write + Seek>(
     tpk: &TpkTypeTreeBlob,
     typetree_provider: &impl TypeTreeProvider,
     unity_version: UnityVersion,
-    scenes: &mut [(String, SerializedFile, PathBuf, BTreeSet<i64>)],
+    disable_roots: bool,
+    scenes: &mut [(
+        String,
+        SerializedFile,
+        PathBuf,
+        BTreeSet<PathId>,
+        Vec<PathId>,
+    )],
 ) -> Result<Stats> {
     let mut files = Vec::new();
 
@@ -334,7 +366,7 @@ fn repack_bundle<W: Write + Seek>(
         .collect();
     let mut container = Some(container);
 
-    for (name, serialized, path, keep_objects) in scenes {
+    for (name, serialized, path, keep_objects, roots) in scenes {
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, typetree_provider, &common_offset_map);
 
@@ -370,7 +402,7 @@ fn repack_bundle<W: Write + Seek>(
 
         let trimmed = {
             let file = File::open(path)?;
-            let data = Cursor::new(unsafe { Mmap::map(&file)? });
+            let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
 
             stats.objects_before += serialized.objects().len();
             stats.size_before += data.get_ref().len();
@@ -379,12 +411,35 @@ fn repack_bundle<W: Write + Seek>(
                 objects.retain(|obj| keep_objects.contains(&obj.m_PathID));
             });
 
+            let mut replacements = match disable_roots {
+                true => roots
+                    .iter()
+                    .map(|&root| disable_objects(tpk, serialized, &mut data, root))
+                    .collect::<Result<FxHashMap<_, _>>>()
+                    .context("Could not disable root gameobjects")?,
+                false => FxHashMap::default(),
+            };
+
+            let new_objects = serialized.take_objects();
+            let objects = new_objects.into_iter().map(|obj| {
+                let data = match replacements.remove(&obj.m_PathID) {
+                    Some(owned) => Cow::Owned(owned),
+                    None => {
+                        let offset = obj.m_Offset as usize;
+                        let size = obj.m_Size as usize;
+                        Cow::Borrowed(&data.get_ref()[offset..offset + size])
+                    }
+                };
+
+                (obj, data)
+            });
+
             let mut writer = Cursor::new(Vec::new());
-            serialzedfile::write_serialized(
+            serialzedfile::write_serialized_with(
                 &mut writer,
                 serialized,
-                data.get_ref(),
                 &common_offset_map,
+                objects,
             )?;
             let out = writer.into_inner();
 
