@@ -118,7 +118,17 @@ fn locate(game: &str) -> Result<PathBuf> {
     let name = app.name.as_ref().unwrap_or(&app.install_dir);
     info!("Detected game '{}' at '{}'", name, install_dir.display());
 
-    let data_dir = std::fs::read_dir(&install_dir)?
+    find_data_dir(&install_dir)?.with_context(|| {
+        format!(
+            "Did not find unity 'game_Data' directory in '{}'. Is {} a unity game?",
+            install_dir.display(),
+            name
+        )
+    })
+}
+
+fn find_data_dir(install_dir: &Path) -> Result<Option<PathBuf>> {
+    Ok(std::fs::read_dir(&install_dir)?
         .filter_map(Result::ok)
         .find(|entry| {
             entry
@@ -128,16 +138,9 @@ fn locate(game: &str) -> Result<PathBuf> {
                 .map_or(false, |name| name.ends_with("_Data"))
                 && entry.file_type().map_or(false, |ty| ty.is_dir())
         })
-        .with_context(|| {
-            format!(
-                "Did not find unity 'game_Data' directory in '{}'. Is {} a unity game?",
-                install_dir.display(),
-                name
-            )
-        })?;
-
-    Ok(data_dir.path())
+        .map(|entry| entry.path()))
 }
+
 fn run() -> Result<()> {
     let args = Arguments::parse();
 
@@ -148,7 +151,10 @@ fn run() -> Result<()> {
                 "Game directory '{}' does not exist",
                 game_dir.display()
             );
-            game_dir
+            match find_data_dir(&game_dir) {
+                Ok(Some(data_dir)) => data_dir,
+                _ => game_dir,
+            }
         }
         None => {
             let game = args.game.steam_game.unwrap();
