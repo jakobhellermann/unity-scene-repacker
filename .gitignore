@@ -1,4 +1,5 @@
 /target
+/uv.lock
 
 /out
 /*.unity3d

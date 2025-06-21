@@ -1,0 +1,22 @@
+[project]
+name = "unity-scene-repacker"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Topic :: Games/Entertainment"
+]
+dynamic = ["version"]
+
+[build-system]
+requires = ["maturin>=1.8,<2.0"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "bin"
+
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
