@@ -1,5 +1,6 @@
 mod scene_lookup;
 mod trace_pptr;
+pub mod typetree_generator_api;
 mod unity;
 
 pub use rabex;
