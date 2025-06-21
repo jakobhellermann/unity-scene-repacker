@@ -72,6 +72,10 @@ struct Arguments {
     compression: Compression,
     #[arg(long, short = 'o', default_value = "out.unity3d")]
     output: PathBuf,
+
+    /// Name to give the assetbundle. Should be unique for your game.
+    #[arg(long)]
+    bundle_name: Option<String>,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -233,7 +237,24 @@ fn run() -> Result<()> {
         Compression::Lz4hc => CompressionType::Lz4hc,
         // Compression::Lzham => CompressionType::Lzham,
     };
+
+    let name = match &args.bundle_name {
+        Some(name) => name,
+        None => {
+            let name = args
+                .output
+                .file_stem()
+                .and_then(OsStr::to_str)
+                .unwrap_or("unity-scene-repacker-bundle");
+            warn!(
+                "Did not specify --bundle-name, falling back to '{name}'. This might conflict with other loaded asset bundles"
+            );
+            name
+        }
+    };
+
     let stats = repack_bundle(
+        name,
         &mut out,
         compression,
         &tpk,
@@ -329,6 +350,7 @@ struct Stats {
 }
 
 fn repack_bundle<W: Write + Seek>(
+    bundle_name: &str,
     writer: W,
     compression: CompressionType,
     tpk: &TpkTypeTreeBlob,
@@ -354,13 +376,12 @@ fn repack_bundle<W: Write + Seek>(
 
     let common_offset_map = serialzedfile::build_common_offset_map(tpk, unity_version);
 
-    const ASSET_BUNDLE_NAME: &str = "assetBundle";
-    let prefix = "bundle";
+    let prefix = bundle_name;
 
     let container = scenes
         .iter()
         .map(|(scene_name, ..)| {
-            let path = format!("repacker/{prefix}_{scene_name}.unity");
+            let path = format!("unity-scene-repacker/{prefix}_{scene_name}.unity");
             (path, AssetInfo::default())
         })
         .collect();
@@ -381,7 +402,7 @@ fn repack_bundle<W: Write + Seek>(
 
         if let Some(container) = container.take() {
             sharedassets.add_object(&AssetBundle {
-                m_Name: ASSET_BUNDLE_NAME.into(),
+                m_Name: bundle_name.to_owned(),
                 m_Container: container,
                 m_MainAsset: AssetInfo::default(),
                 m_RuntimeCompatibility: 1,
