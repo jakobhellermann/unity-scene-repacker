@@ -18,7 +18,7 @@ use rabex::objects::pptr::PPtr;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsStr;
-use std::fs::File;
+use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -98,7 +98,7 @@ fn locate(game: &str) -> Result<PathBuf> {
     let (app, library) = if let Ok(app_id) = game.parse() {
         steam
             .find_app(app_id)?
-            .with_context(|| format!("Could not locate game with app id {}", app_id))?
+            .with_context(|| format!("Could not locate game with app id {app_id}"))?
     } else {
         steam
             .libraries()?
@@ -110,7 +110,7 @@ fn locate(game: &str) -> Result<PathBuf> {
                 })?;
                 Some((app, library))
             })
-            .with_context(|| format!("Didn't find any steam game matching '{}'", game))?
+            .with_context(|| format!("Didn't find any steam game matching '{game}'"))?
     };
 
     let install_dir = library.resolve_app_dir(&app);
@@ -124,8 +124,8 @@ fn locate(game: &str) -> Result<PathBuf> {
                 .path()
                 .file_name()
                 .and_then(OsStr::to_str)
-                .map_or(false, |name| name.ends_with("_Data"))
-                && entry.file_type().map_or(false, |ty| ty.is_dir())
+                .is_some_and(|name| name.ends_with("_Data"))
+                && entry.file_type().is_ok_and(|ty| ty.is_dir())
         })
         .with_context(|| {
             format!(
@@ -205,7 +205,15 @@ fn run() -> Result<()> {
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
-    let mut out = BufWriter::new(File::create(&args.output)?);
+    if let Some(parent) = args.output.parent() {
+        DirBuilder::new()
+            .recursive(true)
+            .create(parent)
+            .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
+    }
+
+    let mut out =
+        BufWriter::new(File::create(&args.output).context("Could not write to output file")?);
 
     let compression = match args.compression {
         Compression::None => CompressionType::None,
