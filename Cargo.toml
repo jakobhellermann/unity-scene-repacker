@@ -15,7 +15,7 @@ indexmap = { version = "2.9", features = ["serde"] }
 json5 = "0.4"
 memmap2 = "0.9"
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", features = [
-    "serde_path_to_error",
+    # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
 ] }
 rustc-hash = "2.1"
 paris = { version = "1.5", features = ["macros", "no_logger"] }
