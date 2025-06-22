@@ -250,7 +250,7 @@ fn run() -> Result<()> {
         }
     };
 
-    let stats = repack_bundle(
+    repack_bundle(
         name,
         &mut out,
         compression,
@@ -261,17 +261,6 @@ fn run() -> Result<()> {
         repack_scenes.as_mut_slice(),
     )
     .context("trying to repack bundle")?;
-
-    info!(
-        "Pruned {} -> <b>{}</b> objects",
-        stats.objects_before, stats.objects_after
-    );
-    info!(
-        "{} -> <b>{}</b> raw size",
-        friendly_size(stats.size_before),
-        friendly_size(stats.size_after)
-    );
-    println!();
 
     success!(
         "Repacked into <b>{}</b> <i>({})</i> in {:.2?}",
@@ -501,6 +490,17 @@ fn repack_bundle<W: Write + Seek>(
         unity_revision: unity_version.to_string(),
         size: 0, // unused
     };
+
+    info!(
+        "Pruned {} -> <b>{}</b> objects",
+        stats.objects_before, stats.objects_after
+    );
+    info!(
+        "{} -> <b>{}</b> raw size",
+        friendly_size(stats.size_before),
+        friendly_size(stats.size_after)
+    );
+    println!();
 
     bundlefile::write_bundle_iter(
         &header,
