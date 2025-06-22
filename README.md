@@ -1,5 +1,7 @@
 # unity-scene-repacker
 
+![demo asciicast](./docs/demo-cast.svg)
+
 When modding a unity game, you often want to `Instantiate` objects from a scene that isn't loaded.
 One solution for this is to load all the scenes you're interested in at startup, copy the gameobjects somewhere and unload the scene.
 This works, but is slow and memory intensive.
@@ -9,26 +11,26 @@ This project lets you read scenes from the distributed game, take only what you 
 ## Installation
 
 ```sh
-# compile from source
-cargo install --git https://github.com/jakobhellermann/unity-scene-repacker --branch rewrite
+uv tool install unity-scene-repacker # if you have uv installed
+cargo install --git https://github.com/jakobhellermann/unity-scene-repacker # to compile from source
 ```
 
 ## Usage
 
-```json
+```jsonc
 objects.json
 {
-    "A6_S3_Tutorial_And_SecretBoss_Remake": [
-        "A6_S3/Room/Prefab/Enemy/StealthGameMonster_RunningHog (3)",
-        "A6_S3/Room/Prefab/Enemy_2/\u5f29\u83c1\u82f1"
-    ],
-    "A0_S7_CaveReturned": [
-        "A0_S7/Room/StealthGameMonster_TutorialDummyNonAttack"
-    ],
-    "AG_SG1": [
-        "AG_SG1/Room/Shield Crawler Spawner \u4e1f\u91d1\u96fb\u87f2"
-    ],
-    ...
+  "Fungus1_12": [
+    "simple_grass",
+    "green_grass_2",
+    "green_grass_3",
+    "green_grass_1 (1)"
+  ],
+  "White_Palace_01": [
+    "WhiteBench",
+    "White_ Spikes"
+  ],
+  ...
 }
 ```
 
