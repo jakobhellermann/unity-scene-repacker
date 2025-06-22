@@ -428,6 +428,7 @@ fn repack_bundle<W: Write + Seek>(
             serialized.modify_objects(|objects| {
                 objects.retain(|obj| keep_objects.contains(&obj.m_PathID));
             });
+            stats.objects_after += serialized.objects().len();
 
             let mut replacements = match disable_roots {
                 true => roots
