@@ -179,10 +179,7 @@ fn run() -> Result<()> {
         .with_context(|| format!("couldn't find object json '{}'", args.objects.display()))?;
     let preloads: IndexMap<String, Vec<String>> = json5::from_str(&preloads)?;
 
-    let mut tpk_file = File::open("lz4.tpk").map_err(|_| {
-        anyhow::anyhow!("missing lz4.tpk file, download from https://github.com/AssetRipper/Tpk")
-    })?;
-    let tpk_file = TpkFile::from_reader(&mut tpk_file)?;
+    let tpk_file = TpkFile::from_reader(&mut include_bytes!("../resources/lz4.tpk").as_slice())?;
     let tpk = tpk_file.as_type_tree()?.unwrap();
     let typetree_provider = TypeTreeCache::new(&tpk);
 
