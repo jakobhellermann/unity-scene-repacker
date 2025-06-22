@@ -5,7 +5,8 @@ mod unity;
 mod utils;
 
 use anyhow::{Context, Result, ensure};
-use clap::{Args, Parser};
+use clap::{Args, CommandFactory as _, Parser};
+use clap_complete::{ArgValueCompleter, CompletionCandidate};
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use paris::{error, info, success, warn};
@@ -21,7 +22,7 @@ use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
 use std::io::{BufReader, BufWriter, Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -41,9 +42,36 @@ struct GameArgs {
     /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
     #[arg(long)]
     game_dir: Option<PathBuf>,
-    #[arg(long)]
+    #[arg(long, add = ArgValueCompleter::new(complete_steam_game))]
     /// App ID or search term for the steam game to detect
     steam_game: Option<String>,
+}
+
+fn complete_steam_game(current: &OsStr) -> Vec<CompletionCandidate> {
+    fn complete_steam_game_inner(_: &OsStr) -> Result<Vec<CompletionCandidate>> {
+        let steam = steamlocate::SteamDir::locate()?;
+
+        let mut candidates = Vec::new();
+
+        for library in steam.libraries()?.filter_map(Result::ok) {
+            for app in library.apps().filter_map(Result::ok) {
+                let app_dir = library.resolve_app_dir(&app);
+                let Some(_) = find_data_dir(&app_dir).transpose() else {
+                    continue;
+                };
+                let name = app
+                    .name
+                    .map(OsString::from)
+                    .unwrap_or(Path::new(&app.install_dir).file_name().unwrap().to_owned());
+                candidates
+                    .push(CompletionCandidate::new(name).help(Some(app.app_id.to_string().into())));
+            }
+        }
+
+        Ok(candidates)
+    }
+
+    complete_steam_game_inner(current).unwrap_or_default()
 }
 
 #[derive(Parser, Debug)]
@@ -95,6 +123,8 @@ pub enum Compression {
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn main() {
+    clap_complete::CompleteEnv::with_factory(Arguments::command).complete();
+
     if let Err(e) = run() {
         error!("{:?}", e);
         std::process::exit(1);

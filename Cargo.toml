@@ -10,6 +10,7 @@ description = "Repack unity level files into filtered asset bundles you can load
 anyhow = "1.0"
 byteorder = "1.5"
 clap = { version = "4.5", features = ["derive", "unstable-markdown"] }
+clap_complete = { version = "4.5.54", features = ["unstable-dynamic"] }
 elsa = "1.11"
 indexmap = { version = "2.9", features = ["serde"] }
 json5 = "0.4"
