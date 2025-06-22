@@ -68,7 +68,7 @@ struct Arguments {
     #[arg(long, default_value = "false")]
     disable: bool,
     /// Compression level to apply
-    #[arg(long, default_value = "none")]
+    #[arg(long, default_value = "lzma")]
     compression: Compression,
     #[arg(long, short = 'o', default_value = "out.unity3d")]
     output: PathBuf,
@@ -82,7 +82,7 @@ struct Arguments {
 pub enum Compression {
     None = 0,
     Lzma = 1,
-    Lz4 = 2,
+    // Lz4 = 2,
     /// Best compression at the cost of speed
     Lz4hc = 3,
     // Lzham = 4,
@@ -230,7 +230,7 @@ fn run() -> Result<()> {
     let compression = match args.compression {
         Compression::None => CompressionType::None,
         Compression::Lzma => CompressionType::Lzma,
-        Compression::Lz4 => CompressionType::Lz4,
+        // Compression::Lz4 => CompressionType::Lz4,
         Compression::Lz4hc => CompressionType::Lz4hc,
         // Compression::Lzham => CompressionType::Lzham,
     };

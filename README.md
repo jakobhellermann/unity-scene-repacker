@@ -33,7 +33,7 @@ objects.json
 ```
 
 ```sh
-unity-scene-repacker 
+unity-scene-repacker
     --steam-game 'Hollow Knight'
     --objects objects.json \
     --output mybundle.unity3d
@@ -52,7 +52,7 @@ Options:
 
       --objects <OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
-          
+
             {
               "Fungus1_12": [
                 "simple_grass",
@@ -62,24 +62,26 @@ Options:
                 "WhiteBench",
               ]
             }
-          
+
 
       --disable
           When true, all gameobjects in the scene will start out disabled
 
       --compression <COMPRESSION>
           Compression level to apply
-          
-          [default: none]
+
+          [default: lzma]
 
           Possible values:
           - none
           - lzma
-          - lz4
           - lz4hc: Best compression at the cost of speed
 
   -o, --output <OUTPUT>
           [default: out.unity3d]
+
+      --bundle-name <BUNDLE_NAME>
+          Name to give the assetbundle. Should be unique for your game
 
   -h, --help
           Print help (see a summary with '-h')
