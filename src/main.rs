@@ -13,8 +13,8 @@ use rabex::files::SerializedFile;
 use rabex::files::bundlefile::{self, BundleFileHeader, CompressionType};
 use rabex::files::serialzedfile::builder::SerializedFileBuilder;
 use rabex::files::serialzedfile::{self, TypeTreeProvider};
-use rabex::objects::ClassId;
 use rabex::objects::pptr::{PPtr, PathId};
+use rabex::objects::{ClassId, TypedPPtr};
 use rabex::serde_typetree;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -308,23 +308,34 @@ fn prune_scene(
     Ok((serialized, all_reachable, new_roots.into_iter().collect()))
 }
 
-fn disable_objects(
+fn adjust_roots(
+    replacements: &mut FxHashMap<i64, Vec<u8>>,
     tpk: &TpkTypeTreeBlob,
     serialized: &mut SerializedFile,
     data: &mut Cursor<Mmap>,
-    root: i64,
-) -> std::result::Result<(i64, Vec<u8>), anyhow::Error> {
-    let root_transform = serialized.get_object(root).unwrap();
-    let root_transform = serialized.read::<Transform>(root_transform, tpk, data)?;
+    transform: i64,
+    disable: bool,
+) -> Result<(), anyhow::Error> {
+    let transform_info = serialized.get_object(transform).unwrap();
+    let tt = serialized.get_typetree_for(&transform_info, tpk)?;
+    let mut transform = serialized.read_as::<Transform>(transform_info, &tt, data)?;
+    transform.m_Father = TypedPPtr::null();
 
-    let go_info = root_transform.m_GameObject.deref_local(serialized);
-    let tt = serialized.get_typetree_for(&go_info, tpk)?;
+    let transform_modified =
+        serde_typetree::to_vec_endianed(&transform, &tt, serialized.m_Header.m_Endianess)?;
+    replacements.insert(transform_info.m_PathID, transform_modified);
 
-    let mut go = serialized.read_as::<GameObject>(&go_info, &tt, data)?;
-    go.m_IsActive = false;
+    if disable {
+        let go_info = transform.m_GameObject.deref_local(serialized);
+        let tt = serialized.get_typetree_for(&go_info, tpk)?;
+        let mut go = serialized.read_as::<GameObject>(&go_info, &tt, data)?;
+        go.m_IsActive = false;
+        let go_modified =
+            serde_typetree::to_vec_endianed(&go, &tt, serialized.m_Header.m_Endianess)?;
+        replacements.insert(go_info.m_PathID, go_modified);
+    }
 
-    let modified = serde_typetree::to_vec_endianed(&go, &tt, serialized.m_Header.m_Endianess)?;
-    Ok((go_info.m_PathID, modified))
+    Ok(())
 }
 
 #[must_use]
@@ -438,14 +449,17 @@ fn repack_bundle<W: Write + Seek>(
 
             let type_remap = prune_types(serialized);
 
-            let mut replacements = match disable_roots {
-                true => roots
-                    .iter()
-                    .map(|&root| disable_objects(tpk, serialized, &mut data, root))
-                    .collect::<Result<FxHashMap<_, _>>>()
-                    .context("Could not disable root gameobjects")?,
-                false => FxHashMap::default(),
-            };
+            let mut replacements = FxHashMap::default();
+            for &root in roots.iter() {
+                adjust_roots(
+                    &mut replacements,
+                    tpk,
+                    serialized,
+                    &mut data,
+                    root,
+                    disable_roots,
+                )?;
+            }
 
             let new_objects = serialized.take_objects();
             let objects = new_objects.into_iter().map(|mut obj| {

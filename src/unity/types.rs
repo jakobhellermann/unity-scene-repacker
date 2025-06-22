@@ -49,11 +49,14 @@ pub struct AssetInfo {
     pub asset: PPtr,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transform {
+    pub m_GameObject: TypedPPtr<GameObject>,
+    pub m_LocalRotation: (f32, f32, f32, f32),
+    pub m_LocalPosition: (f32, f32, f32),
+    pub m_LocalScale: (f32, f32, f32),
     pub m_Children: Vec<TypedPPtr<Transform>>,
     pub m_Father: TypedPPtr<Transform>,
-    pub m_GameObject: TypedPPtr<GameObject>,
 }
 impl ClassIdType for Transform {
     const CLASS_ID: ClassId = ClassId::Transform;
