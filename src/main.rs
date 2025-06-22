@@ -17,7 +17,7 @@ use rabex::objects::ClassId;
 use rabex::objects::pptr::{PPtr, PathId};
 use rabex::serde_typetree;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 use std::ffi::OsStr;
@@ -338,6 +338,23 @@ fn disable_objects(
     Ok((go_info.m_PathID, modified))
 }
 
+#[must_use]
+fn prune_types(serialized: &mut SerializedFile) -> FxHashMap<i32, i32> {
+    let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
+    let mut old_to_new: FxHashMap<i32, i32> = FxHashMap::default();
+    serialized.m_Types = std::mem::take(&mut serialized.m_Types)
+        .into_iter()
+        .enumerate()
+        .filter(|&(idx, _)| used_types.contains(&(idx as i32)))
+        .enumerate()
+        .map(|(new_index, (old_index, ty))| {
+            old_to_new.insert(old_index as i32, new_index as i32);
+            ty
+        })
+        .collect();
+    old_to_new
+}
+
 #[derive(Debug)]
 struct Stats {
     objects_before: usize,
@@ -430,6 +447,8 @@ fn repack_bundle<W: Write + Seek>(
             });
             stats.objects_after += serialized.objects().len();
 
+            let type_remap = prune_types(serialized);
+
             let mut replacements = match disable_roots {
                 true => roots
                     .iter()
@@ -440,7 +459,7 @@ fn repack_bundle<W: Write + Seek>(
             };
 
             let new_objects = serialized.take_objects();
-            let objects = new_objects.into_iter().map(|obj| {
+            let objects = new_objects.into_iter().map(|mut obj| {
                 let data = match replacements.remove(&obj.m_PathID) {
                     Some(owned) => Cow::Owned(owned),
                     None => {
@@ -449,6 +468,8 @@ fn repack_bundle<W: Write + Seek>(
                         Cow::Borrowed(&data.get_ref()[offset..offset + size])
                     }
                 };
+
+                obj.m_TypeID = type_remap[&obj.m_TypeID];
 
                 (obj, data)
             });
