@@ -1,5 +1,7 @@
 #![allow(non_snake_case, dead_code)]
 
+use std::path::Path;
+
 use indexmap::IndexMap;
 use rabex::objects::pptr::{PPtr, TypedPPtr};
 use rabex::objects::{ClassId, ClassIdType};
@@ -11,6 +13,13 @@ pub struct BuildSettings {
 }
 impl ClassIdType for BuildSettings {
     const CLASS_ID: ClassId = ClassId::BuildSettings;
+}
+impl BuildSettings {
+    pub fn scene_names(&self) -> impl Iterator<Item = &str> {
+        self.scenes
+            .iter()
+            .map(|scene_path| Path::new(scene_path).file_stem().unwrap().to_str().unwrap())
+    }
 }
 
 #[derive(Debug, Serialize, Default)]

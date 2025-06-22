@@ -9,8 +9,9 @@ use clap::{Args, Parser};
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use paris::{error, info, success, warn};
+use rabex::config::ExtractionConfig;
 use rabex::files::SerializedFile;
-use rabex::files::bundlefile::{self, BundleFileHeader, CompressionType};
+use rabex::files::bundlefile::{self, BundleFileHeader, BundleFileReader, CompressionType};
 use rabex::files::serialzedfile::builder::SerializedFileBuilder;
 use rabex::files::serialzedfile::{self, TypeTreeProvider};
 use rabex::objects::pptr::{PPtr, PathId};
@@ -19,12 +20,13 @@ use rabex::serde_typetree;
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::fs::{DirBuilder, File};
-use std::io::{BufWriter, Cursor, Seek, Write};
+use std::io::{BufReader, BufWriter, Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use utils::TempDir;
 
 use crate::scene_lookup::SceneLookup;
 use crate::typetree_cache::TypeTreeCache;
@@ -179,40 +181,86 @@ fn run() -> Result<()> {
         .with_context(|| format!("couldn't find object json '{}'", args.objects.display()))?;
     let preloads: IndexMap<String, Vec<String>> = json5::from_str(&preloads)?;
 
-    let tpk_file = TpkFile::from_reader(&mut include_bytes!("../resources/lz4.tpk").as_slice())?;
-    let tpk = tpk_file.as_type_tree()?.unwrap();
-    let typetree_provider = TypeTreeCache::new(&tpk);
-
-    let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
-        .context("couldn't find globalgamemanagers in game directory")?;
-    let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
-
-    let scenes = ggm
-        .read_single::<BuildSettings>(ClassId::BuildSettings, &typetree_provider, &mut ggm_reader)?
-        .scenes;
-    let scenes: HashMap<&str, usize> = scenes
-        .iter()
-        .enumerate()
-        .map(|(i, scene_path)| {
-            let path = Path::new(scene_path).file_stem().unwrap().to_str().unwrap();
-            (path, i)
-        })
-        .collect();
-
     let obj_count = preloads
         .iter()
         .map(|(_, objects)| objects.len())
         .sum::<usize>();
     info!("Repacking {obj_count} objects in {} scenes", preloads.len());
 
-    let mut repack_scenes = Vec::new();
-    for (scene_name, paths) in preloads {
-        let scene_index = scenes[scene_name.as_str()];
-        let path = game_dir.join(format!("level{scene_index}"));
+    let tpk_file = TpkFile::from_reader(&mut include_bytes!("../resources/lz4.tpk").as_slice())?;
+    let tpk = tpk_file.as_type_tree()?.unwrap();
+    let tt = TypeTreeCache::new(&tpk);
 
-        let (serialized, all_reachable, roots) =
-            prune_scene(&scene_name, &path, &typetree_provider, &paths)?;
-        repack_scenes.push((scene_name, serialized, path, all_reachable, roots));
+    let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
+
+    let mut repack_scenes = Vec::new();
+    let bundle = game_dir.join("data.unity3d");
+    if bundle.exists() {
+        let mut reader = BundleFileReader::from_reader(
+            BufReader::new(File::open(bundle)?),
+            &ExtractionConfig::default(),
+        )?;
+
+        let mut scenes = None;
+        while let Some(mut item) = reader.next() {
+            if item.path == "globalgamemanagers" {
+                let mut ggm_reader = Cursor::new(item.read()?);
+                let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
+
+                let build_settings =
+                    ggm.read_single::<BuildSettings>(ClassId::BuildSettings, &tt, &mut ggm_reader)?;
+                scenes = Some(
+                    build_settings
+                        .scene_names()
+                        .map(ToOwned::to_owned)
+                        .collect::<Vec<_>>(),
+                );
+            } else if let Some(index) = item.path.strip_prefix("level") {
+                if let Ok(val) = index.parse::<usize>() {
+                    let scenes = scenes.as_ref().context(
+                        "globalgamemanagers not found in data.unity3d before level files",
+                    )?;
+                    let scene_name = &scenes[val];
+                    let Some(paths) = preloads.get(scene_name.as_str()) else {
+                        continue;
+                    };
+
+                    let data = item.read()?;
+
+                    let (serialized, all_reachable, roots) =
+                        prune_scene(&scene_name, Cursor::new(data), &tt, &paths)?;
+
+                    let tmp = temp_dir.dir.join(scene_name);
+                    std::fs::write(&tmp, data).context("Writing bundle data to temporary file")?;
+
+                    repack_scenes.push((scene_name.clone(), serialized, tmp, all_reachable, roots));
+                }
+            }
+        }
+    } else {
+        let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
+            .context("couldn't find globalgamemanagers in game directory")?;
+        let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
+
+        let scenes =
+            ggm.read_single::<BuildSettings>(ClassId::BuildSettings, &tt, &mut ggm_reader)?;
+        let scenes: FxHashMap<_, _> = scenes
+            .scene_names()
+            .enumerate()
+            .map(|(i, path)| (path, i))
+            .collect();
+
+        for (scene_name, paths) in preloads {
+            let scene_index = scenes[scene_name.as_str()];
+            let path = game_dir.join(format!("level{scene_index}"));
+
+            let file = File::open(&path)?;
+            let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
+
+            let (serialized, all_reachable, roots) =
+                prune_scene(&scene_name, &mut data, &tt, &paths)?;
+            repack_scenes.push((scene_name, serialized, path, all_reachable, roots));
+        }
     }
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
@@ -255,7 +303,7 @@ fn run() -> Result<()> {
         &mut out,
         compression,
         &tpk,
-        &typetree_provider,
+        &tt,
         unity_version,
         args.disable,
         repack_scenes.as_mut_slice(),
@@ -275,13 +323,10 @@ fn run() -> Result<()> {
 #[inline(never)]
 fn prune_scene(
     scene_name: &str,
-    path: &Path,
+    mut data: impl Read + Seek,
     typetree_provider: impl TypeTreeProvider,
     retain_paths: &[String],
 ) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<PathId>)> {
-    let file = File::open(path)?;
-    let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
-
     let serialized = SerializedFile::from_reader(&mut data)
         .with_context(|| format!("Could not parse {scene_name}"))?;
 
