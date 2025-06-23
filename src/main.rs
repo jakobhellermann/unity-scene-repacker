@@ -10,15 +10,16 @@ use clap_complete::{ArgValueCompleter, CompletionCandidate};
 use indexmap::IndexMap;
 use memmap2::Mmap;
 use paris::{error, info, success, warn};
-use rabex::config::ExtractionConfig;
-use rabex::files::SerializedFile;
-use rabex::files::bundlefile::{self, BundleFileHeader, BundleFileReader, CompressionType};
-use rabex::files::serialzedfile::builder::SerializedFileBuilder;
-use rabex::files::serialzedfile::{self, TypeTreeProvider};
+use rabex::files::bundlefile::{
+    self, BundleFileHeader, BundleFileReader, CompressionType, ExtractionConfig,
+};
+use rabex::files::serializedfile::builder::SerializedFileBuilder;
+use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::{PPtr, PathId};
 use rabex::objects::{ClassId, TypedPPtr};
-use rabex::serde_typetree;
-use rabex::tpk::{TpkFile, TpkTypeTreeBlob, UnityVersion};
+use rabex::tpk::{TpkFile, TpkTypeTreeBlob};
+use rabex::typetree::TypeTreeProvider;
+use rabex::{UnityVersion, serde_typetree};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
@@ -463,7 +464,7 @@ fn repack_bundle<W: Write + Seek>(
         size_after: 0,
     };
 
-    let common_offset_map = serialzedfile::build_common_offset_map(tpk, unity_version);
+    let common_offset_map = serializedfile::build_common_offset_map(tpk, unity_version);
 
     let prefix = bundle_name;
 
@@ -553,7 +554,7 @@ fn repack_bundle<W: Write + Seek>(
             });
 
             let mut writer = Cursor::new(Vec::new());
-            serialzedfile::write_serialized_with(
+            serializedfile::write_serialized_with_objects(
                 &mut writer,
                 serialized,
                 &common_offset_map,
@@ -576,7 +577,7 @@ fn repack_bundle<W: Write + Seek>(
         signature: bundlefile::BundleSignature::UnityFS,
         version: 7,
         unity_version: "5.x.x".to_owned(),
-        unity_revision: unity_version.to_string(),
+        unity_revision: Some(unity_version),
         size: 0, // unused
     };
 

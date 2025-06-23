@@ -516,7 +516,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#21860af76e5b730b3dfe3986520d82336912194d"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#ac17207de3c17ec9fc914ec35f20d7c1998a3dfb"
 dependencies = [
  "aes",
  "anyhow",

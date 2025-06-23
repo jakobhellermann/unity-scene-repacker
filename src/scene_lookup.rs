@@ -1,8 +1,9 @@
 use anyhow::Result;
 use rabex::files::SerializedFile;
-use rabex::files::serialzedfile::TypeTreeProvider;
+
 use rabex::objects::ClassId;
 use rabex::objects::pptr::{PPtr, PathId};
+use rabex::typetree::TypeTreeProvider;
 use std::collections::{BTreeSet, HashMap, VecDeque};
 use std::io::{Read, Seek};
 

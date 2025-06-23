@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 
-use rabex::files::serialzedfile::TypeTreeProvider;
+use rabex::UnityVersion;
 use rabex::objects::ClassId;
-use rabex::tpk::UnityVersion;
-use rabex::typetree::TypeTreeNode;
+use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 
 pub struct TypeTreeCache<T> {
     inner: T,
