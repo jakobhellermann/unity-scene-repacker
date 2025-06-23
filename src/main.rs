@@ -32,9 +32,7 @@ use utils::TempDir;
 
 use crate::scene_lookup::SceneLookup;
 use crate::typetree_cache::TypeTreeCache;
-use crate::unity::types::{
-    AssetBundle, AssetInfo, BuildSettings, GameObject, PreloadData, Transform,
-};
+use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 use crate::utils::friendly_size;
 
 #[derive(Args, Debug)]
@@ -238,8 +236,11 @@ fn run() -> Result<()> {
                 let mut ggm_reader = Cursor::new(item.read()?);
                 let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
-                let build_settings =
-                    ggm.read_single::<BuildSettings>(ClassId::BuildSettings, &tt, &mut ggm_reader)?;
+                let build_settings = ggm
+                    .find_object_of::<BuildSettings>(&tpk)?
+                    .unwrap()
+                    .read(&mut ggm_reader)?;
+
                 scenes = Some(
                     build_settings
                         .scene_names()
@@ -273,8 +274,10 @@ fn run() -> Result<()> {
             .context("couldn't find globalgamemanagers in game directory")?;
         let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
-        let scenes =
-            ggm.read_single::<BuildSettings>(ClassId::BuildSettings, &tt, &mut ggm_reader)?;
+        let scenes = ggm
+            .find_object_of::<BuildSettings>(&tt)?
+            .unwrap()
+            .read(&mut ggm_reader)?;
         let scenes: FxHashMap<_, _> = scenes
             .scene_names()
             .enumerate()
@@ -361,11 +364,11 @@ fn prune_scene(
     let serialized = SerializedFile::from_reader(&mut data)
         .with_context(|| format!("Could not parse {scene_name}"))?;
 
-    let scene_lookup = SceneLookup::new(&serialized, typetree_provider, &mut data);
+    let scene_lookup = SceneLookup::new(&serialized, typetree_provider, &mut data)?;
     let new_roots: Vec<_> = retain_paths
         .iter()
         .filter_map(|path| {
-            let item = scene_lookup.lookup_path_id(&mut data, path);
+            let item = scene_lookup.lookup_path_id(&mut data, path).unwrap();
             if item.is_none() {
                 warn!("Could not find path '{path}' in {scene_name}");
             }
@@ -377,7 +380,10 @@ fn prune_scene(
         .reachable(&new_roots, &mut data)
         .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
 
-    for settings in serialized.objects_of_class_id(ClassId::RenderSettings) {
+    for settings in serialized
+        .objects()
+        .filter(|info| [ClassId::RenderSettings].contains(&info.m_ClassID))
+    {
         all_reachable.insert(settings.m_PathID);
     }
 
@@ -392,23 +398,24 @@ fn adjust_roots(
     transform: i64,
     disable: bool,
 ) -> Result<(), anyhow::Error> {
-    let transform_info = serialized.get_object(transform).unwrap();
-    let tt = serialized.get_typetree_for(transform_info, tpk)?;
-    let mut transform = serialized.read_as::<Transform>(transform_info, &tt, data)?;
+    let transform_obj = serialized.get_object::<Transform>(transform, tpk)?;
+    let mut transform = transform_obj.read(data)?;
     transform.m_Father = TypedPPtr::null();
 
-    let transform_modified =
-        serde_typetree::to_vec_endianed(&transform, &tt, serialized.m_Header.m_Endianess)?;
-    replacements.insert(transform_info.m_PathID, transform_modified);
+    let transform_modified = serde_typetree::to_vec_endianed(
+        &transform,
+        &transform_obj.tt,
+        serialized.m_Header.m_Endianess,
+    )?;
+    replacements.insert(transform_obj.info.m_PathID, transform_modified);
 
     if disable {
-        let go_info = transform.m_GameObject.deref_local(serialized);
-        let tt = serialized.get_typetree_for(go_info, tpk)?;
-        let mut go = serialized.read_as::<GameObject>(go_info, &tt, data)?;
-        go.m_IsActive = false;
+        let go = transform.m_GameObject.deref_local(serialized, tpk)?;
+        let mut go_data = go.read(data)?;
+        go_data.m_IsActive = false;
         let go_modified =
-            serde_typetree::to_vec_endianed(&go, &tt, serialized.m_Header.m_Endianess)?;
-        replacements.insert(go_info.m_PathID, go_modified);
+            serde_typetree::to_vec_endianed(&go_data, &go.tt, serialized.m_Header.m_Endianess)?;
+        replacements.insert(go.info.m_PathID, go_modified);
     }
 
     Ok(())

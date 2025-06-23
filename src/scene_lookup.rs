@@ -1,7 +1,6 @@
 use anyhow::Result;
 use rabex::files::SerializedFile;
 
-use rabex::objects::ClassId;
 use rabex::objects::pptr::{PPtr, PathId};
 use rabex::typetree::TypeTreeProvider;
 use std::collections::{BTreeSet, HashMap, VecDeque};
@@ -17,53 +16,68 @@ pub struct SceneLookup<'a, P> {
 }
 
 impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
-    pub fn new(serialized: &'a SerializedFile, tpk: P, reader: &mut (impl Read + Seek)) -> Self {
+    pub fn new(
+        serialized: &'a SerializedFile,
+        tpk: P,
+        reader: &mut (impl Read + Seek),
+    ) -> Result<Self> {
         let mut roots = HashMap::new();
-        for (name, (path_id, transform)) in serialized
-            .objects_of_class_id(ClassId::Transform)
-            .filter_map(|info| {
-                let transform: Transform = serialized.read(info, &tpk, reader).unwrap();
-                let None = transform.m_Father.try_deref(serialized) else {
-                    return None;
-                };
-                let go = transform
-                    .m_GameObject
-                    .deref_read_local(serialized, &tpk, reader)
-                    .unwrap();
-                Some((go.m_Name, (info.m_PathID, transform)))
-            })
-        {
-            roots.entry(name).or_insert((path_id, transform));
+
+        for transform_obj in serialized.objects_of::<Transform>(&tpk)? {
+            let transform = transform_obj.read(reader)?;
+            if transform.m_Father.optional().is_some() {
+                continue;
+            }
+
+            let go = transform
+                .m_GameObject
+                .deref_local(serialized, &tpk)?
+                .read(reader)?;
+
+            roots
+                .entry(go.m_Name)
+                .or_insert((transform_obj.info.m_PathID, transform));
         }
 
-        SceneLookup {
+        Ok(SceneLookup {
             roots,
             serialized,
             tpk,
-        }
+        })
     }
 
-    pub fn lookup_path_id(&self, reader: &mut (impl Read + Seek), path: &str) -> Option<PathId> {
-        self.lookup_path_full(reader, path).map(|(id, _)| id)
+    pub fn lookup_path_id(
+        &self,
+        reader: &mut (impl Read + Seek),
+        path: &str,
+    ) -> Result<Option<PathId>> {
+        Ok(self.lookup_path_full(reader, path)?.map(|(id, _)| id))
     }
     pub fn lookup_path_full(
         &self,
         reader: &mut (impl Read + Seek),
         path: &str,
-    ) -> Option<(i64, Transform)> {
+    ) -> Result<Option<(i64, Transform)>> {
         let mut segments = path.split('/');
-        let root_name = segments.next()?;
-        let mut current = vec![self.roots.get(root_name)?.clone()];
+        let Some(root_name) = segments.next() else {
+            return Ok(None);
+        };
+        let Some(root) = self.roots.get(root_name) else {
+            return Ok(None);
+        };
+        let mut current = vec![root.clone()];
 
         for segment in segments {
             let mut found = Vec::new();
             for current in &current {
                 for child_pptr in &current.1.m_Children {
-                    let child = child_pptr.try_deref_read(self.serialized, &self.tpk, reader)?;
+                    let child = child_pptr
+                        .deref_local(self.serialized, &self.tpk)?
+                        .read(reader)?;
                     let go = child
                         .m_GameObject
-                        .deref_read_local(self.serialized, &self.tpk, reader)
-                        .unwrap();
+                        .deref_local(self.serialized, &self.tpk)?
+                        .read(reader)?;
 
                     if go.m_Name == segment {
                         found.push((child_pptr.m_PathID, child));
@@ -73,11 +87,11 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
 
             current = found;
             if current.is_empty() {
-                return None;
+                return Ok(None);
             }
         }
 
-        current.pop()
+        Ok(current.pop())
     }
 
     pub fn reachable(
@@ -109,7 +123,7 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
     }
 
     fn reachable_one(&self, from: PathId, reader: &mut (impl Read + Seek)) -> Result<Vec<PPtr>> {
-        let info = PPtr::local(from).deref_local(self.serialized);
+        let info = self.serialized.get_object_info(from).unwrap();
 
         let tt = self
             .tpk

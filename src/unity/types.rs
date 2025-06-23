@@ -64,7 +64,7 @@ pub struct Transform {
     pub m_LocalRotation: (f32, f32, f32, f32),
     pub m_LocalPosition: (f32, f32, f32),
     pub m_LocalScale: (f32, f32, f32),
-    pub m_Children: Vec<TypedPPtr<Transform>>,
+    pub m_Children: Vec<TypedPPtr<Transform>>, // TODO recttransform
     pub m_Father: TypedPPtr<Transform>,
 }
 impl ClassIdType for Transform {
