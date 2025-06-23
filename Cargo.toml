@@ -29,6 +29,8 @@ dhat-heap = []
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
 
 # [patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
 # rabex = { path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor" }

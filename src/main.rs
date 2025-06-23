@@ -259,7 +259,7 @@ fn run() -> Result<()> {
                     let data = item.read()?;
 
                     let (serialized, all_reachable, roots) =
-                        prune_scene(&scene_name, Cursor::new(data), &tt, &paths)?;
+                        prune_scene(scene_name, Cursor::new(data), &tt, paths)?;
 
                     let tmp = temp_dir.dir.join(scene_name);
                     std::fs::write(&tmp, data).context("Writing bundle data to temporary file")?;
@@ -393,7 +393,7 @@ fn adjust_roots(
     disable: bool,
 ) -> Result<(), anyhow::Error> {
     let transform_info = serialized.get_object(transform).unwrap();
-    let tt = serialized.get_typetree_for(&transform_info, tpk)?;
+    let tt = serialized.get_typetree_for(transform_info, tpk)?;
     let mut transform = serialized.read_as::<Transform>(transform_info, &tt, data)?;
     transform.m_Father = TypedPPtr::null();
 
@@ -403,8 +403,8 @@ fn adjust_roots(
 
     if disable {
         let go_info = transform.m_GameObject.deref_local(serialized);
-        let tt = serialized.get_typetree_for(&go_info, tpk)?;
-        let mut go = serialized.read_as::<GameObject>(&go_info, &tt, data)?;
+        let tt = serialized.get_typetree_for(go_info, tpk)?;
+        let mut go = serialized.read_as::<GameObject>(go_info, &tt, data)?;
         go.m_IsActive = false;
         let go_modified =
             serde_typetree::to_vec_endianed(&go, &tt, serialized.m_Header.m_Endianess)?;
