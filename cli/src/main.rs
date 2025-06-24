@@ -201,8 +201,8 @@ fn run() -> Result<()> {
         .sum::<usize>();
     info!("Repacking {obj_count} objects in {} scenes", preloads.len());
 
-    let tpk = TpkTypeTreeBlob::embedded();
-    let tt = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
+    let tpk_blob = TpkTypeTreeBlob::embedded();
+    let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
 
     let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
 
@@ -244,8 +244,8 @@ fn run() -> Result<()> {
 
     let (stats, header, files) = unity_scene_repacker::repack_bundle(
         name,
+        &tpk_blob,
         &tpk,
-        &tt,
         unity_version,
         args.disable,
         repack_scenes.as_mut_slice(),

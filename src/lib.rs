@@ -236,7 +236,7 @@ fn prune_scene(
 
 fn adjust_roots(
     replacements: &mut FxHashMap<i64, Vec<u8>>,
-    tpk: &TpkTypeTreeBlob,
+    tpk: &impl TypeTreeProvider,
     serialized: &mut SerializedFile,
     data: &mut Cursor<Mmap>,
     transform: i64,
@@ -294,8 +294,8 @@ pub struct Stats {
 
 pub fn repack_bundle(
     bundle_name: &str,
-    tpk: &TpkTypeTreeBlob,
-    typetree_provider: &impl TypeTreeProvider,
+    tpk_blob: &TpkTypeTreeBlob,
+    tpk: &impl TypeTreeProvider,
     unity_version: UnityVersion,
     disable_roots: bool,
     scenes: &mut [RepackScene],
@@ -309,7 +309,7 @@ pub fn repack_bundle(
         size_after: 0,
     };
 
-    let common_offset_map = serializedfile::build_common_offset_map(tpk, unity_version);
+    let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let prefix = bundle_name;
 
@@ -323,8 +323,7 @@ pub fn repack_bundle(
     let mut container = Some(container);
 
     for scene in scenes {
-        let mut sharedassets =
-            SerializedFileBuilder::new(unity_version, typetree_provider, &common_offset_map);
+        let mut sharedassets = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map);
 
         sharedassets.add_object(&PreloadData {
             m_Name: "".into(),
