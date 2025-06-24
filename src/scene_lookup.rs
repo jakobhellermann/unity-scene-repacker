@@ -12,7 +12,7 @@ use crate::unity::types::Transform;
 pub struct SceneLookup<'a, P> {
     roots: HashMap<String, (PathId, Transform)>,
     serialized: &'a SerializedFile,
-    tpk: P,
+    pub tpk: P,
 }
 
 impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {

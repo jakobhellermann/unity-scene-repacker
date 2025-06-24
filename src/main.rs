@@ -7,7 +7,7 @@ mod utils;
 use anyhow::{Context, Result, ensure};
 use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::{ArgValueCompleter, CompletionCandidate};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use memmap2::Mmap;
 use paris::{error, info, success, warn};
 use rabex::files::bundlefile::{
@@ -208,7 +208,8 @@ fn run() -> Result<()> {
 
     let preloads = std::fs::read_to_string(&args.objects)
         .with_context(|| format!("couldn't find object json '{}'", args.objects.display()))?;
-    let preloads: IndexMap<String, Vec<String>> = json5::from_str(&preloads)?;
+    let preloads: IndexMap<String, Vec<String>> =
+        json5::from_str(&preloads).context("error parsing the objects json")?;
 
     let obj_count = preloads
         .iter()
@@ -259,8 +260,12 @@ fn run() -> Result<()> {
 
                     let data = item.read()?;
 
-                    let (serialized, all_reachable, roots) =
-                        prune_scene(scene_name, Cursor::new(data), &tt, paths)?;
+                    let (serialized, all_reachable, roots) = prune_scene(
+                        scene_name,
+                        Cursor::new(data),
+                        &tt,
+                        deduplicate_objects(scene_name, paths),
+                    )?;
 
                     let tmp = temp_dir.dir.join(scene_name);
                     std::fs::write(&tmp, data).context("Writing bundle data to temporary file")?;
@@ -291,8 +296,12 @@ fn run() -> Result<()> {
             let file = File::open(&path)?;
             let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
 
-            let (serialized, all_reachable, roots) =
-                prune_scene(&scene_name, &mut data, &tt, &paths)?;
+            let (serialized, all_reachable, roots) = prune_scene(
+                &scene_name,
+                &mut data,
+                &tt,
+                deduplicate_objects(&scene_name, &paths),
+            )?;
             repack_scenes.push((scene_name, serialized, path, all_reachable, roots));
         }
     }
@@ -358,15 +367,15 @@ fn run() -> Result<()> {
 fn prune_scene(
     scene_name: &str,
     mut data: impl Read + Seek,
-    typetree_provider: impl TypeTreeProvider,
-    retain_paths: &[String],
+    tpk: impl TypeTreeProvider,
+    retain_paths: IndexSet<&str>,
 ) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<PathId>)> {
     let serialized = SerializedFile::from_reader(&mut data)
         .with_context(|| format!("Could not parse {scene_name}"))?;
 
-    let scene_lookup = SceneLookup::new(&serialized, typetree_provider, &mut data)?;
-    let new_roots: Vec<_> = retain_paths
-        .iter()
+    let scene_lookup = SceneLookup::new(&serialized, tpk, &mut data)?;
+    let retain_objects: Vec<_> = retain_paths
+        .into_iter()
         .filter_map(|path| {
             let item = scene_lookup.lookup_path_id(&mut data, path).unwrap();
             if item.is_none() {
@@ -377,7 +386,7 @@ fn prune_scene(
         .collect();
 
     let mut all_reachable = scene_lookup
-        .reachable(&new_roots, &mut data)
+        .reachable(&retain_objects, &mut data)
         .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
 
     for settings in serialized
@@ -387,7 +396,11 @@ fn prune_scene(
         all_reachable.insert(settings.m_PathID);
     }
 
-    Ok((serialized, all_reachable, new_roots.into_iter().collect()))
+    Ok((
+        serialized,
+        all_reachable,
+        retain_objects.into_iter().collect(),
+    ))
 }
 
 fn adjust_roots(
@@ -608,4 +621,14 @@ fn repack_bundle<W: Write + Seek>(
     )?;
 
     Ok(stats)
+}
+
+fn deduplicate_objects<'a>(scene_name: &str, paths: &'a [String]) -> IndexSet<&'a str> {
+    let mut deduplicated = IndexSet::new();
+    for item in paths {
+        if !deduplicated.insert(item.as_str()) {
+            warn!("Duplicate object: '{}' in '{scene_name}'", item);
+        }
+    }
+    deduplicated
 }
