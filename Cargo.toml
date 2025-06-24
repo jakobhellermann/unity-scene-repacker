@@ -7,31 +7,32 @@ repository = "https://github.com/jakobhellermann/unity-scene-repacker"
 description = "Repack unity level files into filtered asset bundles you can load at runtime"
 
 [dependencies]
+log = "0.4"
 anyhow = "1.0"
 byteorder = "1.5"
-clap = { version = "4.5", features = ["derive", "unstable-markdown"] }
-clap_complete = { version = "4.5.54", features = ["unstable-dynamic"] }
 elsa = "1.11"
 indexmap = { version = "2.9", features = ["serde"] }
-json5 = "0.4"
 memmap2 = "0.9"
-rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
-    "compression-all",
-    # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
-] }
 rustc-hash = "2.1"
-paris = { version = "1.5", features = ["macros", "no_logger"] }
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
-steamlocate = "2.0"
-
-[features]
-dhat-heap = []
+rabex.workspace = true
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
 too_many_arguments = "allow"
 type_complexity = "allow"
+
+[workspace]
+members = [".", "cli"]
+default-members = ["cli"]
+
+[workspace.dependencies]
+rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
+    "compression-all",
+    "embed-tpk",
+    # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
+] }
 
 # [patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
 # rabex = { path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor" }

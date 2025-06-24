@@ -1,5 +1,5 @@
 use anyhow::Result;
-use paris::warn;
+use log::warn;
 use rabex::files::SerializedFile;
 
 use rabex::objects::pptr::{PPtr, PathId};
