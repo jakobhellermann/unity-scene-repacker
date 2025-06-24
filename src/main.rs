@@ -15,8 +15,8 @@ use rabex::files::bundlefile::{
 };
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
+use rabex::objects::ClassId;
 use rabex::objects::pptr::{PPtr, PathId};
-use rabex::objects::{ClassId, TypedPPtr};
 use rabex::tpk::{TpkFile, TpkTypeTreeBlob};
 use rabex::typetree::TypeTreeProvider;
 use rabex::{UnityVersion, serde_typetree};
@@ -260,17 +260,26 @@ fn run() -> Result<()> {
 
                     let data = item.read()?;
 
+                    let mut replacements = FxHashMap::default();
                     let (serialized, all_reachable, roots) = prune_scene(
                         scene_name,
                         Cursor::new(data),
                         &tt,
                         deduplicate_objects(scene_name, paths),
+                        &mut replacements,
                     )?;
 
                     let tmp = temp_dir.dir.join(scene_name);
                     std::fs::write(&tmp, data).context("Writing bundle data to temporary file")?;
 
-                    repack_scenes.push((scene_name.clone(), serialized, tmp, all_reachable, roots));
+                    repack_scenes.push((
+                        scene_name.clone(),
+                        serialized,
+                        tmp,
+                        all_reachable,
+                        roots,
+                        replacements,
+                    ));
                 }
             }
         }
@@ -296,13 +305,22 @@ fn run() -> Result<()> {
             let file = File::open(&path)?;
             let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
 
+            let mut replacements = FxHashMap::default();
             let (serialized, all_reachable, roots) = prune_scene(
                 &scene_name,
                 &mut data,
                 &tt,
                 deduplicate_objects(&scene_name, &paths),
+                &mut replacements,
             )?;
-            repack_scenes.push((scene_name, serialized, path, all_reachable, roots));
+            repack_scenes.push((
+                scene_name,
+                serialized,
+                path,
+                all_reachable,
+                roots,
+                replacements,
+            ));
         }
     }
 
@@ -369,6 +387,7 @@ fn prune_scene(
     mut data: impl Read + Seek,
     tpk: impl TypeTreeProvider,
     retain_paths: IndexSet<&str>,
+    replacements: &mut FxHashMap<i64, Vec<u8>>,
 ) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<PathId>)> {
     let serialized = SerializedFile::from_reader(&mut data)
         .with_context(|| format!("Could not parse {scene_name}"))?;
@@ -388,6 +407,54 @@ fn prune_scene(
     let mut all_reachable = scene_lookup
         .reachable(&retain_objects, &mut data)
         .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
+
+    let mut ancestors = Vec::new();
+
+    for &retain in &retain_objects {
+        let mut current = retain;
+        loop {
+            let transform = serialized
+                .get_object::<Transform>(current, &scene_lookup.tpk)?
+                .read(&mut data)?;
+            let Some(father) = transform.m_Father.optional() else {
+                break;
+            };
+            current = father.m_PathID;
+
+            if !all_reachable.insert(father.m_PathID) {
+                break;
+            }
+
+            ancestors.push(father.m_PathID);
+        }
+    }
+
+    for ancestor in ancestors {
+        let transform_obj = serialized.get_object::<Transform>(ancestor, &scene_lookup.tpk)?;
+        let mut transform = transform_obj.read(&mut data)?;
+        transform
+            .m_Children
+            .retain(|child| all_reachable.contains(&child.m_PathID));
+
+        // TODO disable go? enable but disable components?
+        /*let go_obj = transform
+            .m_GameObject
+            .deref_local(&serialized, &scene_lookup.tpk)?;
+        let mut go = go_obj.read(&mut data)?;*/
+
+        all_reachable.insert(transform.m_GameObject.m_PathID);
+
+        let transform_modified = serde_typetree::to_vec_endianed(
+            &transform,
+            &transform_obj.tt,
+            serialized.m_Header.m_Endianess,
+        )?;
+        assert!(
+            replacements
+                .insert(transform_obj.info.m_PathID, transform_modified)
+                .is_none()
+        );
+    }
 
     for settings in serialized
         .objects()
@@ -412,15 +479,7 @@ fn adjust_roots(
     disable: bool,
 ) -> Result<(), anyhow::Error> {
     let transform_obj = serialized.get_object::<Transform>(transform, tpk)?;
-    let mut transform = transform_obj.read(data)?;
-    transform.m_Father = TypedPPtr::null();
-
-    let transform_modified = serde_typetree::to_vec_endianed(
-        &transform,
-        &transform_obj.tt,
-        serialized.m_Header.m_Endianess,
-    )?;
-    replacements.insert(transform_obj.info.m_PathID, transform_modified);
+    let transform = transform_obj.read(data)?;
 
     if disable {
         let go = transform.m_GameObject.deref_local(serialized, tpk)?;
@@ -428,7 +487,7 @@ fn adjust_roots(
         go_data.m_IsActive = false;
         let go_modified =
             serde_typetree::to_vec_endianed(&go_data, &go.tt, serialized.m_Header.m_Endianess)?;
-        replacements.insert(go.info.m_PathID, go_modified);
+        assert!(replacements.insert(go.info.m_PathID, go_modified).is_none());
     }
 
     Ok(())
@@ -473,6 +532,7 @@ fn repack_bundle<W: Write + Seek>(
         PathBuf,
         BTreeSet<PathId>,
         Vec<PathId>,
+        FxHashMap<PathId, Vec<u8>>,
     )],
 ) -> Result<Stats> {
     let mut files = Vec::new();
@@ -497,7 +557,7 @@ fn repack_bundle<W: Write + Seek>(
         .collect();
     let mut container = Some(container);
 
-    for (name, serialized, path, keep_objects, roots) in scenes {
+    for (name, serialized, path, keep_objects, roots, replacements) in scenes {
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, typetree_provider, &common_offset_map);
 
@@ -545,10 +605,9 @@ fn repack_bundle<W: Write + Seek>(
 
             let type_remap = prune_types(serialized);
 
-            let mut replacements = FxHashMap::default();
             for &root in roots.iter() {
                 adjust_roots(
-                    &mut replacements,
+                    replacements,
                     tpk,
                     serialized,
                     &mut data,
