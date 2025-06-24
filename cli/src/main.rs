@@ -1,3 +1,4 @@
+mod logger;
 mod utils;
 
 use anyhow::{Context, Result, ensure};
@@ -106,6 +107,7 @@ static ALLOC: dhat::Alloc = dhat::Alloc;
 
 fn main() {
     clap_complete::CompleteEnv::with_factory(Arguments::command).complete();
+    logger::install();
 
     if let Err(e) = run() {
         error!("{:?}", e);

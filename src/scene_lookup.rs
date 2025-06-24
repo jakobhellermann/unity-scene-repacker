@@ -95,7 +95,6 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
         if current.len() > 1 {
             warn!("Found {} matches for path '{path}'", current.len());
         }
-        assert_eq!(current.len(), 1);
 
         Ok(current.pop())
     }
