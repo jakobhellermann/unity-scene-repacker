@@ -11,11 +11,12 @@ log = "0.4"
 anyhow = "1.0"
 byteorder = "1.5"
 elsa = "1.11"
-indexmap = { version = "2.9", features = ["serde"] }
+indexmap = { version = "2.9", features = ["serde", "rayon"] }
 memmap2 = "0.9"
 rustc-hash = "2.1"
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
+rayon = "1.10"
 rabex.workspace = true
 
 [lints.clippy]

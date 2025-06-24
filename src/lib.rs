@@ -39,12 +39,12 @@ pub struct RepackScene {
 pub fn repack_scenes(
     game_dir: &Path,
     preloads: IndexMap<String, Vec<String>>,
-    tpk: &impl TypeTreeProvider,
+    tpk: &(impl TypeTreeProvider + Send + Sync),
     temp_dir: &Path,
 ) -> Result<Vec<RepackScene>> {
-    let mut repack_scenes = Vec::new();
     let bundle = game_dir.join("data.unity3d");
-    if bundle.exists() {
+    let repack_scenes = if bundle.exists() {
+        let mut repack_scenes = Vec::new();
         let mut reader = BundleFileReader::from_reader(
             BufReader::new(File::open(bundle)?),
             &ExtractionConfig::default(),
@@ -102,6 +102,7 @@ pub fn repack_scenes(
                 });
             }
         }
+        repack_scenes
     } else {
         let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
             .context("couldn't find globalgamemanagers in game directory")?;
@@ -117,31 +118,35 @@ pub fn repack_scenes(
             .map(|(i, path)| (path, i))
             .collect();
 
-        for (scene_name, paths) in preloads {
-            let scene_index = scenes[scene_name.as_str()];
-            let serialized_path = game_dir.join(format!("level{scene_index}"));
+        use rayon::prelude::*;
+        preloads
+            .into_par_iter()
+            .map(|(scene_name, paths)| -> Result<_> {
+                let scene_index = scenes[scene_name.as_str()];
+                let serialized_path = game_dir.join(format!("level{scene_index}"));
 
-            let file = File::open(&serialized_path)?;
-            let data = Cursor::new(unsafe { Mmap::map(&file)? });
+                let file = File::open(&serialized_path)?;
+                let data = Cursor::new(unsafe { Mmap::map(&file)? });
 
-            let mut replacements = FxHashMap::default();
-            let (serialized, keep_objects, roots) = prune_scene(
-                &scene_name,
-                data,
-                tpk,
-                deduplicate_objects(&scene_name, &paths),
-                &mut replacements,
-            )?;
-            repack_scenes.push(RepackScene {
-                scene_name,
-                serialized,
-                serialized_path,
-                keep_objects,
-                roots,
-                replacements,
-            });
-        }
-    }
+                let mut replacements = FxHashMap::default();
+                let (serialized, keep_objects, roots) = prune_scene(
+                    &scene_name,
+                    data,
+                    tpk,
+                    deduplicate_objects(&scene_name, &paths),
+                    &mut replacements,
+                )?;
+                Ok(RepackScene {
+                    scene_name,
+                    serialized,
+                    serialized_path,
+                    keep_objects,
+                    roots,
+                    replacements,
+                })
+            })
+            .collect::<Result<_>>()?
+    };
     Ok(repack_scenes)
 }
 

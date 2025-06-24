@@ -8,7 +8,7 @@ use unity_scene_repacker::Stats;
 use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
-use unity_scene_repacker::rabex::typetree::TypeTreeCache;
+use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 
 #[repr(C)]
 pub struct CStats {

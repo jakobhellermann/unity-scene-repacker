@@ -9,7 +9,7 @@ use paris::{error, info, success, warn};
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, CompressionType};
 use rabex::tpk::TpkTypeTreeBlob;
-use rabex::typetree::TypeTreeCache;
+use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
