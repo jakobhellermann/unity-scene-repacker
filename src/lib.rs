@@ -4,7 +4,7 @@ mod unity;
 
 pub use rabex;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use memmap2::Mmap;
@@ -42,6 +42,12 @@ pub fn repack_scenes(
     tpk: &(impl TypeTreeProvider + Send + Sync),
     temp_dir: &Path,
 ) -> Result<Vec<RepackScene>> {
+    ensure!(
+        game_dir.exists(),
+        "Game Directory '{}' does not exist",
+        game_dir.display()
+    );
+
     let bundle = game_dir.join("data.unity3d");
     let repack_scenes = if bundle.exists() {
         let mut repack_scenes = Vec::new();
