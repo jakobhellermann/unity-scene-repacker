@@ -372,7 +372,8 @@ fn run() -> Result<()> {
     .context("trying to repack bundle")?;
 
     success!(
-        "Repacked into <b>{}</b> <i>({})</i> in {:.2?}",
+        "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
+        name,
         args.output.display(),
         friendly_size(out.get_ref().metadata()?.len() as usize),
         start.elapsed()
