@@ -2,6 +2,8 @@ mod scene_lookup;
 mod trace_pptr;
 mod unity;
 
+pub use rabex;
+
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
@@ -35,7 +37,7 @@ pub struct RepackScene {
 }
 
 pub fn repack_scenes(
-    game_dir: PathBuf,
+    game_dir: &Path,
     preloads: IndexMap<String, Vec<String>>,
     tpk: &impl TypeTreeProvider,
     temp_dir: &Path,
@@ -117,15 +119,15 @@ pub fn repack_scenes(
 
         for (scene_name, paths) in preloads {
             let scene_index = scenes[scene_name.as_str()];
-            let serialiezd_path = game_dir.join(format!("level{scene_index}"));
+            let serialized_path = game_dir.join(format!("level{scene_index}"));
 
-            let file = File::open(&serialiezd_path)?;
-            let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
+            let file = File::open(&serialized_path)?;
+            let data = Cursor::new(unsafe { Mmap::map(&file)? });
 
             let mut replacements = FxHashMap::default();
             let (serialized, keep_objects, roots) = prune_scene(
                 &scene_name,
-                &mut data,
+                data,
                 tpk,
                 deduplicate_objects(&scene_name, &paths),
                 &mut replacements,
@@ -133,7 +135,7 @@ pub fn repack_scenes(
             repack_scenes.push(RepackScene {
                 scene_name,
                 serialized,
-                serialized_path: serialiezd_path,
+                serialized_path,
                 keep_objects,
                 roots,
                 replacements,

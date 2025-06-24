@@ -207,7 +207,7 @@ fn run() -> Result<()> {
     let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
 
     let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(game_dir, preloads, &tpk, &temp_dir.dir)?;
+        unity_scene_repacker::repack_scenes(&game_dir, preloads, &tpk, &temp_dir.dir)?;
 
     if let Some(parent) = args.output.parent() {
         DirBuilder::new()
