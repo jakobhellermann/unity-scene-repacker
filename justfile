@@ -5,9 +5,9 @@ ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols-Speedrunp
 hollowknight *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \
-        --objects /tmp/preloads.json \
-        --output out/hollowknight.unity3d {{ args }} \
-        --bundle-name bundle --disable --compression none
+        --objects objects/hk-realworld.jsonc \
+        --output out-separate {{ args }} \
+        --bundle-name bundle --compression none
 
 ninesols *args:
     cargo run --release -- \

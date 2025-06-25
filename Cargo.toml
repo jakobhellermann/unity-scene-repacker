@@ -18,6 +18,9 @@ serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 rayon = "1.10"
 rabex.workspace = true
+serde-transcode = "1.1.1"
+serde_path_to_error = "0.1.17"
+serde_json = { version = "1.0.140", features = ["preserve_order"] }
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
@@ -31,7 +34,7 @@ default-members = ["cli"]
 [workspace.dependencies]
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
     "embed-tpk",
-    # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
+    # "serde_path_to_error", # nicer errors for debugging, at a 2x speed cost
 ] }
 
 # [patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
