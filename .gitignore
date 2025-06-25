@@ -1,7 +1,7 @@
 /target
 /uv.lock
 
-/out
+/out*
 /*.unity3d
 /*.bundle
 /*.so

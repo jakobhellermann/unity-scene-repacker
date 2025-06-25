@@ -60,9 +60,12 @@ fn complete_steam_game(current: &OsStr) -> Vec<CompletionCandidate> {
 #[derive(Parser, Debug)]
 #[command(version)]
 struct Arguments {
-    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
     #[clap(flatten)]
     game: GameArgs,
+
+    #[arg(long, default_value = "asset-separate")]
+    mode: Mode,
+
     /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
     /// ```json
     /// {
@@ -89,6 +92,17 @@ struct Arguments {
     /// Name to give the assetbundle. Should be unique for your game.
     #[arg(long)]
     bundle_name: Option<String>,
+}
+
+/// What kind of asset bundle to build
+#[derive(Debug, Clone, clap::ValueEnum)]
+pub enum Mode {
+    /// Contains filtered 1:1 scenes you can load via `LoadScene`.
+    Scene,
+    /// A single bundle letting you load specific objects using `LoadAsset`
+    Asset,
+    /// Like `AssetBundle`, but outputs a separate assetbundle per scene
+    AssetSeparate,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -208,8 +222,13 @@ fn run() -> Result<()> {
 
     let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
 
-    let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&game_dir, preloads, &tpk, &temp_dir.dir)?;
+    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+        &game_dir,
+        preloads,
+        &tpk,
+        &temp_dir.dir,
+        args.disable,
+    )?;
 
     if let Some(parent) = args.output.parent() {
         DirBuilder::new()
@@ -217,9 +236,6 @@ fn run() -> Result<()> {
             .create(parent)
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
-
-    let mut out =
-        BufWriter::new(File::create(&args.output).context("Could not write to output file")?);
 
     let compression = match args.compression {
         Compression::None => CompressionType::None,
@@ -244,44 +260,74 @@ fn run() -> Result<()> {
         }
     };
 
-    let (stats, header, files) = unity_scene_repacker::repack_bundle(
-        name,
-        &tpk_blob,
-        &tpk,
-        unity_version,
-        args.disable,
-        repack_scenes.as_mut_slice(),
-    )
-    .context("trying to repack bundle")?;
+    match args.mode {
+        Mode::Scene => {
+            let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
+                name,
+                &tpk_blob,
+                &tpk,
+                unity_version,
+                repack_scenes.as_mut_slice(),
+            )
+            .context("trying to repack bundle")?;
 
-    info!(
-        "Pruned {} -> <b>{}</b> objects",
-        stats.objects_before, stats.objects_after
-    );
-    info!(
-        "{} -> <b>{}</b> raw size",
-        friendly_size(stats.size_before),
-        friendly_size(stats.size_after)
-    );
-    println!();
+            info!(
+                "Pruned {} -> <b>{}</b> objects",
+                stats.objects_before, stats.objects_after
+            );
+            info!(
+                "{} -> <b>{}</b> raw size",
+                friendly_size(stats.size_before),
+                friendly_size(stats.size_after)
+            );
+            println!();
 
-    bundlefile::write_bundle_iter(
-        &header,
-        &mut out,
-        CompressionType::Lz4hc,
-        compression,
-        files
-            .into_iter()
-            .map(|(name, file)| Ok((name, Cursor::new(file)))),
-    )?;
+            let mut out = BufWriter::new(
+                File::create(&args.output).context("Could not write to output file")?,
+            );
+            bundlefile::write_bundle_iter(
+                &header,
+                &mut out,
+                CompressionType::Lz4hc,
+                compression,
+                files
+                    .into_iter()
+                    .map(|(name, file)| Ok((name, Cursor::new(file)))),
+            )?;
 
-    success!(
-        "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
-        name,
-        args.output.display(),
-        friendly_size(out.get_ref().metadata()?.len() as usize),
-        start.elapsed()
-    );
+            success!(
+                "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
+                name,
+                args.output.display(),
+                friendly_size(out.get_ref().metadata()?.len() as usize),
+                start.elapsed()
+            );
+        }
+        Mode::Asset => {
+            todo!()
+        }
+        Mode::AssetSeparate => {
+            std::fs::create_dir_all(&args.output).context("Could not create output directory")?;
+
+            unity_scene_repacker::pack_to_asset_bundles_separate(
+                &game_dir,
+                &args.output,
+                name,
+                &tpk_blob,
+                &tpk,
+                unity_version,
+                repack_scenes.as_mut_slice(),
+            )?;
+
+            success!(
+                "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
+                name,
+                args.output.display(),
+                0,
+                start.elapsed()
+            );
+        }
+    }
 
     Ok(())
 }

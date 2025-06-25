@@ -521,7 +521,6 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#38c5ff08345f2bb7f3a22aff83f47a634fa3ef7a"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -583,6 +582,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-transcode"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "590c0e25c2a5bb6e85bf5c1bce768ceb86b316e7a01bdf07d2cb4ec2271990e2"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.219"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,9 +607,20 @@ version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
+ "indexmap",
  "itoa",
  "memchr",
  "ryu",
+ "serde",
+]
+
+[[package]]
+name = "serde_path_to_error"
+version = "0.1.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59fab13f937fa393d08645bf3a84bdfe86e296747b506ada67bb15f10f218b2a"
+dependencies = [
+ "itoa",
  "serde",
 ]
 
@@ -737,7 +756,10 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
+ "serde-transcode",
  "serde_derive",
+ "serde_json",
+ "serde_path_to_error",
 ]
 
 [[package]]
@@ -752,6 +774,7 @@ dependencies = [
  "log",
  "paris",
  "rabex",
+ "serde-transcode",
  "steamlocate",
  "unity-scene-repacker",
 ]

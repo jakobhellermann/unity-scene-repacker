@@ -1,5 +1,6 @@
 #![allow(non_snake_case, dead_code)]
 
+use std::borrow::Cow;
 use std::path::Path;
 
 use indexmap::IndexMap;
@@ -95,4 +96,37 @@ pub struct Component {
 
 impl ClassIdType for Component {
     const CLASS_ID: ClassId = ClassId::Component;
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MonoBehaviour {
+    pub m_GameObject: TypedPPtr<GameObject>,
+    pub m_Enabled: u8,
+    pub m_Script: TypedPPtr<MonoScript>,
+    pub m_Name: String,
+}
+impl ClassIdType for MonoBehaviour {
+    const CLASS_ID: ClassId = ClassId::MonoBehaviour;
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MonoScript {
+    pub m_Name: String,
+    pub m_ExecutionOrder: i32,
+    pub m_PropertiesHash: [u8; 16],
+    pub m_ClassName: String,
+    pub m_Namespace: String,
+    pub m_AssemblyName: String,
+}
+impl MonoScript {
+    pub fn full_name(&self) -> Cow<'_, str> {
+        match self.m_Namespace.is_empty() {
+            true => Cow::Borrowed(&self.m_ClassName),
+            false => Cow::Owned(format!("{}.{}", self.m_Namespace, self.m_ClassName)),
+        }
+    }
+}
+
+impl ClassIdType for MonoScript {
+    const CLASS_ID: ClassId = ClassId::MonoScript;
 }
