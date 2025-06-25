@@ -17,6 +17,7 @@ steamlocate = "2.0"
 log = "0.4"
 rabex = { workspace = true, features = ["compression-all"] }
 indexmap = "2.9"
+serde-transcode = "1.1.1"
 
 [features]
 dhat-heap = []

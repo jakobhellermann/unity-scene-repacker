@@ -1,4 +1,5 @@
 use std::io::{Cursor, Read, Seek};
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -109,5 +110,9 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
         T: ClassIdType + serde::Deserialize<'de>,
     {
         self.deref_read_untyped(pptr.untyped(), serialized, serialized_reader)
+    }
+
+    pub fn loaded_files(&mut self) -> impl Iterator<Item = &Path> {
+        self.serialized_files.as_mut().keys().map(Deref::deref)
     }
 }

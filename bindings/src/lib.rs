@@ -83,14 +83,13 @@ fn export_inner(name: &CStr, game_dir: &CStr, preload_json: &CStr) -> Result<(St
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
     let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&game_dir, preloads, &tt, &temp_dir)?;
+        unity_scene_repacker::repack_scenes(&game_dir, preloads, &tt, &temp_dir, disable)?;
 
-    let (stats, header, files) = unity_scene_repacker::repack_bundle(
+    let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
         name,
         &tpk,
         &tt,
         unity_version,
-        disable,
         repack_scenes.as_mut_slice(),
     )
     .context("trying to repack bundle")?;
