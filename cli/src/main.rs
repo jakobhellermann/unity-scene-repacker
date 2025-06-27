@@ -63,7 +63,7 @@ struct Arguments {
     #[clap(flatten)]
     game: GameArgs,
 
-    #[arg(long, default_value = "asset-separate")]
+    #[arg(long, default_value = "asset")]
     mode: Mode,
 
     /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
@@ -304,14 +304,12 @@ fn run() -> Result<()> {
             );
         }
         Mode::Asset => {
-            todo!()
-        }
-        Mode::AssetSeparate => {
-            std::fs::create_dir_all(&args.output).context("Could not create output directory")?;
-
-            unity_scene_repacker::pack_to_asset_bundles_separate(
+            let mut out = BufWriter::new(
+                File::create(&args.output).context("Could not write to output file")?,
+            );
+            unity_scene_repacker::pack_to_asset_bundle(
                 &game_dir,
-                &args.output,
+                &mut out,
                 name,
                 &tpk_blob,
                 &tpk,
@@ -323,9 +321,14 @@ fn run() -> Result<()> {
                 "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
                 name,
                 args.output.display(),
-                0,
+                friendly_size(out.get_ref().metadata()?.len() as usize),
                 start.elapsed()
             );
+        }
+        Mode::AssetSeparate => {
+            std::fs::create_dir_all(&args.output).context("Could not create output directory")?;
+
+            todo!();
         }
     }
 

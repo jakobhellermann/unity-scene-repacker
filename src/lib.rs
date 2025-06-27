@@ -28,7 +28,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Cursor, Read, Seek};
+use std::io::{BufReader, Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use typetree_generator_api::cache::TypeTreeGeneratorCache;
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
@@ -498,9 +498,9 @@ pub fn pack_to_scene_bundle(
     Ok((stats, header, files))
 }
 
-pub fn pack_to_asset_bundles_separate(
+pub fn pack_to_asset_bundle(
     game_dir: &Path,
-    out_dir: &Path,
+    writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
     tpk: &impl TypeTreeProvider,
@@ -515,9 +515,12 @@ pub fn pack_to_asset_bundles_separate(
     generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
     let generator_cache = TypeTreeGeneratorCache::new(generator);
 
-    for scene in scenes {
-        let name = format!("{}_{}", bundle_name, scene.scene_name);
+    let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
+    builder._next_path_id = 2;
 
+    let mut container = IndexMap::new();
+
+    for scene in scenes {
         let serialized = &mut scene.serialized;
         let file = File::open(&scene.serialized_path)?;
         let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
@@ -536,149 +539,154 @@ pub fn pack_to_asset_bundles_separate(
             })
             .collect::<Result<FxHashMap<_, _>>>()?;
 
-        let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
-
         serialized.modify_objects(|objects| {
             objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID))
         });
 
         let mut path_id_remap = FxHashMap::default();
 
-        builder._next_path_id = 2;
         for obj in serialized.objects() {
             builder.get_next_path_id();
             path_id_remap.insert(obj.m_PathID, builder.get_next_path_id());
         }
 
-        let mut file_id_remap = FxHashMap::default();
-        for (i, external) in serialized.m_Externals.iter().enumerate() {
-            let orig_file_id = i + 1;
-            let new_file_id = builder.serialized.m_Externals.len() + 1;
-            file_id_remap.insert(orig_file_id as FileId, new_file_id as FileId);
-            builder.serialized.m_Externals.push(external.clone());
-        }
+        for (transform, scene_path) in scene.roots.iter().copied().zip(scene.scene_paths.iter()) {
+            let transform = serialized
+                .get_object::<Transform>(transform, tpk)?
+                .read(&mut data)?;
 
-        let remap_script_types = remap_vecs_all::<i16, _>(
-            serialized.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
-            builder.serialized.m_ScriptTypes.get_or_insert_default(),
-        );
-        for ty in serialized.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
-            ty.m_LocalSerializedFileIndex = *file_id_remap
-                .get(&(ty.m_LocalIdentifierInFile as i32))
-                .unwrap_or(&ty.m_LocalSerializedFileIndex);
-        }
-        for ty in &mut serialized.m_Types {
-            ty.m_ScriptTypeIndex = *remap_script_types
-                .get(&ty.m_ScriptTypeIndex)
-                .unwrap_or(&ty.m_ScriptTypeIndex);
-        }
+            let mut go = transform.m_GameObject;
+            assert!(go.is_local());
+            if let Some(replacement) = path_id_remap.get(&go.m_PathID) {
+                go.m_PathID = *replacement;
+            }
 
-        let container = scene
-            .roots
-            .iter()
-            .zip(scene.scene_paths.iter())
-            .map(|(&transform, scene_path)| {
-                let transform = serialized
-                    .get_object::<Transform>(transform, tpk)?
-                    .read(&mut data)?;
-
-                let mut go = transform.m_GameObject;
-                assert!(go.is_local());
-                if let Some(replacement) = path_id_remap.get(&go.m_PathID) {
-                    go.m_PathID = *replacement;
-                }
-
-                let info = AssetInfo {
-                    asset: go.untyped(),
-                    ..Default::default()
-                };
-                let path = format!("{}.prefab", scene_path.to_lowercase());
-
-                Ok((path, info))
-            })
-            .collect::<Result<_>>()?;
-
-        let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
-        let type_remap = remap_vecs(
-            used_types,
-            &mut serialized.m_Types,
-            &mut builder.serialized.m_Types,
-        );
-        // serialized.m_types empty from this point
-
-        let new_objects = serialized.take_objects();
-        let objects = new_objects.into_iter().map(|mut obj| -> Result<_> {
-            obj.m_TypeID = type_remap[&obj.m_TypeID];
-
-            let tt = match mb_types.get(&obj.m_PathID) {
-                Some(ty) => ty,
-                None => &*builder.serialized.get_typetree_for(&obj, tpk)?,
-            };
-
-            let object_data = match scene.replacements.remove(&obj.m_PathID) {
-                Some(owned) => Cow::Owned(owned),
-                None => {
-                    let offset = obj.m_Offset as usize;
-                    let size = obj.m_Size as usize;
-                    Cow::Borrowed(&data.get_ref()[offset..offset + size])
-                }
-            };
-
-            let replacement = replace_pptrs_endianed(
-                &object_data,
-                tt,
-                &path_id_remap,
-                &file_id_remap,
-                serialized.m_Header.m_Endianess,
-            )?;
-
-            obj.m_PathID = *path_id_remap.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
-
-            Ok((obj, Cow::Owned(replacement)))
-        });
-
-        // ---
-
-        for object in objects {
-            builder.objects.push(object?);
-        }
-
-        let assetbundle_ty = tpk
-            .get_typetree_node(AssetBundle::CLASS_ID, unity_version)
-            .unwrap();
-        let mut assetbundle_serialized_type =
-            SerializedType::simple(ClassId::AssetBundle, Some(assetbundle_ty.into_owned()));
-        assetbundle_serialized_type.m_OldTypeHash = [
-            // TODO compute
-            151, 218, 95, 70, 136, 228, 90, 87, 200, 180, 45, 79, 66, 73, 114, 151,
-        ];
-        let ab_type_id = builder.add_type_uncached(assetbundle_serialized_type);
-        builder.add_object_inner(
-            &AssetBundle {
-                m_Name: name.clone(),
-                m_PreloadTable: Vec::new(),
-                m_Container: container,
-                m_MainAsset: AssetInfo::default(),
-                m_RuntimeCompatibility: 1,
-                m_AssetBundleName: name.clone(),
-                m_IsStreamedSceneAssetBundle: false,
-                m_PathFlags: 7,
+            let info = AssetInfo {
+                asset: go.untyped(),
                 ..Default::default()
-            },
-            1,
-            ab_type_id,
+            };
+            let path = format!("{}/{}.prefab", scene.scene_name, scene_path).to_lowercase();
+
+            container.insert(path, info);
+        }
+
+        add_remapped_scene(
+            &mut builder,
+            serialized,
+            data.get_ref(),
+            &mut scene.replacements,
+            mb_types,
+            path_id_remap,
         )?;
-        builder.objects.sort_by_key(|(info, _)| info.m_PathID);
-
-        let mut serialized_out = Vec::new();
-        builder.write(&mut Cursor::new(&mut serialized_out))?;
-
-        let bundle_out = File::create(out_dir.join(format!("{}.bundle", &scene.scene_name)))?;
-        let mut bundle_builder = BundleFileBuilder::unityfs(7, unity_version);
-        bundle_builder.add_file(&format!("CAB-{name}"), Cursor::new(serialized_out))?;
-        bundle_builder.write(&mut BufWriter::new(bundle_out), CompressionType::None)?;
     }
 
+    let assetbundle_ty = tpk
+        .get_typetree_node(AssetBundle::CLASS_ID, unity_version)
+        .unwrap();
+    let mut assetbundle_serialized_type =
+        SerializedType::simple(ClassId::AssetBundle, Some(assetbundle_ty.into_owned()));
+    assetbundle_serialized_type.m_OldTypeHash = [
+        // TODO compute
+        151, 218, 95, 70, 136, 228, 90, 87, 200, 180, 45, 79, 66, 73, 114, 151,
+    ];
+    let ab_type_id = builder.add_type_uncached(assetbundle_serialized_type);
+    builder.add_object_inner(
+        &AssetBundle {
+            m_Name: bundle_name.to_owned(),
+            m_PreloadTable: Vec::new(),
+            m_Container: container,
+            m_MainAsset: AssetInfo::default(),
+            m_RuntimeCompatibility: 1,
+            m_AssetBundleName: bundle_name.to_owned(),
+            m_IsStreamedSceneAssetBundle: false,
+            m_PathFlags: 7,
+            ..Default::default()
+        },
+        1,
+        ab_type_id,
+    )?;
+    builder.objects.sort_by_key(|(info, _)| info.m_PathID);
+
+    let mut out = Vec::new();
+    builder.write(&mut Cursor::new(&mut out))?;
+
+    let mut bundle_builder = BundleFileBuilder::unityfs(7, unity_version);
+    bundle_builder.add_file(&format!("CAB-{bundle_name}"), Cursor::new(out))?;
+
+    bundle_builder.write(writer, CompressionType::None)?;
+
+    Ok(())
+}
+
+fn add_remapped_scene(
+    builder: &mut SerializedFileBuilder<impl TypeTreeProvider>,
+    serialized: &mut SerializedFile,
+    data: &[u8],
+    replacements: &mut FxHashMap<i64, Vec<u8>>,
+    mb_types: FxHashMap<i64, &TypeTreeNode>,
+    path_id_remap: FxHashMap<i64, i64>,
+) -> Result<()> {
+    let mut remap_file_id = FxHashMap::default();
+    for (i, external) in serialized.m_Externals.iter().enumerate() {
+        let orig_file_id = i + 1;
+        let new_file_id = builder.serialized.m_Externals.len() + 1;
+        remap_file_id.insert(orig_file_id as FileId, new_file_id as FileId);
+        builder.serialized.m_Externals.push(external.clone());
+    }
+    let remap_script_types = remap_vecs_all::<i16, _>(
+        serialized.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
+        builder.serialized.m_ScriptTypes.get_or_insert_default(),
+    );
+    for ty in serialized.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
+        ty.m_LocalSerializedFileIndex = *remap_file_id
+            .get(&(ty.m_LocalIdentifierInFile as i32))
+            .unwrap_or(&ty.m_LocalSerializedFileIndex);
+    }
+    for ty in &mut serialized.m_Types {
+        ty.m_ScriptTypeIndex = *remap_script_types
+            .get(&ty.m_ScriptTypeIndex)
+            .unwrap_or(&ty.m_ScriptTypeIndex);
+    }
+    let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
+    let remap_types = remap_vecs(
+        used_types,
+        &mut serialized.m_Types,
+        &mut builder.serialized.m_Types,
+    );
+    let new_objects = serialized.take_objects();
+    let objects = new_objects.into_iter().map(|mut obj| -> Result<_> {
+        obj.m_TypeID = remap_types[&obj.m_TypeID];
+
+        let tt = match mb_types.get(&obj.m_PathID) {
+            Some(ty) => ty,
+            None => &*builder
+                .serialized
+                .get_typetree_for(&obj, builder.typetree_provider)?,
+        };
+        let object_data = match replacements.remove(&obj.m_PathID) {
+            Some(owned) => Cow::Owned(owned),
+            None => {
+                let offset = obj.m_Offset as usize;
+                let size = obj.m_Size as usize;
+                Cow::Borrowed(&data[offset..offset + size])
+            }
+        };
+
+        obj.m_PathID = *path_id_remap.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
+
+        let modified = replace_pptrs_endianed(
+            &object_data,
+            tt,
+            &path_id_remap,
+            &remap_file_id,
+            serialized.m_Header.m_Endianess,
+        )?;
+
+        Ok((obj, Cow::Owned(modified)))
+    });
+    for object in objects {
+        builder.objects.push(object?);
+    }
     Ok(())
 }
 
