@@ -314,7 +314,7 @@ fn run() -> Result<()> {
                 &tpk_blob,
                 &tpk,
                 unity_version,
-                repack_scenes.as_mut_slice(),
+                repack_scenes,
             )?;
 
             success!(
