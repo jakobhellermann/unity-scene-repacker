@@ -102,11 +102,10 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
 
     pub fn reachable(
         &self,
-        from: &[PathId],
+        from: VecDeque<PathId>,
         reader: &mut (impl Read + Seek),
     ) -> Result<BTreeSet<PathId>> {
-        let mut queue: VecDeque<PathId> = VecDeque::new();
-        queue.extend(from);
+        let mut queue = from;
 
         let mut include = BTreeSet::new();
 
