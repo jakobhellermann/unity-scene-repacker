@@ -19,7 +19,6 @@ serde_derive = "1.0"
 rayon = "1.10"
 rabex.workspace = true
 libloading = "0.8"
-serde_json = { version = "1.0.140", features = ["preserve_order"] }
 
 [lints.clippy]
 redundant_pattern_matching = "allow"

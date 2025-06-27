@@ -1,4 +1,5 @@
 use anyhow::Result;
+use byteorder::{BigEndian, LittleEndian};
 use log::warn;
 use rabex::files::SerializedFile;
 
@@ -135,6 +136,11 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
             .get_typetree_node(info.m_ClassID, self.serialized.m_UnityVersion.unwrap())
             .unwrap();
         reader.seek(std::io::SeekFrom::Start(info.m_Offset as u64))?;
-        trace_pptrs(&tt, reader)
+        match self.serialized.m_Header.m_Endianess {
+            rabex::files::serializedfile::Endianness::Little => {
+                trace_pptrs::<LittleEndian>(&tt, reader)
+            }
+            rabex::files::serializedfile::Endianness::Big => trace_pptrs::<BigEndian>(&tt, reader),
+        }
     }
 }

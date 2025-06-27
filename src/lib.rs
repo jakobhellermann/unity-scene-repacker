@@ -4,7 +4,6 @@ mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
-use byteorder::{ByteOrder, LittleEndian};
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
@@ -14,8 +13,8 @@ use memmap2::Mmap;
 use rabex::files::bundlefile::{
     self, BundleFileBuilder, BundleFileHeader, BundleFileReader, CompressionType, ExtractionConfig,
 };
+use rabex::files::serializedfile::SerializedType;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
-use rabex::files::serializedfile::{Endianness, SerializedType};
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::objects::{ClassId, ClassIdType};
@@ -23,7 +22,6 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex::{UnityVersion, serde_typetree};
 use rustc_hash::{FxHashMap, FxHashSet};
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
@@ -36,6 +34,7 @@ use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
 use crate::scene_lookup::SceneLookup;
+use crate::trace_pptr::replace_pptrs_inplace_endianed;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub struct RepackScene {
@@ -665,7 +664,7 @@ fn add_remapped_scene(
                 .serialized
                 .get_typetree_for(&obj, builder.typetree_provider)?,
         };
-        let object_data = match replacements.remove(&obj.m_PathID) {
+        let mut object_data = match replacements.remove(&obj.m_PathID) {
             Some(owned) => Cow::Owned(owned),
             None => {
                 let offset = obj.m_Offset as usize;
@@ -676,96 +675,18 @@ fn add_remapped_scene(
 
         obj.m_PathID = *path_id_remap.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
 
-        let modified = replace_pptrs_endianed(
-            &object_data,
+        replace_pptrs_inplace_endianed(
+            object_data.to_mut().as_mut_slice(),
             tt,
             &path_id_remap,
             &remap_file_id,
             serialized.m_Header.m_Endianess,
         )?;
 
-        Ok((obj, Cow::Owned(modified)))
+        Ok((obj, Cow::Owned(object_data.into_owned())))
     });
     for object in objects {
         builder.objects.push(object?);
     }
     Ok(())
-}
-
-#[inline(never)]
-fn replace_pptrs_endianed(
-    value: &[u8],
-    ty: &TypeTreeNode,
-    path_id_remap: &FxHashMap<PathId, PathId>,
-    file_id_remap: &FxHashMap<FileId, FileId>,
-    endianness: Endianness,
-) -> Result<Vec<u8>> {
-    match endianness {
-        serializedfile::Endianness::Little => {
-            replace_pptrs::<LittleEndian>(value, ty, path_id_remap, file_id_remap)
-        }
-        serializedfile::Endianness::Big => {
-            replace_pptrs::<LittleEndian>(value, ty, path_id_remap, file_id_remap)
-        }
-    }
-}
-
-fn replace_pptrs<B: ByteOrder + 'static>(
-    value: &[u8],
-    tt: &TypeTreeNode,
-    path_id_remap: &FxHashMap<PathId, PathId>,
-    file_id_remap: &FxHashMap<FileId, FileId>,
-) -> Result<Vec<u8>> {
-    let mut reader = Cursor::new(value);
-    let mut de = serde_typetree::Deserializer::<_, B>::from_reader(&mut reader, tt);
-
-    let mut out = Vec::new();
-    let mut writer = Cursor::new(&mut out);
-    let mut ser = serde_typetree::Serializer::<_, B>::new(&mut writer, tt);
-
-    let mut val = serde_json::Value::deserialize(&mut de)?;
-    remap_paths(&mut val, path_id_remap, file_id_remap);
-    val.serialize(&mut ser).context("ser")?;
-
-    Ok(out)
-}
-
-fn remap_paths(
-    val: &mut serde_json::Value,
-    path_id_remap: &FxHashMap<PathId, PathId>,
-    file_id_remap: &FxHashMap<FileId, FileId>,
-) {
-    use serde_json::Value::*;
-
-    match val {
-        Null | Bool(_) | Number(_) | String(_) => {}
-
-        Array(values) => {
-            for val in values {
-                remap_paths(val, path_id_remap, file_id_remap);
-            }
-        }
-        Object(map) => {
-            if map.keys().len() == 2
-                && let Some(file_id) = map.get("m_FileID")
-                && let Some(path_id) = map.get("m_PathID")
-            {
-                let file_id = file_id.as_number().unwrap().as_i64().unwrap();
-                let path_id = path_id.as_number().unwrap().as_i64().unwrap();
-                if file_id == 0
-                    && let Some(&replacement) = path_id_remap.get(&path_id)
-                {
-                    map["m_PathID"] = replacement.into();
-                }
-
-                if let Some(&replacement) = file_id_remap.get(&(file_id as i32)) {
-                    map["m_FileID"] = replacement.into();
-                }
-            } else {
-                for val in map.values_mut() {
-                    remap_paths(val, path_id_remap, file_id_remap);
-                }
-            }
-        }
-    }
 }
