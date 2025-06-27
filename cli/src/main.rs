@@ -305,7 +305,7 @@ fn run() -> Result<()> {
             let mut out = BufWriter::new(
                 File::create(&args.output).context("Could not write to output file")?,
             );
-            unity_scene_repacker::pack_to_asset_bundle(
+            let stats = unity_scene_repacker::pack_to_asset_bundle(
                 &game_dir,
                 &mut out,
                 name,
@@ -313,7 +313,19 @@ fn run() -> Result<()> {
                 &tpk,
                 unity_version,
                 repack_scenes,
+                compression,
             )?;
+
+            info!(
+                "Pruned {} -> <b>{}</b> objects",
+                stats.objects_before, stats.objects_after
+            );
+            info!(
+                "{} -> <b>{}</b> raw size",
+                friendly_size(stats.size_before),
+                friendly_size(stats.size_after)
+            );
+            println!();
 
             success!(
                 "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
