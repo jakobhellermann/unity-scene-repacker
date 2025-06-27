@@ -364,7 +364,7 @@ fn deduplicate_objects<'a>(scene_name: &str, paths: &'a [String]) -> IndexSet<&'
     deduplicated
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Stats {
     pub objects_before: usize,
     pub objects_after: usize,
@@ -506,7 +506,8 @@ pub fn pack_to_asset_bundle(
     tpk: &(impl TypeTreeProvider + Send + Sync),
     unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
-) -> Result<()> {
+    compression: CompressionType,
+) -> Result<Stats> {
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let env = Environment::new_in(game_dir, tpk);
@@ -519,6 +520,8 @@ pub fn pack_to_asset_bundle(
     builder._next_path_id = 2;
 
     let mut container = IndexMap::new();
+
+    let mut stats = Stats::default();
 
     let intermediate = scenes
         .into_iter()
@@ -539,9 +542,12 @@ pub fn pack_to_asset_bundle(
                 &mut data,
             )?;
 
+            stats.objects_before += serialized.objects().len();
+            stats.size_before += data.get_ref().len();
             serialized.modify_objects(|objects| {
                 objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID))
             });
+            stats.objects_after += serialized.objects().len();
 
             let mut remap_path_id = FxHashMap::default();
 
@@ -641,13 +647,14 @@ pub fn pack_to_asset_bundle(
 
     let mut out = Vec::new();
     builder.write(&mut Cursor::new(&mut out))?;
+    stats.size_after += out.len();
 
     let mut bundle_builder = BundleFileBuilder::unityfs(7, unity_version);
     bundle_builder.add_file(&format!("CAB-{bundle_name}"), Cursor::new(out))?;
 
-    bundle_builder.write(writer, CompressionType::None)?;
+    bundle_builder.write(writer, compression)?;
 
-    Ok(())
+    Ok(stats)
 }
 
 fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
