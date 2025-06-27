@@ -52,6 +52,13 @@ Options:
       --steam-game <STEAM_GAME>
           App ID or search term for the steam game to detect
 
+      --mode <MODE>
+          [default: asset]
+
+          Possible values:
+          - scene: Contains filtered 1:1 scenes you can load via LoadScene
+          - asset: A single bundle letting you load specific objects using LoadAsset
+
       --objects <OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
 

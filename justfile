@@ -6,7 +6,7 @@ hollowknight *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \
         --objects objects/hk-realworld.jsonc \
-        --output out-separate {{ args }} \
+        --output out/all.bundle {{ args }} \
         --bundle-name bundle --compression none
 
 ninesols *args:
