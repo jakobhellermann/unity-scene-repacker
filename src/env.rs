@@ -21,13 +21,13 @@ impl EnvResolver for BaseDirResolver {
     }
 }
 
-pub struct Environment<R, P> {
+pub struct Environment<P, R = BaseDirResolver> {
     pub resolver: R,
     pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>, FxBuildHasher>,
     pub tpk: P,
 }
 
-impl<P: TypeTreeProvider> Environment<BaseDirResolver, P> {
+impl<P: TypeTreeProvider> Environment<P, BaseDirResolver> {
     pub fn new_in(path: impl Into<PathBuf>, tpk: P) -> Self {
         Environment {
             resolver: BaseDirResolver(path.into()),
@@ -37,7 +37,7 @@ impl<P: TypeTreeProvider> Environment<BaseDirResolver, P> {
     }
 }
 
-impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
+impl<R: EnvResolver, P: TypeTreeProvider> Environment<P, R> {
     pub fn load_leaf(
         &self,
         relative_path: impl AsRef<Path>,

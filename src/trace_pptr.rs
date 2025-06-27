@@ -76,7 +76,7 @@ pub fn replace_pptrs_inplace<B: ByteOrder>(
                 if let Some(&replacement) = path_id_remap.get(&path_id) {
                     B::write_i64(&mut reader.get_mut()[pos + 4..], replacement);
                 }
-            } else if let Some(&replacement) = file_id_remap.get(&(file_id as i32)) {
+            } else if let Some(&replacement) = file_id_remap.get(&file_id) {
                 B::write_i32(&mut reader.get_mut()[pos..], replacement);
             }
 
