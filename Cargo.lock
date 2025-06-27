@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
+ "rabex",
  "serde_json",
  "unity-scene-repacker",
 ]
@@ -521,6 +522,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#2e1fb2481bd927412e17457d30729f3f03f6c869"
 dependencies = [
  "bitflags",
  "byteorder",
