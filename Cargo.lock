@@ -64,6 +64,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
+ "rabex",
  "serde_json",
  "unity-scene-repacker",
 ]
