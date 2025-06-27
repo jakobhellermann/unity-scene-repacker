@@ -44,8 +44,7 @@ pub struct RepackScene {
     pub serialized_path: PathBuf,
 
     pub keep_objects: BTreeSet<i64>,
-    pub scene_paths: Vec<String>,
-    pub roots: Vec<i64>,
+    pub roots: Vec<(String, i64)>,
     pub replacements: FxHashMap<i64, Vec<u8>>,
 }
 
@@ -119,7 +118,6 @@ pub fn repack_scenes(
                     serialized,
                     serialized_path: tmp,
                     keep_objects,
-                    scene_paths: scene_paths.into_iter().map(ToOwned::to_owned).collect(),
                     roots,
                     replacements,
                 });
@@ -166,7 +164,6 @@ pub fn repack_scenes(
                     serialized,
                     serialized_path,
                     keep_objects,
-                    scene_paths: scene_paths.into_iter().map(ToOwned::to_owned).collect(),
                     roots,
                     replacements,
                 })
@@ -184,29 +181,35 @@ fn prune_scene(
     retain_paths: &IndexSet<&str>,
     replacements: &mut FxHashMap<i64, Vec<u8>>,
     disable_roots: bool,
-) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<PathId>)> {
+) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<(String, PathId)>)> {
     let serialized = SerializedFile::from_reader(&mut data)
         .with_context(|| format!("Could not parse {scene_name}"))?;
 
     let scene_lookup = SceneLookup::new(&serialized, tpk, &mut data)?;
     let retain_objects: Vec<_> = retain_paths
-        .into_iter()
-        .filter_map(|path| {
+        .iter()
+        .filter_map(|&path| {
             let item = scene_lookup.lookup_path_id(&mut data, path).unwrap();
-            if item.is_none() {
-                warn!("Could not find path '{path}' in {scene_name}");
-            }
-            item
+            let item = match item {
+                None => {
+                    warn!("Could not find path '{path}' in {scene_name}");
+                    return None;
+                }
+                Some(item) => item,
+            };
+            Some((path.to_owned(), item))
         })
         .collect();
 
     let mut all_reachable = scene_lookup
-        .reachable(&retain_objects, &mut data)
+        .reachable(
+            retain_objects.iter().map(|(_, id)| *id).collect(),
+            &mut data,
+        )
         .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
 
     let mut ancestors = Vec::new();
-
-    for &retain in &retain_objects {
+    for &(_, retain) in &retain_objects {
         let mut current = retain;
         loop {
             let transform = serialized
@@ -259,7 +262,7 @@ fn prune_scene(
         all_reachable.insert(settings.m_PathID);
     }
 
-    for &root in &retain_objects {
+    for &(_, root) in &retain_objects {
         adjust_roots(
             replacements,
             &scene_lookup.tpk,
@@ -558,8 +561,7 @@ pub fn pack_to_asset_bundle(
                 remap_path_id.insert(obj.m_PathID, builder.get_next_path_id());
             }
 
-            for (transform, scene_path) in scene.roots.iter().copied().zip(scene.scene_paths.iter())
-            {
+            for &(ref scene_path, transform) in scene.roots.iter() {
                 let transform = serialized
                     .get_object::<Transform>(transform, tpk)?
                     .read(&mut data)?;
