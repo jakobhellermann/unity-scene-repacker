@@ -4,6 +4,7 @@ mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
+use elsa::sync::FrozenMap;
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
@@ -36,6 +37,7 @@ use unity::types::MonoBehaviour;
 use crate::env::Environment;
 use crate::scene_lookup::SceneLookup;
 use crate::trace_pptr::replace_pptrs_inplace_endianed;
+use crate::typetree_generator_api::reconstruct_typetree_node;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub enum GameFiles {
@@ -536,12 +538,18 @@ pub fn pack_to_scene_bundle(
     Ok((stats, header, files))
 }
 
+pub enum MonobehaviourTypetreeMode<'a> {
+    GenerateRuntime,
+    Export(&'a [u8]),
+}
+
 pub fn pack_to_asset_bundle(
     game_dir: &Path,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
     tpk: &(impl TypeTreeProvider + Send + Sync),
+    monobehaviour_typetree_mode: MonobehaviourTypetreeMode,
     unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
     compression: CompressionType,
@@ -550,11 +558,18 @@ pub fn pack_to_asset_bundle(
 
     let env = Environment::new_in(game_dir, tpk);
 
-    let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetStudio)?;
-    generator
-        .load_all_dll_in_dir(game_dir.join("Managed"))
-        .context("Cannot load game DLLs")?;
-    let generator_cache = TypeTreeGeneratorCache::new(generator);
+    let generator_cache = match monobehaviour_typetree_mode {
+        MonobehaviourTypetreeMode::GenerateRuntime => {
+            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetStudio)?;
+            generator
+                .load_all_dll_in_dir(game_dir.join("Managed"))
+                .context("Cannot load game DLLs")?;
+            TypeTreeGeneratorCache::new(generator)
+        }
+        MonobehaviourTypetreeMode::Export(export) => {
+            TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_cache(export)?)
+        }
+    };
 
     let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
     builder._next_path_id = 2;
@@ -838,4 +853,46 @@ fn add_remapped_scene_header(
     );
 
     Ok((remap_file_id, remap_types))
+}
+
+// Todo: optimize / proper format
+fn monobehaviour_typetree_cache(
+    export: &[u8],
+) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>>> {
+    use byteorder::{LE, ReadBytesExt};
+
+    fn read_str(reader: &mut impl std::io::Read) -> Result<String> {
+        let len = reader.read_u32::<LE>()?;
+        let mut data = vec![0; len as usize];
+        reader.read_exact(&mut data)?;
+        let str = String::from_utf8(data)?;
+        Ok(str)
+    }
+
+    let export = lz4_flex::decompress_size_prepended(export)?;
+    let mut reader = &mut &*export;
+    let monobehaviour_type_cache = FrozenMap::default();
+
+    let n_assemblies = reader.read_u32::<LE>()?;
+    for _ in 0..n_assemblies {
+        let assembly_name = read_str(&mut reader)?;
+        let n_types = reader.read_u32::<LE>()?;
+        for _ in 0..n_types {
+            let full_name = read_str(&mut reader)?;
+            let n_flat_nodes = reader.read_u32::<LE>()?;
+            let mut flat_nodes = Vec::with_capacity(n_flat_nodes as usize);
+            for _ in 0..n_flat_nodes {
+                let name = read_str(&mut reader)?;
+                let ty = read_str(&mut reader)?;
+                let index = reader.read_u8()?;
+                let full_name = reader.read_i32::<LE>()?;
+                flat_nodes.push((name, ty, index, full_name));
+            }
+
+            let node = reconstruct_typetree_node(&flat_nodes);
+            monobehaviour_type_cache.insert((assembly_name.clone(), full_name), Box::new(node));
+        }
+    }
+
+    Ok(monobehaviour_type_cache)
 }

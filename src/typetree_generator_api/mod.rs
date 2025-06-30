@@ -249,7 +249,7 @@ impl TypeTreeGenerator {
     }
 }
 
-pub fn reconstruct_typetree_node<'a>(flat: &[(&'a str, &'a str, u8, i32)]) -> TypeTreeNode {
+pub fn reconstruct_typetree_node<'a, S: AsRef<str>>(flat: &[(S, S, u8, i32)]) -> TypeTreeNode {
     let mut stack = Vec::new();
 
     let mut parent = 0;
@@ -274,12 +274,12 @@ pub fn reconstruct_typetree_node<'a>(flat: &[(&'a str, &'a str, u8, i32)]) -> Ty
     build_node_tree(0, flat, &children)
 }
 
-fn build_node_tree(
+fn build_node_tree<S: AsRef<str>>(
     index: usize,
-    flat_nodes: &[(&str, &str, u8, i32)],
+    flat_nodes: &[(S, S, u8, i32)],
     children_map: &BTreeMap<usize, Vec<usize>>,
 ) -> TypeTreeNode {
-    let &(ty, name, level, flags) = &flat_nodes[index];
+    let &(ref ty, ref name, level, flags) = &flat_nodes[index];
     let child_indices = children_map.get(&index);
 
     let children = match child_indices {
@@ -291,8 +291,8 @@ fn build_node_tree(
     };
 
     TypeTreeNode {
-        m_Type: ty.to_owned(),
-        m_Name: name.to_owned(),
+        m_Type: ty.as_ref().to_owned(),
+        m_Name: name.as_ref().to_owned(),
         m_Level: level,
         m_MetaFlag: Some(flags),
         children,

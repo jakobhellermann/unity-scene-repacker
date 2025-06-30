@@ -1,29 +1,36 @@
-use elsa::FrozenMap;
+use anyhow::{Result, bail};
+use elsa::sync::FrozenMap;
 use rabex::typetree::TypeTreeNode;
-use rustc_hash::FxBuildHasher;
 
-use super::{Error, TypeTreeGenerator};
+use super::TypeTreeGenerator;
 
 pub struct TypeTreeGeneratorCache {
-    generator: TypeTreeGenerator,
-    cache: FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>,
+    generator: Option<TypeTreeGenerator>,
+    cache: FrozenMap<(String, String), Box<TypeTreeNode>>,
 }
 impl TypeTreeGeneratorCache {
     pub fn new(generator: TypeTreeGenerator) -> Self {
         TypeTreeGeneratorCache {
-            generator,
+            generator: Some(generator),
             cache: FrozenMap::default(),
         }
     }
+    pub fn prefilled(cache: FrozenMap<(String, String), Box<TypeTreeNode>>) -> Self {
+        TypeTreeGeneratorCache {
+            generator: None,
+            cache,
+        }
+    }
 
-    pub fn generate(&self, assembly_name: &str, full_name: &str) -> Result<&TypeTreeNode, Error> {
+    pub fn generate(&self, assembly_name: &str, full_name: &str) -> Result<&TypeTreeNode> {
         let key = (assembly_name.to_owned(), full_name.to_owned());
         match self.cache.get(&key) {
             Some(value) => Ok(value),
             None => {
-                let value = self
-                    .generator
-                    .generate_typetree_raw(assembly_name, full_name)?;
+                let Some(generator) = &self.generator else {
+                    bail!("Missing {assembly_name} / {full_name} in monobehaviour typetree export");
+                };
+                let value = generator.generate_typetree_raw(assembly_name, full_name)?;
                 Ok(self.cache.insert(key, Box::new(value)))
             }
         }

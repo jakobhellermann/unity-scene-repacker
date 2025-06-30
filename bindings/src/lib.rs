@@ -8,7 +8,7 @@ use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
-use unity_scene_repacker::{GameFiles, Stats};
+use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
 
 #[repr(C)]
 pub struct CStats {
@@ -30,6 +30,8 @@ pub extern "C" fn export(
     bundle_size: *mut c_int,
     bundle_data: *mut *mut u8,
     stats_ret: *mut CStats,
+    mb_typetree_export: *const u8,
+    mb_typetree_len: c_int,
     mode: u8,
 ) {
     unsafe {
@@ -37,7 +39,10 @@ pub extern "C" fn export(
         let game_dir = CStr::from_ptr(game_dir);
         let preload_json = CStr::from_ptr(preload_json);
 
-        let result = export_inner(name, game_dir, preload_json, mode);
+        let mb_typetree_export = (!mb_typetree_export.is_null())
+            .then(|| std::slice::from_raw_parts(mb_typetree_export, mb_typetree_len as usize));
+
+        let result = export_inner(name, game_dir, preload_json, mode, mb_typetree_export);
         match result {
             Ok((stats, data)) => {
                 *bundle_size = data.len() as c_int;
@@ -75,6 +80,7 @@ fn export_inner(
     game_dir: &CStr,
     preload_json: &CStr,
     mode: u8,
+    mb_typetree_export: Option<&[u8]>,
 ) -> Result<(Stats, Vec<u8>)> {
     let name = name.to_str()?;
     let game_dir = Path::new(game_dir.to_str()?);
@@ -103,6 +109,11 @@ fn export_inner(
         unity_scene_repacker::repack_scenes(game_files, preloads, &tpk, &temp_dir, disable)?;
 
     let mut out = Cursor::new(Vec::new());
+
+    let monobehaviour_typetree_mode = match mb_typetree_export {
+        Some(data) => MonobehaviourTypetreeMode::Export(data),
+        None => MonobehaviourTypetreeMode::GenerateRuntime,
+    };
 
     let stats = match mode {
         Mode::SceneBundle => {
@@ -134,6 +145,7 @@ fn export_inner(
                 name,
                 &tpk_raw,
                 &tpk,
+                monobehaviour_typetree_mode,
                 unity_version,
                 repack_scenes,
                 compression,
