@@ -21,6 +21,7 @@ rabex.workspace = true
 serde-transcode = "1.1.1"
 serde_path_to_error = "0.1.17"
 serde_json = { version = "1.0.140", features = ["preserve_order"] }
+lz4_flex = { version = "0.11.5", default-features = false }
 
 [lints.clippy]
 redundant_pattern_matching = "allow"

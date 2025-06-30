@@ -35,6 +35,7 @@ unsafe extern "C" {
         arr_addr: &mut *mut TypeTreeNodeNative,
         arr_length: &mut c_int,
     ) -> c_int;
+    pub fn TypeTreeGenerator_freeTreeNodesRaw(ptr: *mut TypeTreeNodeNative, size: c_int) -> c_int;
     pub fn TypeTreeGenerator_getMonoBehaviorDefinitions(
         ptr: *mut TypeTreeGeneratorHandle,
         arr_addr: &mut *const [*const c_char; 2],

@@ -4,6 +4,7 @@ mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
+use elsa::FrozenMap;
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
@@ -22,9 +23,9 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex::{UnityVersion, serde_typetree};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufReader, Cursor, Read, Seek, Write};
@@ -501,12 +502,18 @@ pub fn pack_to_scene_bundle(
     Ok((stats, header, files))
 }
 
+pub enum MonobehaviourTypetreeMode<'a> {
+    RuntimeTypeTreeGeneratorAPI,
+    Dump(&'a [u8]),
+}
+
 pub fn pack_to_asset_bundle(
     game_dir: &Path,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
     tpk: &(impl TypeTreeProvider + Send + Sync),
+    monobehaviour_typetree_mode: MonobehaviourTypetreeMode,
     unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
     compression: CompressionType,
@@ -516,8 +523,14 @@ pub fn pack_to_asset_bundle(
     let env = Environment::new_in(game_dir, tpk);
 
     let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetStudio)?;
-    generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
-    let generator_cache = TypeTreeGeneratorCache::new(generator);
+    if let MonobehaviourTypetreeMode::RuntimeTypeTreeGeneratorAPI = monobehaviour_typetree_mode {
+        generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
+    }
+    let mut generator_cache = TypeTreeGeneratorCache::new(generator);
+
+    if let MonobehaviourTypetreeMode::Dump(dump) = monobehaviour_typetree_mode {
+        generator_cache.cache = monobehaviour_typetree_cache(dump)?;
+    }
 
     let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
     builder._next_path_id = 2;
@@ -795,4 +808,31 @@ fn add_remapped_scene_header(
     );
 
     Ok((remap_file_id, remap_types))
+}
+
+// Todo: optimize / proper format
+fn monobehaviour_typetree_cache(
+    dump: &[u8],
+) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>> {
+    #[allow(non_snake_case)]
+    #[derive(serde_derive::Deserialize, Debug)]
+    struct DumpTypetreeNode<'a>(#[serde(borrow)] &'a str, #[serde(borrow)] &'a str, u8, i32);
+
+    let dump = lz4_flex::decompress_size_prepended(dump)?;
+    let dump: HashMap<String, HashMap<String, Vec<DumpTypetreeNode>>> =
+        serde_json::from_slice(&dump)?;
+
+    let mut monobehaviour_type_cache = FrozenMap::default();
+
+    for (asm, paths) in dump {
+        for (path, data) in paths {
+            let x: Vec<_> = data.iter().map(|x| (x.0, x.1, x.2, x.3)).collect();
+            let node = typetree_generator_api::reconstruct_typetree_node(&x);
+            monobehaviour_type_cache
+                .as_mut()
+                .insert((asm.clone(), path), Box::new(node));
+        }
+    }
+
+    Ok(monobehaviour_type_cache)
 }

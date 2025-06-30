@@ -753,6 +753,7 @@ dependencies = [
  "elsa",
  "indexmap",
  "log",
+ "lz4_flex",
  "memmap2",
  "rabex",
  "rayon",

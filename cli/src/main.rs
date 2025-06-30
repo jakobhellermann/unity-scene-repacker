@@ -15,6 +15,7 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use unity_scene_repacker::MonobehaviourTypetreeMode;
 use utils::TempDir;
 
 use crate::utils::friendly_size;
@@ -260,6 +261,8 @@ fn run() -> Result<()> {
         }
     };
 
+    let monobehaviour_typetree_mode = MonobehaviourTypetreeMode::RuntimeTypeTreeGeneratorAPI;
+
     match args.mode {
         Mode::Scene => {
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
@@ -313,6 +316,7 @@ fn run() -> Result<()> {
                 name,
                 &tpk_blob,
                 &tpk,
+                monobehaviour_typetree_mode,
                 unity_version,
                 repack_scenes,
                 compression,

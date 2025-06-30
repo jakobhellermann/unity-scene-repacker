@@ -11,6 +11,7 @@ use rustc_hash::FxBuildHasher;
 
 pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
+    fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
 }
 
 pub struct BaseDirResolver(PathBuf);
@@ -18,6 +19,20 @@ pub struct BaseDirResolver(PathBuf);
 impl EnvResolver for BaseDirResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
         std::fs::read(self.0.join(path))
+    }
+
+    fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
+        let mut all = Vec::new();
+        for entry in std::fs::read_dir(&self.0)? {
+            let entry = entry?;
+
+            if entry.file_type()?.is_dir() {
+                continue;
+            }
+
+            all.push(entry.path().strip_prefix(&self.0).unwrap().to_owned());
+        }
+        Ok(all)
     }
 }
 

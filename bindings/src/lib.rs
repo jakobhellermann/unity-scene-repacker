@@ -4,11 +4,11 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use indexmap::IndexMap;
-use unity_scene_repacker::Stats;
 use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use unity_scene_repacker::{MonobehaviourTypetreeMode, Stats};
 
 #[repr(C)]
 pub struct CStats {
@@ -103,6 +103,8 @@ fn export_inner(
 
     let mut out = Cursor::new(Vec::new());
 
+    let monobehaviour_mode = MonobehaviourTypetreeMode::Dump(&[]);
+
     let stats = match mode {
         Mode::SceneBundle => {
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
@@ -133,6 +135,7 @@ fn export_inner(
                 name,
                 &tpk_raw,
                 &tpk,
+                monobehaviour_mode,
                 unity_version,
                 repack_scenes,
                 compression,

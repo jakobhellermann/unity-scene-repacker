@@ -129,7 +129,7 @@ impl TypeTreeGenerator {
         Ok(all)
     }
 
-    pub fn generate_typetree_json(&self, assembly: &str, full_name: &str) -> Result<(), Error> {
+    pub fn generate_typetree_json(&self, assembly: &str, full_name: &str) -> Result<String, Error> {
         let assembly = CString::new(assembly).unwrap();
         let full_name = CString::new(full_name).unwrap();
 
@@ -144,13 +144,11 @@ impl TypeTreeGenerator {
         };
         Error::from_code(res)?;
 
-        unsafe {
-            CStr::from_ptr(json_ptr).to_str()?.to_string();
-        };
+        let json = unsafe { CStr::from_ptr(json_ptr).to_str()?.to_string() };
 
         unsafe { bindings::FreeCoTaskMem(json_ptr.cast()) };
 
-        Ok(())
+        Ok(json)
     }
 
     pub fn generate_typetree_raw(
@@ -189,7 +187,7 @@ impl TypeTreeGenerator {
                 )
             })
             .collect::<Vec<_>>();
-        let node = reconstruct(&items);
+        let node = reconstruct_typetree_node(&items);
 
         unsafe { bindings::FreeCoTaskMem(array.cast()) };
 
@@ -197,7 +195,7 @@ impl TypeTreeGenerator {
     }
 }
 
-fn reconstruct<'a>(all: &[(&'a str, &'a str, u8, i32)]) -> TypeTreeNode {
+pub fn reconstruct_typetree_node<'a>(flat: &[(&'a str, &'a str, u8, i32)]) -> TypeTreeNode {
     let mut stack = Vec::new();
 
     let mut parent = 0;
@@ -205,12 +203,12 @@ fn reconstruct<'a>(all: &[(&'a str, &'a str, u8, i32)]) -> TypeTreeNode {
 
     let mut children: BTreeMap<usize, Vec<usize>> = Default::default();
 
-    for (node, &(_, _, level, _)) in all.iter().enumerate().skip(1) {
-        if level > all[prev].2 {
+    for (node, &(_, _, level, _)) in flat.iter().enumerate().skip(1) {
+        if level > flat[prev].2 {
             stack.push(parent);
             parent = prev;
-        } else if level < all[prev].2 {
-            while level <= all[parent].2 {
+        } else if level < flat[prev].2 {
+            while level <= flat[parent].2 {
                 parent = stack.pop().unwrap();
             }
         }
@@ -219,7 +217,7 @@ fn reconstruct<'a>(all: &[(&'a str, &'a str, u8, i32)]) -> TypeTreeNode {
         prev = node;
     }
 
-    build_node_tree(0, all, &children)
+    build_node_tree(0, flat, &children)
 }
 
 fn build_node_tree(

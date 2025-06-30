@@ -6,7 +6,7 @@ use super::{Error, TypeTreeGenerator};
 
 pub struct TypeTreeGeneratorCache {
     generator: TypeTreeGenerator,
-    cache: FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>,
+    pub cache: FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>,
 }
 impl TypeTreeGeneratorCache {
     pub fn new(generator: TypeTreeGenerator) -> Self {
