@@ -1,12 +1,11 @@
-use elsa::FrozenMap;
+use elsa::sync::FrozenMap;
 use rabex::typetree::TypeTreeNode;
-use rustc_hash::FxBuildHasher;
 
 use super::{Error, TypeTreeGenerator};
 
 pub struct TypeTreeGeneratorCache {
     generator: TypeTreeGenerator,
-    pub cache: FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>,
+    pub cache: FrozenMap<(String, String), Box<TypeTreeNode>>,
 }
 impl TypeTreeGeneratorCache {
     pub fn new(generator: TypeTreeGenerator) -> Self {

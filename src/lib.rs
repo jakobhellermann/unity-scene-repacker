@@ -4,7 +4,7 @@ mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
-use elsa::FrozenMap;
+use elsa::sync::FrozenMap;
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
@@ -15,7 +15,7 @@ use rabex::files::bundlefile::{
     self, BundleFileBuilder, BundleFileHeader, BundleFileReader, CompressionType, ExtractionConfig,
 };
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
-use rabex::files::serializedfile::{ObjectInfo, SerializedType};
+use rabex::files::serializedfile::{ObjectInfo, ObjectRef, SerializedType};
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::objects::{ClassId, ClassIdType};
@@ -23,7 +23,7 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex::{UnityVersion, serde_typetree};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Debug;
@@ -549,15 +549,6 @@ pub fn pack_to_asset_bundle(
             assert_eq!(serialized.m_bigIDEnabled, None);
             assert!(serialized.m_RefTypes.as_ref().is_some_and(|x| x.is_empty()));
 
-            let mb_types = prepare_monobehaviour_types(
-                &scene.scene_name,
-                tpk,
-                &env,
-                &generator_cache,
-                serialized,
-                &mut data,
-            )?;
-
             stats.objects_before += serialized.objects().len();
             stats.size_before += data.get_ref().len();
             serialized.modify_objects(|objects| {
@@ -594,21 +585,24 @@ pub fn pack_to_asset_bundle(
 
             let (remap_file_id, remap_types) = add_remapped_scene_header(&mut builder, serialized)?;
 
-            Ok((
-                scene,
-                data,
-                mb_types,
-                remap_file_id,
-                remap_path_id,
-                remap_types,
-            ))
+            Ok((scene, data, remap_file_id, remap_path_id, remap_types))
         })
         .collect::<Result<Vec<_>>>()?;
 
     let objects = intermediate
         .into_par_iter()
         .map(
-            |(mut scene, data, mb_types, remap_file_id, remap_path_id, remap_types)| {
+            |(mut scene, mut data, remap_file_id, remap_path_id, remap_types)| {
+                let mb_types = prepare_monobehaviour_types(
+                    &scene.scene_name,
+                    tpk,
+                    &env,
+                    &generator_cache,
+                    &scene.serialized,
+                    &mut data,
+                )
+                .unwrap();
+
                 add_remapped_scene(
                     &scene.scene_name,
                     tpk,
@@ -680,9 +674,14 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
     serialized: &SerializedFile,
     data: &mut (impl Read + Seek),
 ) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
+    let ty = tpk
+        .get_typetree_node(MonoBehaviour::CLASS_ID, serialized.m_UnityVersion.unwrap())
+        .unwrap();
+
     Ok(serialized
-        .objects_of::<MonoBehaviour>(tpk)?
-        .map(|mb_info| -> Result<_> {
+        .object_infos_of::<MonoBehaviour>()
+        .map(|info| -> Result<_> {
+            let mb_info = ObjectRef::<MonoBehaviour>::new(serialized, info, ty.clone());
             let mb = mb_info.read(data)?;
             let script = env
                 .deref_read(mb.m_Script, serialized, data)
@@ -813,7 +812,7 @@ fn add_remapped_scene_header(
 // Todo: optimize / proper format
 fn monobehaviour_typetree_cache(
     dump: &[u8],
-) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>, FxBuildHasher>> {
+) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>>> {
     #[allow(non_snake_case)]
     #[derive(serde_derive::Deserialize, Debug)]
     struct DumpTypetreeNode<'a>(#[serde(borrow)] &'a str, #[serde(borrow)] &'a str, u8, i32);
