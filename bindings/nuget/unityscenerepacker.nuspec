@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package>
+  <metadata>
+    <id>unityscenerepacker</id>
+    <version>0.0.2</version>
+    <license type="expression">MIT</license>
+    <authors>Jakob Hellermann</authors>
+    <projectUrl>https://github.com/jakobhellermann/unity-scene-repacker</projectUrl>
+    <repository type="git" url="https://github.com/jakobhellermann/unity-scene-repacker" />
+    <description>Bindings for unity-scene-repacker</description>
+    <tags>unity assetbundle bindings rust</tags>
+    <readme>README.md</readme>
+    <packageTypes>
+      <packageType name="Dependency" />
+    </packageTypes>
+  </metadata>
+  <files>
+    <file src="README.md" target="/README.md" />
+    <file src="../../target/release/libunityscenerepacker.so" target="runtimes/linux-x64/native/libunityscenerepacker.so" />
+    <file src="../../target/release/unityscenerepacker.dll" target="runtimes/win-x64/native/unityscenerepacker.dll" />
+    <file src="../../target/release/libunityscenerepacker.dylib" target="runtimes/osx-x64/native/libunityscenerepacker.dylib" />
+  </files>
+</package>

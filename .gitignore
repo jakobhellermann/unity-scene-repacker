@@ -2,6 +2,7 @@
 /uv.lock
 
 /out*
+*.nupkg
 /*.unity3d
 /*.bundle
 /*.so
