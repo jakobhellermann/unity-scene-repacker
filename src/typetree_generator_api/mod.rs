@@ -1,18 +1,14 @@
-#![allow(dead_code)]
+#![allow(dead_code, unused_variables)]
 
 use std::collections::{BTreeMap, HashMap};
-use std::ffi::{CStr, CString, c_int};
 use std::path::Path;
 
 use rabex::UnityVersion;
 use rabex::typetree::TypeTreeNode;
 
-mod bindings;
 pub mod cache;
 
-pub struct TypeTreeGenerator {
-    handle: *mut bindings::TypeTreeGeneratorHandle,
-}
+pub struct TypeTreeGenerator {}
 
 pub enum GeneratorBackend {
     AssetStudio,
@@ -63,19 +59,7 @@ impl TypeTreeGenerator {
         unity_version: UnityVersion,
         backend: GeneratorBackend,
     ) -> Result<TypeTreeGenerator, Error> {
-        let unity_version = CString::new(unity_version.to_string()).unwrap();
-        let generator_name = match backend {
-            GeneratorBackend::AssetStudio => c"AssetStudio",
-            GeneratorBackend::AssetsTools => c"AssetsTools",
-            GeneratorBackend::AssetRipper => c"AssetRipper",
-        };
-        let handle = unsafe {
-            bindings::TypeTreeGenerator_init(unity_version.as_ptr(), generator_name.as_ptr())
-        };
-        if handle.is_null() {
-            return Err(Error::CreationError);
-        }
-        Ok(TypeTreeGenerator { handle })
+        Ok(TypeTreeGenerator {})
     }
 
     pub fn load_dll_path(&self, path: impl AsRef<Path>) -> Result<(), Error> {
@@ -84,10 +68,7 @@ impl TypeTreeGenerator {
     }
 
     pub fn load_dll(&self, dll: &[u8]) -> Result<(), Error> {
-        let res = unsafe {
-            bindings::TypeTreeGenerator_loadDLL(self.handle, dll.as_ptr(), dll.len() as i32)
-        };
-        Error::from_code(res)
+        todo!()
     }
 
     pub fn load_all_dll_in_dir(&self, path: impl AsRef<Path>) -> Result<(), Error> {
@@ -102,53 +83,11 @@ impl TypeTreeGenerator {
     }
 
     pub fn get_monobehaviour_definitions(&self) -> Result<HashMap<String, Vec<String>>, Error> {
-        let mut out = std::ptr::null();
-        let mut length: c_int = 0;
-        let res = unsafe {
-            bindings::TypeTreeGenerator_getMonoBehaviorDefinitions(
-                self.handle,
-                &mut out,
-                &mut length,
-            )
-        };
-        Error::from_code(res)?;
-
-        let mut all: HashMap<String, Vec<String>> = HashMap::new();
-
-        unsafe {
-            let slice = std::slice::from_raw_parts(out, length as usize);
-            for &[module, full_name] in slice {
-                let module = CStr::from_ptr(module).to_str()?.to_owned();
-                let full_name = CStr::from_ptr(full_name).to_str()?.to_owned();
-                all.entry(module.clone()).or_default().push(full_name);
-            }
-        }
-
-        let _ = unsafe { bindings::TypeTreeGenerator_freeMonoBehaviorDefinitions(out, length) };
-
-        Ok(all)
+        todo!()
     }
 
     pub fn generate_typetree_json(&self, assembly: &str, full_name: &str) -> Result<String, Error> {
-        let assembly = CString::new(assembly).unwrap();
-        let full_name = CString::new(full_name).unwrap();
-
-        let mut json_ptr = std::ptr::null_mut();
-        let res = unsafe {
-            bindings::TypeTreeGenerator_generateTreeNodesJson(
-                self.handle,
-                assembly.as_ptr(),
-                full_name.as_ptr(),
-                &mut json_ptr,
-            )
-        };
-        Error::from_code(res)?;
-
-        let json = unsafe { CStr::from_ptr(json_ptr).to_str()?.to_string() };
-
-        unsafe { bindings::FreeCoTaskMem(json_ptr.cast()) };
-
-        Ok(json)
+        todo!()
     }
 
     pub fn generate_typetree_raw(
@@ -156,42 +95,7 @@ impl TypeTreeGenerator {
         assembly: &str,
         full_name: &str,
     ) -> Result<TypeTreeNode, Error> {
-        let assembly = CString::new(assembly).unwrap();
-        let full_name = CString::new(full_name).unwrap();
-
-        let mut array = std::ptr::null_mut();
-        let mut length: c_int = 0;
-        let res = unsafe {
-            bindings::TypeTreeGenerator_generateTreeNodesRaw(
-                self.handle,
-                assembly.as_ptr(),
-                full_name.as_ptr(),
-                &mut array,
-                &mut length,
-            )
-        };
-        Error::from_code(res)?;
-
-        let slice = unsafe { std::slice::from_raw_parts(array, length as usize) };
-
-        let items = slice
-            .iter()
-            .map(|item| {
-                let ty = unsafe { CStr::from_ptr(item.m_Type) }.to_str().unwrap();
-                let name = unsafe { CStr::from_ptr(item.m_Name) }.to_str().unwrap();
-                (
-                    ty,
-                    name,
-                    u8::try_from(item.m_Level).unwrap(),
-                    item.m_MetaFlag,
-                )
-            })
-            .collect::<Vec<_>>();
-        let node = reconstruct_typetree_node(&items);
-
-        unsafe { bindings::FreeCoTaskMem(array.cast()) };
-
-        Ok(node)
+        todo!()
     }
 }
 
@@ -247,7 +151,5 @@ fn build_node_tree(
 }
 
 impl Drop for TypeTreeGenerator {
-    fn drop(&mut self) {
-        let _ok = unsafe { bindings::TypeTreeGenerator_del(self.handle) };
-    }
+    fn drop(&mut self) {}
 }

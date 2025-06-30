@@ -103,7 +103,8 @@ fn export_inner(
 
     let mut out = Cursor::new(Vec::new());
 
-    let monobehaviour_mode = MonobehaviourTypetreeMode::Dump(&[]);
+    let monobehaviour_typetree_mode =
+        MonobehaviourTypetreeMode::Dump(include_bytes!("../../wip-hollowknight-types.json.lz4"));
 
     let stats = match mode {
         Mode::SceneBundle => {
@@ -135,7 +136,7 @@ fn export_inner(
                 name,
                 &tpk_raw,
                 &tpk,
-                monobehaviour_mode,
+                monobehaviour_typetree_mode,
                 unity_version,
                 repack_scenes,
                 compression,

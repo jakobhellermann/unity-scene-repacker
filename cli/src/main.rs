@@ -261,7 +261,8 @@ fn run() -> Result<()> {
         }
     };
 
-    let monobehaviour_typetree_mode = MonobehaviourTypetreeMode::RuntimeTypeTreeGeneratorAPI;
+    let monobehaviour_typetree_mode =
+        MonobehaviourTypetreeMode::Dump(include_bytes!("../../wip-hollowknight-types.json.lz4"));
 
     match args.mode {
         Mode::Scene => {
