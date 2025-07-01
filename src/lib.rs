@@ -78,7 +78,7 @@ pub struct RepackScene {
 
 pub fn repack_scenes(
     game_files: GameFiles,
-    preloads: IndexMap<String, Vec<String>>,
+    mut preloads: IndexMap<String, Vec<String>>,
     tpk: &(impl TypeTreeProvider + Send + Sync),
     temp_dir: &Path,
     disable_roots: bool,
@@ -161,14 +161,14 @@ pub fn repack_scenes(
                         "globalgamemanagers not found in data.unity3d before level files",
                     )?;
                     let scene_name = &scenes[val];
-                    let Some(paths) = preloads.get(scene_name.as_str()) else {
+                    let Some(paths) = preloads.swap_remove(scene_name.as_str()) else {
                         continue;
                     };
 
                     let data = item.read()?;
 
                     let mut replacements = FxHashMap::default();
-                    let scene_paths = deduplicate_objects(scene_name, paths);
+                    let scene_paths = deduplicate_objects(scene_name, &paths);
                     let (serialized, keep_objects, roots) = prune_scene(
                         scene_name,
                         Cursor::new(data),
@@ -191,6 +191,15 @@ pub fn repack_scenes(
                     });
                 }
             }
+            ensure!(
+                preloads.is_empty(),
+                "Couldn't find scenes {} in game files",
+                preloads
+                    .keys()
+                    .map(AsRef::as_ref)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
             Ok(repack_scenes)
         }
     }
