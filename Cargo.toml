@@ -18,6 +18,7 @@ serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 rayon = "1.10"
 rabex.workspace = true
+libloading = "0.8"
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
