@@ -68,6 +68,7 @@ impl GameFiles {
 
 pub struct RepackScene {
     pub scene_name: String,
+    pub scene_index: usize,
     pub serialized: SerializedFile,
     pub serialized_path: PathBuf,
 
@@ -121,6 +122,7 @@ pub fn repack_scenes(
                     )?;
                     Ok(RepackScene {
                         scene_name,
+                        scene_index,
                         serialized,
                         serialized_path,
                         keep_objects,
@@ -155,12 +157,12 @@ pub fn repack_scenes(
                             .collect::<Vec<_>>(),
                     );
                 } else if let Some(index) = item.path.strip_prefix("level")
-                    && let Ok(val) = index.parse::<usize>()
+                    && let Ok(scene_index) = index.parse::<usize>()
                 {
                     let scenes = scenes.as_ref().context(
                         "globalgamemanagers not found in data.unity3d before level files",
                     )?;
-                    let scene_name = &scenes[val];
+                    let scene_name = &scenes[scene_index];
                     let Some(paths) = preloads.swap_remove(scene_name.as_str()) else {
                         continue;
                     };
@@ -183,6 +185,7 @@ pub fn repack_scenes(
 
                     repack_scenes.push(RepackScene {
                         scene_name: scene_name.clone(),
+                        scene_index,
                         serialized,
                         serialized_path: tmp,
                         keep_objects,
@@ -572,6 +575,7 @@ pub fn pack_to_asset_bundle(
 
             let mb_types = prepare_monobehaviour_types(
                 &scene.scene_name,
+                scene.scene_index,
                 tpk,
                 &env,
                 &generator_cache,
@@ -632,6 +636,7 @@ pub fn pack_to_asset_bundle(
             |(mut scene, data, mb_types, remap_file_id, remap_path_id, remap_types)| {
                 add_remapped_scene(
                     &scene.scene_name,
+                    scene.scene_index,
                     tpk,
                     &builder.serialized,
                     scene.serialized.take_objects(),
@@ -695,6 +700,7 @@ pub fn pack_to_asset_bundle(
 
 fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
     scene_name: &str,
+    scene_index: usize,
     tpk: &'a T,
     env: &Environment<&T>,
     generator_cache: &'a TypeTreeGeneratorCache,
@@ -727,7 +733,7 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
                 })
                 .with_context(|| format!("At object {}", mb_info.info.m_PathID))
                 .with_context(|| {
-                    format!("Could not generate type trees from MonoBehaviour in {scene_name}")
+                    format!("Could not generate type trees from MonoBehaviour in {scene_name} (level{scene_index})")
                 })?;
 
             Ok(Some((mb_info.info.m_PathID, full_ty)))
@@ -747,6 +753,7 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
 
 fn add_remapped_scene(
     scene_name: &str,
+    scene_index: usize,
     tpk: &impl TypeTreeProvider,
     serialized: &SerializedFile,
     objects: Vec<ObjectInfo>,
@@ -786,9 +793,10 @@ fn add_remapped_scene(
         )
         .with_context(|| {
             format!(
-                "Could not remap path IDs in bundle for {} in '{}':\n{}",
+                "Could not remap path IDs in bundle for {} in '{}' (level{}):\n{}",
                 orig_path_id,
                 scene_name,
+                scene_index,
                 tt.dump_pretty()
             )
         })?;
