@@ -15,7 +15,7 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use unity_scene_repacker::GameFiles;
+use unity_scene_repacker::{GameFiles, Stats};
 use utils::TempDir;
 
 use crate::utils::friendly_size;
@@ -259,7 +259,7 @@ fn run() -> Result<()> {
         }
     };
 
-    match args.mode {
+    let new_size = match args.mode {
         Mode::Scene => {
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
                 name,
@@ -294,13 +294,7 @@ fn run() -> Result<()> {
                     .map(|(name, file)| Ok((name, Cursor::new(file)))),
             )?;
 
-            success!(
-                "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
-                name,
-                args.output.display(),
-                friendly_size(out.get_ref().metadata()?.len() as usize),
-                start.elapsed()
-            );
+            out.get_ref().metadata()?.len() as usize
         }
         Mode::Asset => {
             let mut out = BufWriter::new(
@@ -316,27 +310,36 @@ fn run() -> Result<()> {
                 repack_scenes,
                 compression,
             )?;
+            print_stats(&stats);
 
-            info!(
-                "Pruned {} -> <b>{}</b> objects",
-                stats.objects_before, stats.objects_after
-            );
-            info!(
-                "{} -> <b>{}</b> raw size",
-                friendly_size(stats.size_before),
-                friendly_size(stats.size_after)
-            );
-            println!();
-
-            success!(
-                "Repacked '{}' into <b>{}</b> <i>({})</i> in {:.2?}",
-                name,
-                args.output.display(),
-                friendly_size(out.get_ref().metadata()?.len() as usize),
-                start.elapsed()
-            );
+            out.get_ref().metadata()?.len() as usize
         }
-    }
+    };
+
+    success!(
+        "Repacked '{}' into {} <b>{}</b> <i>({})</i> in {:.2?}",
+        name,
+        match args.mode {
+            Mode::Scene => "scenebundle",
+            Mode::Asset => "assetbundle",
+        },
+        args.output.display(),
+        friendly_size(new_size),
+        start.elapsed()
+    );
 
     Ok(())
+}
+
+fn print_stats(stats: &Stats) {
+    info!(
+        "Pruned {} -> <b>{}</b> objects",
+        stats.objects_before, stats.objects_after
+    );
+    info!(
+        "{} -> <b>{}</b> raw size",
+        friendly_size(stats.size_before),
+        friendly_size(stats.size_after)
+    );
+    println!();
 }
