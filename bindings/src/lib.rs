@@ -4,11 +4,11 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use indexmap::IndexMap;
-use unity_scene_repacker::Stats;
 use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use unity_scene_repacker::{GameFiles, Stats};
 
 #[repr(C)]
 pub struct CStats {
@@ -98,8 +98,9 @@ fn export_inner(
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
+    let game_files = GameFiles::probe(game_dir)?;
     let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&game_dir, preloads, &tpk, &temp_dir, disable)?;
+        unity_scene_repacker::repack_scenes(game_files, preloads, &tpk, &temp_dir, disable)?;
 
     let mut out = Cursor::new(Vec::new());
 

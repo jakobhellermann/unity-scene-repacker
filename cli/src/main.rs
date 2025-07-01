@@ -15,6 +15,7 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
+use unity_scene_repacker::GameFiles;
 use utils::TempDir;
 
 use crate::utils::friendly_size;
@@ -221,7 +222,7 @@ fn run() -> Result<()> {
     let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
-        &game_dir,
+        GameFiles::probe(&game_dir)?,
         preloads,
         &tpk,
         &temp_dir.dir,
