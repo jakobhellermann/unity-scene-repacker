@@ -287,9 +287,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -521,7 +521,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#38c5ff08345f2bb7f3a22aff83f47a634fa3ef7a"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#837f0d78a49bf824ba9b4a76f89211bf0e507d23"
 dependencies = [
  "bitflags",
  "byteorder",

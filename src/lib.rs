@@ -334,7 +334,8 @@ pub fn repack_bundle(
     let mut container = Some(container);
 
     for scene in scenes {
-        let mut sharedassets = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map);
+        let mut sharedassets =
+            SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
 
         sharedassets.add_object(&PreloadData {
             m_Name: "".into(),
