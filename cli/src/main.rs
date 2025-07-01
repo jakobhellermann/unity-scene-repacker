@@ -64,7 +64,7 @@ struct Arguments {
     #[clap(flatten)]
     game: GameArgs,
 
-    #[arg(long, default_value = "asset")]
+    #[arg(long, default_value = "scene")]
     mode: Mode,
 
     /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
