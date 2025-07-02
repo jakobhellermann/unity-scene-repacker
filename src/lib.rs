@@ -660,10 +660,13 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
     serialized: &SerializedFile,
     data: &mut (impl Read + Seek),
 ) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
-    serialized
+    let items = serialized
         .objects_of::<MonoBehaviour>(tpk)?
         .map(|mb_info| -> Result<_> {
             let mb = mb_info.read(data)?;
+            if mb.m_Script.is_null() {
+                return Ok(None);
+            }
             let script = env
                 .deref_read(mb.m_Script, serialized, data)
                 .with_context(|| format!("In monobehaviour {}", mb_info.info.m_PathID))?;
@@ -686,16 +689,19 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
                     format!("Could not generate type trees from MonoBehaviour in {scene_name}")
                 })?;
 
-            Ok((mb_info.info.m_PathID, full_ty))
+            Ok(Some((mb_info.info.m_PathID, full_ty)))
         })
-        // .filter_map(|ty| match ty {
-        //     Ok(val) => Some(val),
-        //     Err(e) => {
-        //         log::error!("{e:?}");
-        //         None
-        //     }
-        // })
-        .collect::<Result<FxHashMap<_, _>>>()
+        .filter_map(|x| x.transpose())
+        .filter_map(|ty| match ty {
+            Ok(val) => Some(val),
+            Err(e) => {
+                log::error!("{e:?}");
+                None
+            }
+        })
+        .collect::<FxHashMap<_, _>>();
+    // .collect::<Result<FxHashMap<_, _>>>()?
+    Ok(items)
 }
 
 fn add_remapped_scene(
