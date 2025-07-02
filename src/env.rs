@@ -3,11 +3,10 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use elsa::FrozenMap;
+use elsa::sync::FrozenMap;
 use rabex::files::SerializedFile;
 use rabex::objects::{ClassIdType, PPtr, TypedPPtr};
 use rabex::typetree::TypeTreeProvider;
-use rustc_hash::FxBuildHasher;
 
 pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
@@ -23,7 +22,7 @@ impl EnvResolver for BaseDirResolver {
 
 pub struct Environment<P, R = BaseDirResolver> {
     pub resolver: R,
-    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>, FxBuildHasher>,
+    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
     pub tpk: P,
 }
 
