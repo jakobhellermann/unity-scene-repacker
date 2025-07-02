@@ -532,7 +532,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#837f0d78a49bf824ba9b4a76f89211bf0e507d23"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#3f1ccededcac0083380fcde415106ae46af9cbe6"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -591,15 +591,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
-]
-
-[[package]]
-name = "serde-transcode"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "590c0e25c2a5bb6e85bf5c1bce768ceb86b316e7a01bdf07d2cb4ec2271990e2"
-dependencies = [
- "serde",
 ]
 
 [[package]]
@@ -776,7 +767,6 @@ dependencies = [
  "log",
  "paris",
  "rabex",
- "serde-transcode",
  "steamlocate",
  "unity-scene-repacker",
 ]

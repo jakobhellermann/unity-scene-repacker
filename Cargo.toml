@@ -7,19 +7,19 @@ repository = "https://github.com/jakobhellermann/unity-scene-repacker"
 description = "Repack unity level files into filtered asset bundles you can load at runtime"
 
 [dependencies]
-log = "0.4"
 anyhow = "1.0"
 byteorder = "1.5"
 elsa = "1.11"
 indexmap = { version = "2.9", features = ["serde", "rayon"] }
+libloading = "0.8"
+log = "0.4"
+lz4_flex = { version = "0.11", default-features = false }
 memmap2 = "0.9"
+rabex.workspace = true
+rayon = "1.10"
 rustc-hash = "2.1"
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
-rayon = "1.10"
-rabex.workspace = true
-libloading = "0.8"
-lz4_flex = { version = "0.11", default-features = false }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 
 [lints.clippy]

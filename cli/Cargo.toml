@@ -7,17 +7,16 @@ repository = "https://github.com/jakobhellermann/unity-scene-repacker"
 description = "Repack unity level files into filtered asset bundles you can load at runtime"
 
 [dependencies]
-unity-scene-repacker = { version = "2.1", path = ".." }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive", "unstable-markdown"] }
 clap_complete = { version = "4.5", features = ["unstable-dynamic"] }
-json5 = "0.4"
-paris = { version = "1.5", features = ["macros", "no_logger"] }
-steamlocate = "2.0"
-log = "0.4"
-rabex = { workspace = true, features = ["compression-all"] }
 indexmap = "2.9"
-serde-transcode = "1.1.1"
+json5 = "0.4"
+log = "0.4"
+paris = { version = "1.5", features = ["macros", "no_logger"] }
+rabex = { workspace = true, features = ["compression-all"] }
+steamlocate = "2.0"
+unity-scene-repacker = { version = "2.1", path = ".." }
 
 [features]
 dhat-heap = []
