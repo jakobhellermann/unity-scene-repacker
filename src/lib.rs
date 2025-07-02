@@ -560,7 +560,7 @@ pub fn pack_to_asset_bundle(
 
     let generator_cache = match monobehaviour_typetree_mode {
         MonobehaviourTypetreeMode::GenerateRuntime => {
-            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetStudio)?;
+            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
             generator
                 .load_all_dll_in_dir(game_dir.join("Managed"))
                 .context("Cannot load game DLLs")?;

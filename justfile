@@ -13,5 +13,6 @@ hollowknight *args:
 ninesols *args:
     cargo run --release -- \
         --game-dir "{{ ninesols }}" \
+        --mode asset \
         --objects objects/ns-monsters.json \
         --output /tmp/testing/new.bundle {{ args }}
