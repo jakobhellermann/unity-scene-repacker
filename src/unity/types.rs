@@ -1,5 +1,7 @@
 #![allow(non_snake_case, dead_code)]
 
+mod utils;
+
 use std::borrow::Cow;
 use std::path::Path;
 

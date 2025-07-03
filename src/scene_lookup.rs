@@ -14,7 +14,7 @@ use crate::unity::types::Transform;
 pub struct SceneLookup<'a, P> {
     roots: HashMap<String, (PathId, Transform)>,
     serialized: &'a SerializedFile,
-    pub tpk: P,
+    tpk: P,
 }
 
 impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
@@ -48,14 +48,7 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
         })
     }
 
-    pub fn lookup_path_id(
-        &self,
-        reader: &mut (impl Read + Seek),
-        path: &str,
-    ) -> Result<Option<PathId>> {
-        Ok(self.lookup_path_full(reader, path)?.map(|(id, _)| id))
-    }
-    pub fn lookup_path_full(
+    pub fn lookup_path(
         &self,
         reader: &mut (impl Read + Seek),
         path: &str,

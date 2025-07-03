@@ -249,7 +249,7 @@ impl TypeTreeGenerator {
     }
 }
 
-pub fn reconstruct_typetree_node<'a, S: AsRef<str>>(flat: &[(S, S, u8, i32)]) -> TypeTreeNode {
+pub fn reconstruct_typetree_node<S: AsRef<str>>(flat: &[(S, S, u8, i32)]) -> TypeTreeNode {
     let mut stack = Vec::new();
 
     let mut parent = 0;

@@ -1,27 +1,29 @@
 pub mod env;
+mod merge_serialized;
+mod monobehaviour_typetree_export;
+mod prune;
 mod scene_lookup;
 mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
-use elsa::sync::FrozenMap;
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use memmap2::Mmap;
+use rabex::UnityVersion;
 use rabex::files::bundlefile::{
     self, BundleFileBuilder, BundleFileHeader, BundleFileReader, CompressionType, ExtractionConfig,
 };
+use rabex::files::serializedfile::SerializedType;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
-use rabex::files::serializedfile::{ObjectInfo, SerializedType};
 use rabex::files::{SerializedFile, serializedfile};
-use rabex::objects::pptr::{FileId, PPtr, PathId};
+use rabex::objects::pptr::PPtr;
 use rabex::objects::{ClassId, ClassIdType};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
-use rabex::{UnityVersion, serde_typetree};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
@@ -35,9 +37,6 @@ use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
-use crate::scene_lookup::SceneLookup;
-use crate::trace_pptr::replace_pptrs_inplace_endianed;
-use crate::typetree_generator_api::reconstruct_typetree_node;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub enum GameFiles {
@@ -75,7 +74,7 @@ pub struct RepackScene {
     pub serialized_path: PathBuf,
 
     pub keep_objects: BTreeSet<i64>,
-    pub roots: Vec<(String, i64)>,
+    pub roots: Vec<(String, Transform)>,
     pub replacements: FxHashMap<i64, Vec<u8>>,
 }
 
@@ -110,13 +109,16 @@ pub fn repack_scenes(
                     let serialized_path = game_dir.join(format!("level{scene_index}"));
 
                     let file = File::open(&serialized_path)?;
-                    let data = Cursor::new(unsafe { Mmap::map(&file)? });
+                    let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
 
                     let mut replacements = FxHashMap::default();
                     let scene_paths = deduplicate_objects(&scene_name, &paths);
-                    let (serialized, keep_objects, roots) = prune_scene(
+                    let serialized = SerializedFile::from_reader(&mut data)
+                        .with_context(|| format!("Could not parse {scene_name}"))?;
+                    let (keep_objects, roots) = prune::prune_scene(
                         &scene_name,
-                        data,
+                        &serialized,
+                        &mut data,
                         tpk,
                         &scene_paths,
                         &mut replacements,
@@ -169,13 +171,17 @@ pub fn repack_scenes(
                         continue;
                     };
 
-                    let data = item.read()?;
+                    let mut data = Cursor::new(item.read()?);
 
                     let mut replacements = FxHashMap::default();
                     let scene_paths = deduplicate_objects(scene_name, &paths);
-                    let (serialized, keep_objects, roots) = prune_scene(
+
+                    let serialized = SerializedFile::from_reader(&mut data)
+                        .with_context(|| format!("Could not parse {scene_name}"))?;
+                    let (keep_objects, roots) = prune::prune_scene(
                         scene_name,
-                        Cursor::new(data),
+                        &serialized,
+                        &mut data,
                         tpk,
                         &scene_paths,
                         &mut replacements,
@@ -183,7 +189,8 @@ pub fn repack_scenes(
                     )?;
 
                     let tmp = temp_dir.join(scene_name);
-                    std::fs::write(&tmp, data).context("Writing bundle data to temporary file")?;
+                    std::fs::write(&tmp, data.into_inner())
+                        .context("Writing bundle data to temporary file")?;
 
                     repack_scenes.push(RepackScene {
                         scene_name: scene_name.clone(),
@@ -208,174 +215,6 @@ pub fn repack_scenes(
             Ok(repack_scenes)
         }
     }
-}
-
-#[inline(never)]
-fn prune_scene(
-    scene_name: &str,
-    mut data: impl Read + Seek,
-    tpk: impl TypeTreeProvider,
-    retain_paths: &IndexSet<&str>,
-    replacements: &mut FxHashMap<i64, Vec<u8>>,
-    disable_roots: bool,
-) -> Result<(SerializedFile, BTreeSet<PathId>, Vec<(String, PathId)>)> {
-    let serialized = SerializedFile::from_reader(&mut data)
-        .with_context(|| format!("Could not parse {scene_name}"))?;
-
-    let scene_lookup = SceneLookup::new(&serialized, tpk, &mut data)?;
-    let retain_objects: Vec<_> = retain_paths
-        .iter()
-        .filter_map(|&path| {
-            let item = scene_lookup.lookup_path_id(&mut data, path).unwrap();
-            let item = match item {
-                None => {
-                    warn!("Could not find path '{path}' in {scene_name}");
-                    return None;
-                }
-                Some(item) => item,
-            };
-            Some((path.to_owned(), item))
-        })
-        .collect();
-
-    let mut all_reachable = scene_lookup
-        .reachable(
-            retain_objects.iter().map(|(_, id)| *id).collect(),
-            &mut data,
-        )
-        .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
-
-    let mut ancestors = Vec::new();
-    for &(_, retain) in &retain_objects {
-        let mut current = retain;
-        loop {
-            let transform = serialized
-                .get_object::<Transform>(current, &scene_lookup.tpk)?
-                .read(&mut data)?;
-            let Some(father) = transform.m_Father.optional() else {
-                break;
-            };
-            current = father.m_PathID;
-
-            if !all_reachable.insert(father.m_PathID) {
-                break;
-            }
-
-            ancestors.push(father.m_PathID);
-        }
-    }
-
-    for ancestor in ancestors {
-        let transform_obj = serialized.get_object::<Transform>(ancestor, &scene_lookup.tpk)?;
-        let mut transform = transform_obj.read(&mut data)?;
-        transform
-            .m_Children
-            .retain(|child| all_reachable.contains(&child.m_PathID));
-
-        // TODO disable go? enable but disable components?
-        /*let go_obj = transform
-            .m_GameObject
-            .deref_local(&serialized, &scene_lookup.tpk)?;
-        let mut go = go_obj.read(&mut data)?;*/
-
-        all_reachable.insert(transform.m_GameObject.m_PathID);
-
-        let transform_modified = serde_typetree::to_vec_endianed(
-            &transform,
-            &transform_obj.tt,
-            serialized.m_Header.m_Endianess,
-        )?;
-        assert!(
-            replacements
-                .insert(transform_obj.info.m_PathID, transform_modified)
-                .is_none()
-        );
-    }
-
-    for settings in serialized
-        .objects()
-        .filter(|info| [ClassId::RenderSettings].contains(&info.m_ClassID))
-    {
-        all_reachable.insert(settings.m_PathID);
-    }
-
-    for &(_, root) in &retain_objects {
-        adjust_roots(
-            replacements,
-            &scene_lookup.tpk,
-            &serialized,
-            data.by_ref(),
-            root,
-            disable_roots,
-        )?;
-    }
-
-    Ok((
-        serialized,
-        all_reachable,
-        retain_objects.into_iter().collect(),
-    ))
-}
-
-fn adjust_roots(
-    replacements: &mut FxHashMap<i64, Vec<u8>>,
-    tpk: &impl TypeTreeProvider,
-    serialized: &SerializedFile,
-    data: &mut (impl Read + Seek),
-    transform: i64,
-    disable: bool,
-) -> Result<(), anyhow::Error> {
-    let transform_obj = serialized.get_object::<Transform>(transform, tpk)?;
-    let transform = transform_obj.read(data)?;
-
-    if disable {
-        let go = transform.m_GameObject.deref_local(serialized, tpk)?;
-        let mut go_data = go.read(data)?;
-        go_data.m_IsActive = false;
-        let go_modified =
-            serde_typetree::to_vec_endianed(&go_data, &go.tt, serialized.m_Header.m_Endianess)?;
-        assert!(replacements.insert(go.info.m_PathID, go_modified).is_none());
-    }
-
-    Ok(())
-}
-
-#[must_use]
-fn remap_vecs_all<I, T>(old: &mut Vec<T>, new: &mut Vec<T>) -> FxHashMap<I, I>
-where
-    I: std::hash::Hash + std::cmp::Eq + TryFrom<usize>,
-    <I as TryFrom<usize>>::Error: Debug,
-{
-    std::mem::take(old)
-        .into_iter()
-        .enumerate()
-        .map(|(old_index, ty)| {
-            let new_index = new.len();
-            new.push(ty);
-            (old_index.try_into().unwrap(), new_index.try_into().unwrap())
-        })
-        .filter(|(old, new)| old != new)
-        .collect()
-}
-
-#[must_use]
-fn remap_vecs<T>(
-    used_types: FxHashSet<i32>,
-    old: &mut Vec<T>,
-    new: &mut Vec<T>,
-) -> FxHashMap<i32, i32> {
-    let mut old_to_new: FxHashMap<i32, i32> = FxHashMap::default();
-
-    for (old_index, ty) in std::mem::take(old)
-        .into_iter()
-        .enumerate()
-        .filter(|&(idx, _)| used_types.contains(&(idx as i32)))
-    {
-        let new_index = new.len();
-        old_to_new.insert(old_index as i32, new_index as i32);
-        new.push(ty);
-    }
-    old_to_new
 }
 
 fn prune_types(serialized: &mut SerializedFile) -> FxHashMap<i32, i32> {
@@ -431,7 +270,6 @@ pub fn pack_to_scene_bundle(
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let prefix = bundle_name;
-
     let container = scenes
         .iter()
         .map(|scene| {
@@ -567,7 +405,7 @@ pub fn pack_to_asset_bundle(
             TypeTreeGeneratorCache::new(generator)
         }
         MonobehaviourTypetreeMode::Export(export) => {
-            TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_cache(export)?)
+            TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_export::read(export)?)
         }
     };
 
@@ -612,11 +450,7 @@ pub fn pack_to_asset_bundle(
                 remap_path_id.insert(obj.m_PathID, builder.get_next_path_id());
             }
 
-            for &(ref scene_path, transform) in scene.roots.iter() {
-                let transform = serialized
-                    .get_object::<Transform>(transform, tpk)?
-                    .read(&mut data)?;
-
+            for (scene_path, transform) in scene.roots.iter() {
                 let mut go = transform.m_GameObject;
                 assert!(go.is_local());
                 if let Some(replacement) = remap_path_id.get(&go.m_PathID) {
@@ -632,7 +466,8 @@ pub fn pack_to_asset_bundle(
                 container.insert(path, info);
             }
 
-            let (remap_file_id, remap_types) = add_remapped_scene_header(&mut builder, serialized)?;
+            let (remap_file_id, remap_types) =
+                merge_serialized::add_remapped_scene_header(&mut builder, serialized)?;
 
             Ok((
                 scene,
@@ -649,13 +484,13 @@ pub fn pack_to_asset_bundle(
         .into_par_iter()
         .map(
             |(mut scene, data, mb_types, remap_file_id, remap_path_id, remap_types)| {
-                add_remapped_scene(
+                merge_serialized::add_remapped_scene(
                     &scene.scene_name,
                     scene.scene_index,
-                    tpk,
                     &builder.serialized,
-                    scene.serialized.take_objects(),
                     data.get_ref(),
+                    tpk,
+                    scene.serialized.take_objects(),
                     scene.replacements,
                     mb_types,
                     remap_file_id,
@@ -764,135 +599,4 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
         .collect::<FxHashMap<_, _>>();
     // .collect::<Result<FxHashMap<_, _>>>()?
     Ok(items)
-}
-
-fn add_remapped_scene(
-    scene_name: &str,
-    scene_index: usize,
-    tpk: &impl TypeTreeProvider,
-    serialized: &SerializedFile,
-    objects: Vec<ObjectInfo>,
-    data: &[u8],
-    mut replacements: FxHashMap<i64, Vec<u8>>,
-    mb_types: FxHashMap<i64, &TypeTreeNode>,
-    remap_file_id: FxHashMap<FileId, FileId>,
-    path_id_remap: FxHashMap<PathId, PathId>,
-    remap_types: FxHashMap<i32, i32>,
-) -> impl Iterator<Item = Result<(ObjectInfo, Cow<'static, [u8]>)>> {
-    objects.into_iter().map(move |mut obj| -> Result<_> {
-        obj.m_TypeID = remap_types[&obj.m_TypeID];
-
-        let tt = match mb_types.get(&obj.m_PathID) {
-            Some(ty) => ty,
-            // TODO: take types from file if they exist
-            None => &*serialized.get_typetree_for(&obj, &tpk)?,
-        };
-        let mut object_data = match replacements.remove(&obj.m_PathID) {
-            Some(owned) => Cow::Owned(owned),
-            None => {
-                let offset = obj.m_Offset as usize;
-                let size = obj.m_Size as usize;
-                Cow::Borrowed(&data[offset..offset + size])
-            }
-        };
-
-        let orig_path_id = obj.m_PathID;
-        obj.m_PathID = *path_id_remap.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
-
-        replace_pptrs_inplace_endianed(
-            object_data.to_mut().as_mut_slice(),
-            tt,
-            &path_id_remap,
-            &remap_file_id,
-            serialized.m_Header.m_Endianess,
-        )
-        .with_context(|| {
-            format!(
-                "Could not remap path IDs in bundle for {} in '{}' (level{}):\n{}",
-                orig_path_id,
-                scene_name,
-                scene_index,
-                tt.dump_pretty()
-            )
-        })?;
-
-        Ok((obj, Cow::Owned(object_data.into_owned())))
-    })
-}
-
-fn add_remapped_scene_header(
-    builder: &mut SerializedFileBuilder<impl TypeTreeProvider>,
-    serialized: &mut SerializedFile,
-) -> Result<(FxHashMap<FileId, FileId>, FxHashMap<i32, i32>)> {
-    let mut remap_file_id = FxHashMap::default();
-    for (i, external) in serialized.m_Externals.iter().enumerate() {
-        let orig_file_id = i + 1;
-        let new_file_id = builder.serialized.m_Externals.len() + 1;
-        remap_file_id.insert(orig_file_id as FileId, new_file_id as FileId);
-        builder.serialized.m_Externals.push(external.clone());
-    }
-    let remap_script_types = remap_vecs_all::<i16, _>(
-        serialized.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
-        builder.serialized.m_ScriptTypes.get_or_insert_default(),
-    );
-    for ty in serialized.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
-        ty.m_LocalSerializedFileIndex = *remap_file_id
-            .get(&(ty.m_LocalIdentifierInFile as i32))
-            .unwrap_or(&ty.m_LocalSerializedFileIndex);
-    }
-    for ty in &mut serialized.m_Types {
-        ty.m_ScriptTypeIndex = *remap_script_types
-            .get(&ty.m_ScriptTypeIndex)
-            .unwrap_or(&ty.m_ScriptTypeIndex);
-    }
-    let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
-    let remap_types = remap_vecs(
-        used_types,
-        &mut serialized.m_Types,
-        &mut builder.serialized.m_Types,
-    );
-
-    Ok((remap_file_id, remap_types))
-}
-
-// Todo: optimize / proper format
-fn monobehaviour_typetree_cache(
-    export: &[u8],
-) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>>> {
-    use byteorder::{LE, ReadBytesExt};
-
-    fn read_str(reader: &mut impl std::io::Read) -> Result<String> {
-        let len = reader.read_u32::<LE>()?;
-        let mut data = vec![0; len as usize];
-        reader.read_exact(&mut data)?;
-        let str = String::from_utf8(data)?;
-        Ok(str)
-    }
-
-    let export = lz4_flex::decompress_size_prepended(export)?;
-    let mut reader = &mut &*export;
-    let monobehaviour_type_cache = FrozenMap::default();
-
-    let n_assemblies = reader.read_u32::<LE>()?;
-    for _ in 0..n_assemblies {
-        let assembly_name = read_str(&mut reader)?;
-        let n_types = reader.read_u32::<LE>()?;
-        for _ in 0..n_types {
-            let full_name = read_str(&mut reader)?;
-            let n_flat_nodes = reader.read_u32::<LE>()?;
-            let mut flat_nodes = Vec::with_capacity(n_flat_nodes as usize);
-            for _ in 0..n_flat_nodes {
-                let name = read_str(&mut reader)?;
-                let ty = read_str(&mut reader)?;
-                let index = reader.read_u8()?;
-                let full_name = reader.read_i32::<LE>()?;
-                flat_nodes.push((name, ty, index, full_name));
-            }
-
-            let node = reconstruct_typetree_node(&flat_nodes);
-            monobehaviour_type_cache.insert((assembly_name.clone(), full_name), Box::new(node));
-        }
-    }
-
-    Ok(monobehaviour_type_cache)
 }

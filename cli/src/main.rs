@@ -1,62 +1,26 @@
+mod completion;
+mod locate;
 mod logger;
 mod utils;
 
 use anyhow::{Context, Result, ensure};
 use clap::{Args, CommandFactory as _, Parser};
-use clap_complete::{ArgValueCompleter, CompletionCandidate};
+use clap_complete::ArgValueCompleter;
 use indexmap::IndexMap;
 use paris::{error, info, success, warn};
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, CompressionType};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
 use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
 use utils::TempDir;
 
 use crate::utils::friendly_size;
-
-#[derive(Args, Debug)]
-#[group(required = true, multiple = false)]
-struct GameArgs {
-    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
-    #[arg(long)]
-    game_dir: Option<PathBuf>,
-    #[arg(long, add = ArgValueCompleter::new(complete_steam_game))]
-    /// App ID or search term for the steam game to detect
-    steam_game: Option<String>,
-}
-
-fn complete_steam_game(current: &OsStr) -> Vec<CompletionCandidate> {
-    fn complete_steam_game_inner(_: &OsStr) -> Result<Vec<CompletionCandidate>> {
-        let steam = steamlocate::SteamDir::locate()?;
-
-        let mut candidates = Vec::new();
-
-        for library in steam.libraries()?.filter_map(Result::ok) {
-            for app in library.apps().filter_map(Result::ok) {
-                let app_dir = library.resolve_app_dir(&app);
-                let Some(_) = find_data_dir(&app_dir).transpose() else {
-                    continue;
-                };
-                let name = app
-                    .name
-                    .map(OsString::from)
-                    .unwrap_or(Path::new(&app.install_dir).file_name().unwrap().to_owned());
-                candidates
-                    .push(CompletionCandidate::new(name).help(Some(app.app_id.to_string().into())));
-            }
-        }
-
-        Ok(candidates)
-    }
-
-    complete_steam_game_inner(current).unwrap_or_default()
-}
 
 #[derive(Parser, Debug)]
 #[command(version)]
@@ -95,6 +59,17 @@ struct Arguments {
     bundle_name: Option<String>,
 }
 
+#[derive(Args, Debug)]
+#[group(required = true, multiple = false)]
+struct GameArgs {
+    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
+    #[arg(long)]
+    game_dir: Option<PathBuf>,
+    #[arg(long, add = ArgValueCompleter::new(completion::complete_steam_game))]
+    /// App ID or search term for the steam game to detect
+    steam_game: Option<String>,
+}
+
 /// What kind of asset bundle to build
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum Mode {
@@ -128,56 +103,6 @@ fn main() {
     }
 }
 
-fn locate(game: &str) -> Result<PathBuf> {
-    let steam = steamlocate::SteamDir::locate()?;
-
-    let game = game.to_ascii_lowercase();
-
-    let (app, library) = if let Ok(app_id) = game.parse() {
-        steam
-            .find_app(app_id)?
-            .with_context(|| format!("Could not locate game with app id {app_id}"))?
-    } else {
-        steam
-            .libraries()?
-            .filter_map(Result::ok)
-            .find_map(|library| {
-                let app = library.apps().filter_map(Result::ok).find(|app| {
-                    let name = app.name.as_ref().unwrap_or(&app.install_dir);
-                    name.to_ascii_lowercase().contains(&game)
-                })?;
-                Some((app, library))
-            })
-            .with_context(|| format!("Didn't find any steam game matching '{game}'"))?
-    };
-
-    let install_dir = library.resolve_app_dir(&app);
-    let name = app.name.as_ref().unwrap_or(&app.install_dir);
-    info!("Detected game '{}' at '{}'", name, install_dir.display());
-
-    find_data_dir(&install_dir)?.with_context(|| {
-        format!(
-            "Did not find unity 'game_Data' directory in '{}'. Is {} a unity game?",
-            install_dir.display(),
-            name
-        )
-    })
-}
-
-fn find_data_dir(install_dir: &Path) -> Result<Option<PathBuf>> {
-    Ok(std::fs::read_dir(install_dir)?
-        .filter_map(Result::ok)
-        .find(|entry| {
-            entry
-                .path()
-                .file_name()
-                .and_then(OsStr::to_str)
-                .is_some_and(|name| name.ends_with("_Data"))
-                && entry.file_type().is_ok_and(|ty| ty.is_dir())
-        })
-        .map(|entry| entry.path()))
-}
-
 fn run() -> Result<()> {
     let args = Arguments::parse();
 
@@ -188,14 +113,14 @@ fn run() -> Result<()> {
                 "Game directory '{}' does not exist",
                 game_dir.display()
             );
-            match find_data_dir(&game_dir) {
+            match locate::find_unity_data_dir(&game_dir) {
                 Ok(Some(data_dir)) => data_dir,
                 _ => game_dir,
             }
         }
         None => {
             let game = args.game.steam_game.unwrap();
-            locate(&game)?
+            locate::locate_steam_game(&game)?
         }
     };
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
