@@ -1,5 +1,5 @@
-ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols-Speedrunpatch/NineSols_Data"
-# ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data"
+# ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols-Speedrunpatch/NineSols_Data"
+ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data"
 
 
 hollowknight *args:

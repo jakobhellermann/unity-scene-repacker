@@ -1,4 +1,5 @@
 pub mod env;
+mod game_files;
 mod merge_serialized;
 mod monobehaviour_typetree_export;
 mod prune;
@@ -7,6 +8,7 @@ mod trace_pptr;
 pub mod typetree_generator_api;
 mod unity;
 
+pub use game_files::GameFiles;
 pub use rabex;
 
 use anyhow::{Context, Result, ensure};
@@ -14,9 +16,7 @@ use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use memmap2::Mmap;
 use rabex::UnityVersion;
-use rabex::files::bundlefile::{
-    self, BundleFileBuilder, BundleFileHeader, BundleFileReader, CompressionType, ExtractionConfig,
-};
+use rabex::files::bundlefile::{self, BundleFileBuilder, BundleFileHeader, CompressionType};
 use rabex::files::serializedfile::SerializedType;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
@@ -30,7 +30,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, Write};
+use std::io::{Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use typetree_generator_api::cache::TypeTreeGeneratorCache;
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
@@ -38,34 +38,6 @@ use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
-
-pub enum GameFiles {
-    Directory(PathBuf),
-    Bundle {
-        game_dir: PathBuf,
-        bundle_path: PathBuf,
-    },
-}
-
-impl GameFiles {
-    pub fn probe(game_dir: &Path) -> Result<GameFiles> {
-        ensure!(
-            game_dir.exists(),
-            "Game Directory '{}' does not exist",
-            game_dir.display()
-        );
-
-        let bundle_path = game_dir.join("data.unity3d");
-        if bundle_path.exists() {
-            Ok(GameFiles::Bundle {
-                game_dir: game_dir.to_owned(),
-                bundle_path,
-            })
-        } else {
-            Ok(GameFiles::Directory(game_dir.to_owned()))
-        }
-    }
-}
 
 pub struct RepackScene {
     pub scene_name: String,
@@ -79,7 +51,7 @@ pub struct RepackScene {
 }
 
 pub fn repack_scenes(
-    game_files: GameFiles,
+    game_files: &mut GameFiles,
     mut preloads: IndexMap<String, Vec<String>>,
     tpk: &(impl TypeTreeProvider + Send + Sync),
     temp_dir: &Path,
@@ -136,15 +108,11 @@ pub fn repack_scenes(
                 })
                 .collect::<Result<_>>()
         }
-        GameFiles::Bundle { bundle_path, .. } => {
+        GameFiles::Bundle { bundle, .. } => {
             let mut repack_scenes = Vec::new();
-            let mut reader = BundleFileReader::from_reader(
-                BufReader::new(File::open(bundle_path)?),
-                &ExtractionConfig::default(),
-            )?;
 
             let mut scenes = None;
-            while let Some(mut item) = reader.next() {
+            while let Some(mut item) = bundle.get_mut().next() {
                 if item.path == "globalgamemanagers" {
                     let mut ggm_reader = Cursor::new(item.read()?);
                     let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
@@ -382,7 +350,7 @@ pub enum MonobehaviourTypetreeMode<'a> {
 }
 
 pub fn pack_to_asset_bundle(
-    game_dir: &Path,
+    game_files: GameFiles,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
@@ -394,7 +362,8 @@ pub fn pack_to_asset_bundle(
 ) -> Result<Stats> {
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
-    let env = Environment::new_in(game_dir, tpk);
+    let game_dir = game_files.game_dir().to_owned();
+    let env = Environment::new(game_files, tpk);
 
     let generator_cache = match monobehaviour_typetree_mode {
         MonobehaviourTypetreeMode::GenerateRuntime => {
@@ -552,7 +521,7 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
     scene_name: &str,
     scene_index: usize,
     tpk: &'a T,
-    env: &Environment<&T>,
+    env: &Environment<&T, GameFiles>,
     generator_cache: &'a TypeTreeGeneratorCache,
     serialized: &SerializedFile,
     data: &mut (impl Read + Seek),

@@ -104,9 +104,9 @@ fn export_inner(
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
-    let game_files = GameFiles::probe(game_dir)?;
+    let mut game_files = GameFiles::probe(game_dir)?;
     let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(game_files, preloads, &tpk, &temp_dir, disable)?;
+        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, temp_dir, disable)?;
 
     let mut out = Cursor::new(Vec::new());
 
@@ -140,7 +140,7 @@ fn export_inner(
         }
         Mode::AssetBundle => {
             let stats = unity_scene_repacker::pack_to_asset_bundle(
-                game_dir,
+                game_files,
                 &mut out,
                 name,
                 &tpk_raw,

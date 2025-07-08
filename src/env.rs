@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::io::{Cursor, Read, Seek};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use elsa::sync::FrozenMap;
 use rabex::files::SerializedFile;
+use rabex::files::bundlefile::BundleFileReader;
 use rabex::objects::{ClassIdType, PPtr, TypedPPtr};
 use rabex::typetree::TypeTreeProvider;
 
@@ -13,40 +15,83 @@ pub trait EnvResolver {
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
 }
 
-pub struct BaseDirResolver(PathBuf);
-
-impl EnvResolver for BaseDirResolver {
+impl<R: Read + Seek> EnvResolver for RefCell<BundleFileReader<R>> {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
-        std::fs::read(self.0.join(path))
+        let mut iter = self.borrow_mut();
+        let path = path
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("non-utf8 string"))?;
+        let mut file_ref = iter.seek_file(path).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!("File '{path}' does not exist in bundle"),
+            )
+        })??;
+
+        Ok(file_ref.read()?.to_vec())
+    }
+
+    fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
+        Ok(self
+            .borrow()
+            .files()
+            .iter()
+            .map(|file| file.path.clone().into())
+            .collect())
+    }
+}
+
+impl EnvResolver for Path {
+    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
+        std::fs::read(self.join(path))
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
         let mut all = Vec::new();
-        for entry in std::fs::read_dir(&self.0)? {
+        for entry in std::fs::read_dir(self)? {
             let entry = entry?;
 
             if entry.file_type()?.is_dir() {
                 continue;
             }
 
-            all.push(entry.path().strip_prefix(&self.0).unwrap().to_owned());
+            all.push(entry.path().strip_prefix(self).unwrap().to_owned());
         }
         Ok(all)
     }
 }
+impl EnvResolver for PathBuf {
+    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
+        (**self).read_path(path)
+    }
 
-pub struct Environment<P, R = BaseDirResolver> {
-    pub resolver: R,
-    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
-    pub tpk: P,
+    fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
+        (**self).all_files()
+    }
 }
 
-impl<P: TypeTreeProvider> Environment<P, BaseDirResolver> {
+pub struct Environment<P, R = PathBuf> {
+    pub resolver: R,
+    pub tpk: P,
+    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
+}
+
+impl<P, R> Environment<P, R> {
+    pub fn new(resolver: R, tpk: P) -> Self {
+        Environment {
+            resolver,
+            tpk,
+            serialized_files: Default::default(),
+        }
+    }
+}
+
+impl<P: TypeTreeProvider> Environment<P, PathBuf> {
     pub fn new_in(path: impl Into<PathBuf>, tpk: P) -> Self {
         Environment {
-            resolver: BaseDirResolver(path.into()),
-            serialized_files: Default::default(),
+            resolver: path.into(),
             tpk,
+            serialized_files: Default::default(),
         }
     }
 }

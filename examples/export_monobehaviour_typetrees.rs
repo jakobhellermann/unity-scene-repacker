@@ -127,6 +127,7 @@ fn collect_used_script_types(
             let mut used = Vec::new();
             let name = file.file_name().unwrap().to_str().unwrap();
             if name.starts_with("level") {
+                // PERF: this can be optimized for the BundleFileReader resolver
                 let (serialized, mut data) = env.load_leaf(file)?;
                 for mb in serialized.objects_of::<MonoBehaviour>(&env.tpk)? {
                     let mb = mb.read(&mut data)?;

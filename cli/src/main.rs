@@ -146,8 +146,9 @@ fn run() -> Result<()> {
 
     let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
 
+    let mut game_files = GameFiles::probe(&game_dir)?;
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
-        GameFiles::probe(&game_dir)?,
+        &mut game_files,
         preloads,
         &tpk,
         &temp_dir.dir,
@@ -228,7 +229,7 @@ fn run() -> Result<()> {
                 File::create(&args.output).context("Could not write to output file")?,
             );
             let stats = unity_scene_repacker::pack_to_asset_bundle(
-                &game_dir,
+                game_files,
                 &mut out,
                 name,
                 &tpk_blob,
