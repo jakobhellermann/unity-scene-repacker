@@ -4,10 +4,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use paris::info;
 
+fn search_transform(input: &str) -> String {
+    input.to_ascii_lowercase().replace(char::is_whitespace, "")
+}
+
 pub fn locate_steam_game(game: &str) -> Result<PathBuf> {
     let steam = steamlocate::SteamDir::locate()?;
 
-    let game = game.to_ascii_lowercase();
+    let game = search_transform(game);
 
     let (app, library) = if let Ok(app_id) = game.parse() {
         steam
@@ -20,7 +24,7 @@ pub fn locate_steam_game(game: &str) -> Result<PathBuf> {
             .find_map(|library| {
                 let app = library.apps().filter_map(Result::ok).find(|app| {
                     let name = app.name.as_ref().unwrap_or(&app.install_dir);
-                    name.to_ascii_lowercase().contains(&game)
+                    search_transform(name).contains(&game)
                 })?;
                 Some((app, library))
             })
