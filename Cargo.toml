@@ -29,7 +29,7 @@ type_complexity = "allow"
 
 [workspace]
 members = [".", "bindings", "cli"]
-default-members = ["cli"]
+default-members = [".", "bindings", "cli"]
 
 [workspace.dependencies]
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
