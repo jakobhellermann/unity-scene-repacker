@@ -12,7 +12,7 @@ pub enum GameFiles {
     Directory(PathBuf),
     Bundle {
         game_dir: PathBuf,
-        bundle: RefCell<BundleFileReader<BufReader<File>>>,
+        bundle: Box<RefCell<BundleFileReader<BufReader<File>>>>,
     },
 }
 
@@ -37,7 +37,7 @@ impl GameFiles {
 
             Ok(GameFiles::Bundle {
                 game_dir: game_dir.to_owned(),
-                bundle: RefCell::new(bundle),
+                bundle: Box::new(RefCell::new(bundle)),
             })
         } else {
             Ok(GameFiles::Directory(game_dir.to_owned()))

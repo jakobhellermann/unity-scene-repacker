@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc)]
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::io::Cursor;
 use std::path::Path;
@@ -22,7 +23,7 @@ enum Mode {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn export(
+pub unsafe extern "C" fn export(
     name: *const c_char,
     game_dir: *const c_char,
     preload_json: *const c_char,
@@ -63,14 +64,14 @@ pub extern "C" fn export(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn free_str(cstr: *mut c_char) {
+pub unsafe extern "C" fn free_str(cstr: *mut c_char) {
     unsafe { drop(CString::from_raw(cstr)) };
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn free_array(len: c_int, data: *mut u8) {
     unsafe {
-        let data = std::slice::from_raw_parts_mut(data, len as usize) as *mut [u8];
+        let data = std::ptr::slice_from_raw_parts_mut(data, len as usize);
         drop(Box::from_raw(data))
     };
 }
@@ -97,7 +98,7 @@ fn export_inner(
     let compression = CompressionType::None;
 
     let preloads: IndexMap<String, Vec<String>> =
-        serde_json::from_str(&preload_json).context("error parsing the objects json")?;
+        serde_json::from_str(preload_json).context("error parsing the objects json")?;
 
     let temp_dir = Path::new("/tmp/todo"); // unused for hollowknight
     let disable = true;
@@ -138,20 +139,17 @@ fn export_inner(
 
             stats
         }
-        Mode::AssetBundle => {
-            let stats = unity_scene_repacker::pack_to_asset_bundle(
-                game_files,
-                &mut out,
-                name,
-                &tpk_raw,
-                &tpk,
-                monobehaviour_typetree_mode,
-                unity_version,
-                repack_scenes,
-                compression,
-            )?;
-            stats
-        }
+        Mode::AssetBundle => unity_scene_repacker::pack_to_asset_bundle(
+            game_files,
+            &mut out,
+            name,
+            &tpk_raw,
+            &tpk,
+            monobehaviour_typetree_mode,
+            unity_version,
+            repack_scenes,
+            compression,
+        )?,
     };
 
     Ok((stats, out.into_inner()))
