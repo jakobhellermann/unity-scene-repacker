@@ -207,9 +207,10 @@ impl TypeTreeGenerator {
 
     pub fn generate_typetree_raw(
         &self,
+        base: TypeTreeNode,
         assembly: &str,
         full_name: &str,
-    ) -> Result<TypeTreeNode, Error> {
+    ) -> Result<Option<TypeTreeNode>, Error> {
         let assembly = CString::new(assembly).unwrap();
         let full_name = CString::new(full_name).unwrap();
 
@@ -226,6 +227,10 @@ impl TypeTreeGenerator {
         };
         Error::from_code(res)?;
 
+        if array.is_null() {
+            return Ok(None);
+        }
+
         let slice = unsafe { std::slice::from_raw_parts(array, length as usize) };
 
         let items = slice
@@ -241,11 +246,12 @@ impl TypeTreeGenerator {
                 )
             })
             .collect::<Vec<_>>();
-        let node = reconstruct_typetree_node(&items);
+        let mut node = reconstruct_typetree_node(&items);
+        node.children.splice(0..0, base.children);
 
         unsafe { (self.vtable.FreeCoTaskMem)(array.cast()) };
 
-        Ok(node)
+        Ok(Some(node))
     }
 }
 

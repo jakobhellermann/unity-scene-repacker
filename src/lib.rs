@@ -365,17 +365,22 @@ pub fn pack_to_asset_bundle(
     let game_dir = game_files.game_dir().to_owned();
     let env = Environment::new(game_files, tpk);
 
+    let monobehaviour_node = tpk
+        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+        .unwrap()
+        .into_owned();
     let generator_cache = match monobehaviour_typetree_mode {
         MonobehaviourTypetreeMode::GenerateRuntime => {
             let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
             generator
                 .load_all_dll_in_dir(game_dir.join("Managed"))
                 .context("Cannot load game DLLs")?;
-            TypeTreeGeneratorCache::new(generator)
+            TypeTreeGeneratorCache::new(generator, monobehaviour_node)
         }
-        MonobehaviourTypetreeMode::Export(export) => {
-            TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_export::read(export)?)
-        }
+        MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
+            monobehaviour_typetree_export::read(export)?,
+            monobehaviour_node,
+        ),
     };
 
     let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
