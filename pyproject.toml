@@ -1,10 +1,7 @@
 [project]
 name = "unity-scene-repacker"
 requires-python = ">=3.8"
-classifiers = [
-    "Programming Language :: Rust",
-    "Topic :: Games/Entertainment"
-]
+classifiers = ["Programming Language :: Rust", "Topic :: Games/Entertainment"]
 dynamic = ["version"]
 
 [build-system]
@@ -13,7 +10,7 @@ build-backend = "maturin"
 
 [tool.maturin]
 bindings = "bin"
-
+manifest-path = "cli/Cargo.toml"
 
 [[tool.uv.index]]
 name = "testpypi"
