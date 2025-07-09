@@ -11,7 +11,7 @@ pub mod unity;
 pub use game_files::GameFiles;
 pub use rabex;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use memmap2::Mmap;
@@ -52,7 +52,7 @@ pub struct RepackScene {
 
 pub fn repack_scenes(
     game_files: &mut GameFiles,
-    mut preloads: IndexMap<String, Vec<String>>,
+    preloads: IndexMap<String, Vec<String>>,
     tpk: &(impl TypeTreeProvider + Send + Sync),
     temp_dir: &Path,
     disable_roots: bool,
@@ -63,15 +63,11 @@ pub fn repack_scenes(
                 .context("couldn't find globalgamemanagers in game directory")?;
             let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
-            let scenes = ggm
+            let build_settings = ggm
                 .find_object_of::<BuildSettings>(&tpk)?
                 .unwrap()
                 .read(&mut ggm_reader)?;
-            let scenes: FxHashMap<_, _> = scenes
-                .scene_names()
-                .enumerate()
-                .map(|(i, path)| (path, i))
-                .collect();
+            let scenes = build_settings.scene_name_lookup();
 
             use rayon::prelude::*;
             preloads
@@ -109,45 +105,39 @@ pub fn repack_scenes(
                 .collect::<Result<_>>()
         }
         GameFiles::Bundle { bundle, .. } => {
-            let mut repack_scenes = Vec::new();
+            let bundle = bundle.get_mut();
 
-            let mut scenes = None;
-            while let Some(mut item) = bundle.get_mut().next() {
-                if item.path == "globalgamemanagers" {
-                    let mut ggm_reader = Cursor::new(item.read()?);
-                    let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
+            let mut ggm = bundle
+                .seek_file("globalgamemanagers")
+                .context("globalgamemanagers not found in bundle")??;
+            let ggm = ggm.read()?;
+            let ggm_reader = &mut Cursor::new(ggm);
+            let ggm = SerializedFile::from_reader(ggm_reader)?;
+            let build_settings = ggm
+                .find_object_of::<BuildSettings>(&tpk)?
+                .unwrap()
+                .read(ggm_reader)?;
+            let scenes = build_settings.scene_name_lookup();
 
-                    let build_settings = ggm
-                        .find_object_of::<BuildSettings>(&tpk)?
-                        .unwrap()
-                        .read(&mut ggm_reader)?;
+            use rayon::prelude::*;
+            preloads
+                .into_par_iter()
+                .map(|(scene_name, paths)| -> Result<_> {
+                    let scene_index = scenes[scene_name.as_str()];
 
-                    scenes = Some(
-                        build_settings
-                            .scene_names()
-                            .map(ToOwned::to_owned)
-                            .collect::<Vec<_>>(),
-                    );
-                } else if let Some(index) = item.path.strip_prefix("level")
-                    && let Ok(scene_index) = index.parse::<usize>()
-                {
-                    let scenes = scenes.as_ref().context(
-                        "globalgamemanagers not found in data.unity3d before level files",
-                    )?;
-                    let scene_name = &scenes[scene_index];
-                    let Some(paths) = preloads.swap_remove(scene_name.as_str()) else {
-                        continue;
-                    };
-
-                    let mut data = Cursor::new(item.read()?);
-
+                    let data = bundle
+                        .read_at(&format!("level{scene_index}"))?
+                        .with_context(|| {
+                            format!("level{scene_index} ({scene_name}) not exist in bundle")
+                        })?;
+                    let mut data = Cursor::new(data);
                     let mut replacements = FxHashMap::default();
-                    let scene_paths = deduplicate_objects(scene_name, &paths);
+                    let scene_paths = deduplicate_objects(&scene_name, &paths);
 
                     let serialized = SerializedFile::from_reader(&mut data)
                         .with_context(|| format!("Could not parse {scene_name}"))?;
                     let (keep_objects, roots) = prune::prune_scene(
-                        scene_name,
+                        &scene_name,
                         &serialized,
                         &mut data,
                         tpk,
@@ -156,31 +146,21 @@ pub fn repack_scenes(
                         disable_roots,
                     )?;
 
-                    let tmp = temp_dir.join(scene_name);
-                    std::fs::write(&tmp, data.into_inner())
+                    let tmp = temp_dir.join(&scene_name);
+                    std::fs::write(&tmp, data.get_mut())
                         .context("Writing bundle data to temporary file")?;
 
-                    repack_scenes.push(RepackScene {
-                        scene_name: scene_name.clone(),
+                    Ok(RepackScene {
+                        scene_name,
                         scene_index,
                         serialized,
                         serialized_path: tmp,
                         keep_objects,
                         roots,
                         replacements,
-                    });
-                }
-            }
-            ensure!(
-                preloads.is_empty(),
-                "Couldn't find scenes {} in game files",
-                preloads
-                    .keys()
-                    .map(AsRef::as_ref)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            );
-            Ok(repack_scenes)
+                    })
+                })
+                .collect::<Result<Vec<RepackScene>>>()
         }
     }
 }

@@ -532,7 +532,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#fcf5dfa772fe0bbe8e96e5c0471917664e72109b"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#750976c75cead5985e15a1f5773be4597b343bd2"
 dependencies = [
  "bitflags",
  "byteorder",

@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::fs::File;
-use std::io::{BufReader, ErrorKind};
+use std::io::{Cursor, ErrorKind};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Result, ensure};
+use memmap2::Mmap;
 use rabex::files::bundlefile::{BundleFileReader, ExtractionConfig};
 
 use crate::env::EnvResolver;
@@ -12,7 +13,7 @@ pub enum GameFiles {
     Directory(PathBuf),
     Bundle {
         game_dir: PathBuf,
-        bundle: Box<RefCell<BundleFileReader<BufReader<File>>>>,
+        bundle: Box<RefCell<BundleFileReader<Cursor<Mmap>>>>,
     },
 }
 
@@ -32,8 +33,9 @@ impl GameFiles {
 
         let bundle_path = game_dir.join("data.unity3d");
         if bundle_path.exists() {
-            let reader = BufReader::new(File::open(&bundle_path)?);
-            let bundle = BundleFileReader::from_reader(reader, &ExtractionConfig::default())?;
+            let reader = unsafe { Mmap::map(&File::open(&bundle_path)?) }?;
+            let bundle =
+                BundleFileReader::from_reader(Cursor::new(reader), &ExtractionConfig::default())?;
 
             Ok(GameFiles::Bundle {
                 game_dir: game_dir.to_owned(),
