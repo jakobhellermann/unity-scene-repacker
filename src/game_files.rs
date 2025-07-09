@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::fs::File;
 use std::io::{Cursor, ErrorKind};
 use std::path::{Path, PathBuf};
@@ -13,7 +12,7 @@ pub enum GameFiles {
     Directory(PathBuf),
     Bundle {
         game_dir: PathBuf,
-        bundle: Box<RefCell<BundleFileReader<Cursor<Mmap>>>>,
+        bundle: Box<BundleFileReader<Cursor<Mmap>>>,
     },
 }
 
@@ -39,7 +38,7 @@ impl GameFiles {
 
             Ok(GameFiles::Bundle {
                 game_dir: game_dir.to_owned(),
-                bundle: Box::new(RefCell::new(bundle)),
+                bundle: Box::new(bundle),
             })
         } else {
             Ok(GameFiles::Directory(game_dir.to_owned()))

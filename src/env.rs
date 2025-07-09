@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::io::{Cursor, Read, Seek};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -15,25 +14,23 @@ pub trait EnvResolver {
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
 }
 
-impl<R: Read + Seek> EnvResolver for RefCell<BundleFileReader<R>> {
+impl<T: AsRef<[u8]>> EnvResolver for BundleFileReader<Cursor<T>> {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
-        let mut iter = self.borrow_mut();
         let path = path
             .to_str()
             .ok_or_else(|| std::io::Error::other("non-utf8 string"))?;
-        let mut file_ref = iter.seek_file(path).ok_or_else(|| {
+        let data = self.read_at(path)?.ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::NotFound,
                 format!("File '{path}' does not exist in bundle"),
             )
-        })??;
+        })?;
 
-        Ok(file_ref.read()?.to_vec())
+        Ok(data)
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
         Ok(self
-            .borrow()
             .files()
             .iter()
             .map(|file| file.path.clone().into())

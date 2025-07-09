@@ -105,8 +105,6 @@ pub fn repack_scenes(
                 .collect::<Result<_>>()
         }
         GameFiles::Bundle { bundle, .. } => {
-            let bundle = bundle.get_mut();
-
             let mut ggm = bundle
                 .seek_file("globalgamemanagers")
                 .context("globalgamemanagers not found in bundle")??;
