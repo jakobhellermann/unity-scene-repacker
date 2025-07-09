@@ -5,12 +5,18 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use indexmap::IndexMap;
+use rabex::objects::ClassId;
+use rabex::typetree::TypeTreeProvider as _;
 use unity_scene_repacker::env::Environment;
 use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
-use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
+use unity_scene_repacker::typetree_generator_api::cache::TypeTreeGeneratorCache;
+use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
+use unity_scene_repacker::{
+    GameFiles, MonobehaviourTypetreeMode, Stats, monobehaviour_typetree_export,
+};
 
 #[repr(C)]
 pub struct CStats {
@@ -108,19 +114,39 @@ fn export_inner(
     let game_files = GameFiles::probe(game_dir)?;
     let env = Environment::new(game_files, tpk);
 
+    let monobehaviour_node = env
+        .tpk
+        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+        .unwrap()
+        .into_owned();
+
+    let monobehaviour_typetree_mode = match mb_typetree_export {
+        Some(data) => MonobehaviourTypetreeMode::Export(data),
+        None => MonobehaviourTypetreeMode::GenerateRuntime,
+    };
+    let generator_cache = match monobehaviour_typetree_mode {
+        MonobehaviourTypetreeMode::GenerateRuntime => {
+            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
+            generator
+                .load_all_dll_in_dir(game_dir.join("Managed"))
+                .context("Cannot load game DLLs")?;
+            TypeTreeGeneratorCache::new(generator, monobehaviour_node)
+        }
+        MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
+            monobehaviour_typetree_export::read(export)?,
+            monobehaviour_node,
+        ),
+    };
+
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
+        &generator_cache,
         preloads,
         disable,
         matches!(mode, Mode::AssetBundle),
     )?;
 
     let mut out = Cursor::new(Vec::new());
-
-    let monobehaviour_typetree_mode = match mb_typetree_export {
-        Some(data) => MonobehaviourTypetreeMode::Export(data),
-        None => MonobehaviourTypetreeMode::GenerateRuntime,
-    };
 
     let stats = match mode {
         Mode::SceneBundle => {
@@ -150,7 +176,6 @@ fn export_inner(
             &mut out,
             name,
             &tpk_raw,
-            monobehaviour_typetree_mode,
             unity_version,
             repack_scenes,
             compression,

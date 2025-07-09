@@ -1,7 +1,7 @@
 pub mod env;
 mod game_files;
 mod merge_serialized;
-mod monobehaviour_typetree_export;
+pub mod monobehaviour_typetree_export;
 mod prune;
 pub mod scene_lookup;
 mod trace_pptr;
@@ -32,13 +32,12 @@ use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, Write};
 use typetree_generator_api::cache::TypeTreeGeneratorCache;
-use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
-pub struct RepackScene {
+pub struct RepackScene<'a> {
     pub scene_name: String,
     pub scene_index: usize,
     pub serialized: SerializedFile,
@@ -48,15 +47,16 @@ pub struct RepackScene {
     pub roots: Vec<(String, Transform)>,
     pub replacements: FxHashMap<i64, Vec<u8>>,
 
-    pub monobehaviour_script_locations: FxHashMap<i64, (String, String)>,
+    pub monobehaviour_types: FxHashMap<i64, &'a TypeTreeNode>,
 }
 
-pub fn repack_scenes(
+pub fn repack_scenes<'a>(
     env: &Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    generator_cache: &'a TypeTreeGeneratorCache,
     preloads: IndexMap<String, Vec<String>>,
     prepare_scripts: bool,
     disable_roots: bool,
-) -> Result<Vec<RepackScene>> {
+) -> Result<Vec<RepackScene<'a>>> {
     match &env.resolver {
         GameFiles::Directory(game_dir) => {
             let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
@@ -96,6 +96,13 @@ pub fn repack_scenes(
                         .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
                         .transpose()?
                         .unwrap_or_default();
+                    let monobehaviour_types = prepare_monobehaviour_types_actual(
+                        &monobehaviour_script_locations,
+                        &scene_name,
+                        scene_index,
+                        generator_cache,
+                    );
+
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
@@ -104,7 +111,7 @@ pub fn repack_scenes(
                         keep_objects,
                         roots,
                         replacements,
-                        monobehaviour_script_locations,
+                        monobehaviour_types,
                     })
                 })
                 .collect::<Result<_>>()
@@ -152,6 +159,12 @@ pub fn repack_scenes(
                         .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
                         .transpose()?
                         .unwrap_or_default();
+                    let monobehaviour_types = prepare_monobehaviour_types_actual(
+                        &monobehaviour_script_locations,
+                        &scene_name,
+                        scene_index,
+                        generator_cache,
+                    );
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
@@ -160,7 +173,7 @@ pub fn repack_scenes(
                         keep_objects,
                         roots,
                         replacements,
-                        monobehaviour_script_locations,
+                        monobehaviour_types,
                     })
                 })
                 .collect::<Result<Vec<RepackScene>>>()
@@ -349,33 +362,11 @@ pub fn pack_to_asset_bundle(
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
-    monobehaviour_typetree_mode: MonobehaviourTypetreeMode,
     unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
     compression: CompressionType,
 ) -> Result<Stats> {
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
-
-    let game_dir = env.resolver.game_dir().to_owned();
-
-    let monobehaviour_node = env
-        .tpk
-        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
-        .unwrap()
-        .into_owned();
-    let generator_cache = match monobehaviour_typetree_mode {
-        MonobehaviourTypetreeMode::GenerateRuntime => {
-            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
-            generator
-                .load_all_dll_in_dir(game_dir.join("Managed"))
-                .context("Cannot load game DLLs")?;
-            TypeTreeGeneratorCache::new(generator, monobehaviour_node)
-        }
-        MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
-            monobehaviour_typetree_export::read(export)?,
-            monobehaviour_node,
-        ),
-    };
 
     let mut builder =
         SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
@@ -393,13 +384,6 @@ pub fn pack_to_asset_bundle(
 
             assert_eq!(serialized.m_bigIDEnabled, None);
             assert!(serialized.m_RefTypes.as_ref().is_some_and(|x| x.is_empty()));
-
-            let mb_types = prepare_monobehaviour_types_actual(
-                &scene.monobehaviour_script_locations,
-                &scene.scene_name,
-                scene.scene_index,
-                &generator_cache,
-            );
 
             stats.objects_before += serialized.objects().len();
             stats.size_before += data.len();
@@ -434,30 +418,28 @@ pub fn pack_to_asset_bundle(
             let (remap_file_id, remap_types) =
                 merge_serialized::add_remapped_scene_header(&mut builder, serialized)?;
 
-            Ok((scene, mb_types, remap_file_id, remap_path_id, remap_types))
+            Ok((scene, remap_file_id, remap_path_id, remap_types))
         })
         .collect::<Result<Vec<_>>>()?;
 
     let objects = intermediate
         .into_par_iter()
-        .map(
-            |(mut scene, mb_types, remap_file_id, remap_path_id, remap_types)| {
-                merge_serialized::add_remapped_scene(
-                    &scene.scene_name,
-                    scene.scene_index,
-                    &builder.serialized,
-                    scene.serialized_data.as_ref(),
-                    &env.tpk,
-                    scene.serialized.take_objects(),
-                    scene.replacements,
-                    mb_types,
-                    remap_file_id,
-                    remap_path_id,
-                    remap_types,
-                )
-                .collect::<Vec<_>>()
-            },
-        )
+        .map(|(mut scene, remap_file_id, remap_path_id, remap_types)| {
+            merge_serialized::add_remapped_scene(
+                &scene.scene_name,
+                scene.scene_index,
+                &builder.serialized,
+                scene.serialized_data.as_ref(),
+                &env.tpk,
+                scene.serialized.take_objects(),
+                scene.replacements,
+                scene.monobehaviour_types,
+                remap_file_id,
+                remap_path_id,
+                remap_types,
+            )
+            .collect::<Vec<_>>()
+        })
         .collect::<Vec<Vec<Result<_>>>>();
 
     objects.into_iter().try_for_each(|objects| -> Result<_> {

@@ -60,6 +60,9 @@ pub struct TypeTreeGenerator {
     handle: *mut TypeTreeGeneratorHandle,
     vtable: &'static VTable,
 }
+// The AssetsTools generator API seems to be thread safe
+unsafe impl Send for TypeTreeGenerator {}
+unsafe impl Sync for TypeTreeGenerator {}
 
 pub enum GeneratorBackend {
     AssetStudio,

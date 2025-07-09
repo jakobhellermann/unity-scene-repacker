@@ -10,7 +10,9 @@ use indexmap::IndexMap;
 use paris::{error, info, success, warn};
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, CompressionType};
+use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
+use rabex::typetree::TypeTreeProvider as _;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use std::ffi::OsStr;
 use std::fs::{DirBuilder, File};
@@ -18,7 +20,9 @@ use std::io::{BufWriter, Cursor};
 use std::path::PathBuf;
 use std::time::Instant;
 use unity_scene_repacker::env::Environment;
-use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
+use unity_scene_repacker::typetree_generator_api::cache::TypeTreeGeneratorCache;
+use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
+use unity_scene_repacker::{GameFiles, Stats};
 
 use crate::utils::friendly_size;
 
@@ -147,8 +151,21 @@ fn run() -> Result<()> {
     let game_files = GameFiles::probe(&game_dir)?;
     let env = Environment::new(game_files, tpk);
 
+    let monobehaviour_node = env
+        .tpk
+        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+        .unwrap()
+        .into_owned();
+
+    let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
+    generator
+        .load_all_dll_in_dir(game_dir.join("Managed"))
+        .context("Cannot load game DLLs")?;
+    let generator_cache = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
+
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
+        &generator_cache,
         preloads,
         matches!(args.mode, Mode::Asset),
         args.disable,
@@ -183,8 +200,6 @@ fn run() -> Result<()> {
             name
         }
     };
-
-    let monobehaviour_typetree_mode = MonobehaviourTypetreeMode::GenerateRuntime;
 
     let new_size = match args.mode {
         Mode::Scene => {
@@ -232,7 +247,6 @@ fn run() -> Result<()> {
                 &mut out,
                 name,
                 &tpk_blob,
-                monobehaviour_typetree_mode,
                 unity_version,
                 repack_scenes,
                 compression,
