@@ -13,7 +13,7 @@ use crate::trace_pptr::replace_pptrs_inplace_endianed;
 pub fn add_remapped_scene(
     scene_name: &str,
     scene_index: usize,
-    serialized: &SerializedFile,
+    file: &SerializedFile,
     data: &[u8],
     tpk: &impl TypeTreeProvider,
     objects: Vec<ObjectInfo>,
@@ -29,7 +29,7 @@ pub fn add_remapped_scene(
         let tt = match mb_types.get(&obj.m_PathID) {
             Some(ty) => ty,
             // TODO: take types from file if they exist
-            None => &*serialized.get_typetree_for(&obj, &tpk)?,
+            None => &*file.get_typetree_for(&obj, &tpk)?,
         };
         let mut object_data = match replacements.remove(&obj.m_PathID) {
             Some(owned) => Cow::Owned(owned),
@@ -48,7 +48,7 @@ pub fn add_remapped_scene(
             tt,
             &path_id_remap,
             &remap_file_id,
-            serialized.m_Header.m_Endianess,
+            file.m_Header.m_Endianess,
         )
         .with_context(|| {
             format!(
@@ -66,33 +66,33 @@ pub fn add_remapped_scene(
 
 pub fn add_remapped_scene_header(
     builder: &mut SerializedFileBuilder<impl TypeTreeProvider>,
-    serialized: &mut SerializedFile,
+    file: &mut SerializedFile,
 ) -> Result<(FxHashMap<FileId, FileId>, FxHashMap<i32, i32>)> {
     let mut remap_file_id = FxHashMap::default();
-    for (i, external) in serialized.m_Externals.iter().enumerate() {
+    for (i, external) in file.m_Externals.iter().enumerate() {
         let orig_file_id = i + 1;
         let new_file_id = builder.serialized.m_Externals.len() + 1;
         remap_file_id.insert(orig_file_id as FileId, new_file_id as FileId);
         builder.serialized.m_Externals.push(external.clone());
     }
     let remap_script_types = remap_vecs_all::<i16, _>(
-        serialized.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
+        file.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
         builder.serialized.m_ScriptTypes.get_or_insert_default(),
     );
-    for ty in serialized.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
+    for ty in file.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
         ty.m_LocalSerializedFileIndex = *remap_file_id
             .get(&(ty.m_LocalIdentifierInFile as i32))
             .unwrap_or(&ty.m_LocalSerializedFileIndex);
     }
-    for ty in &mut serialized.m_Types {
+    for ty in &mut file.m_Types {
         ty.m_ScriptTypeIndex = *remap_script_types
             .get(&ty.m_ScriptTypeIndex)
             .unwrap_or(&ty.m_ScriptTypeIndex);
     }
-    let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
+    let used_types: FxHashSet<_> = file.objects().map(|obj| obj.m_TypeID).collect();
     let remap_types = remap_vecs(
         used_types,
-        &mut serialized.m_Types,
+        &mut file.m_Types,
         &mut builder.serialized.m_Types,
     );
 

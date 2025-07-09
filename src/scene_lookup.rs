@@ -13,19 +13,15 @@ use crate::unity::types::Transform;
 
 pub struct SceneLookup<'a, P> {
     roots: HashMap<String, (PathId, Transform)>,
-    serialized: &'a SerializedFile,
+    file: &'a SerializedFile,
     tpk: P,
 }
 
 impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
-    pub fn new(
-        serialized: &'a SerializedFile,
-        tpk: P,
-        reader: &mut (impl Read + Seek),
-    ) -> Result<Self> {
+    pub fn new(file: &'a SerializedFile, reader: &mut (impl Read + Seek), tpk: P) -> Result<Self> {
         let mut roots = HashMap::new();
 
-        for transform_obj in serialized.objects_of::<Transform>(&tpk)? {
+        for transform_obj in file.objects_of::<Transform>(&tpk)? {
             let transform = transform_obj.read(reader)?;
             if transform.m_Father.optional().is_some() {
                 continue;
@@ -33,7 +29,7 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
 
             let go = transform
                 .m_GameObject
-                .deref_local(serialized, &tpk)?
+                .deref_local(file, &tpk)?
                 .read(reader)?;
 
             roots
@@ -41,11 +37,7 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
                 .or_insert((transform_obj.info.m_PathID, transform));
         }
 
-        Ok(SceneLookup {
-            roots,
-            serialized,
-            tpk,
-        })
+        Ok(SceneLookup { roots, file, tpk })
     }
 
     pub fn lookup_path(
@@ -66,12 +58,10 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
             let mut found = Vec::new();
             for current in &current {
                 for child_pptr in &current.1.m_Children {
-                    let child = child_pptr
-                        .deref_local(self.serialized, &self.tpk)?
-                        .read(reader)?;
+                    let child = child_pptr.deref_local(self.file, &self.tpk)?.read(reader)?;
                     let go = child
                         .m_GameObject
-                        .deref_local(self.serialized, &self.tpk)?
+                        .deref_local(self.file, &self.tpk)?
                         .read(reader)?;
 
                     if go.m_Name == segment {
@@ -121,14 +111,14 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
     }
 
     fn reachable_one(&self, from: PathId, reader: &mut (impl Read + Seek)) -> Result<Vec<PPtr>> {
-        let info = self.serialized.get_object_info(from).unwrap();
+        let info = self.file.get_object_info(from).unwrap();
 
         let tt = self
             .tpk
-            .get_typetree_node(info.m_ClassID, self.serialized.m_UnityVersion.unwrap())
+            .get_typetree_node(info.m_ClassID, self.file.m_UnityVersion.unwrap())
             .unwrap();
         reader.seek(std::io::SeekFrom::Start(info.m_Offset as u64))?;
-        match self.serialized.m_Header.m_Endianess {
+        match self.file.m_Header.m_Endianess {
             rabex::files::serializedfile::Endianness::Little => {
                 trace_pptrs::<LittleEndian>(&tt, reader)
             }

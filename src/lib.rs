@@ -185,10 +185,10 @@ pub fn repack_scenes(
     }
 }
 
-fn prune_types(serialized: &mut SerializedFile) -> FxHashMap<i32, i32> {
-    let used_types: FxHashSet<_> = serialized.objects().map(|obj| obj.m_TypeID).collect();
+fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
+    let used_types: FxHashSet<_> = file.objects().map(|obj| obj.m_TypeID).collect();
     let mut old_to_new: FxHashMap<i32, i32> = FxHashMap::default();
-    serialized.m_Types = std::mem::take(&mut serialized.m_Types)
+    file.m_Types = std::mem::take(&mut file.m_Types)
         .into_iter()
         .enumerate()
         .filter(|&(idx, _)| used_types.contains(&(idx as i32)))
@@ -528,18 +528,18 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
     tpk: &'a T,
     env: &Environment<&T, GameFiles>,
     generator_cache: &'a TypeTreeGeneratorCache,
-    serialized: &SerializedFile,
-    data: &mut (impl Read + Seek),
+    file: &SerializedFile,
+    reader: &mut (impl Read + Seek),
 ) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
-    let items = serialized
+    let items = file
         .objects_of::<MonoBehaviour>(tpk)?
         .map(|mb_info| -> Result<_> {
-            let mb = mb_info.read(data)?;
+            let mb = mb_info.read(reader)?;
             if mb.m_Script.is_null() {
                 return Ok(None);
             }
             let script = env
-                .deref_read(mb.m_Script, serialized, data)
+                .deref_read(mb.m_Script, file, reader)
                 .with_context(|| format!("In monobehaviour {}", mb_info.info.m_PathID))?;
 
             let assembly_name = match script.m_AssemblyName.ends_with(".dll") {

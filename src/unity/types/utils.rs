@@ -9,7 +9,7 @@ use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use crate::unity::types::Transform;
 
 pub struct Ancestors<'a, R> {
-    serialized: &'a SerializedFile,
+    file: &'a SerializedFile,
     reader: &'a mut R,
     next: Option<PathId>,
     transform_typetree: Cow<'a, TypeTreeNode>,
@@ -22,7 +22,7 @@ impl<R: Read + Seek> Iterator for Ancestors<'_, R> {
         let current_id = self.next?;
         let current = (|| {
             let info = self
-                .serialized
+                .file
                 .get_object_info(current_id)
                 .ok_or(serializedfile::Error::NoObject(current_id))?;
             self.reader
@@ -30,7 +30,7 @@ impl<R: Read + Seek> Iterator for Ancestors<'_, R> {
             let father = rabex::serde_typetree::from_reader_endianed::<Transform>(
                 &mut self.reader,
                 &self.transform_typetree,
-                self.serialized.m_Header.m_Endianess,
+                self.file.m_Header.m_Endianess,
             )
             .map_err(serializedfile::Error::Deserialize)?;
 
@@ -50,15 +50,15 @@ impl<R: Read + Seek> Iterator for Ancestors<'_, R> {
 impl Transform {
     pub fn ancestors<'a, R>(
         self: &Transform,
-        serialized: &'a SerializedFile,
+        file: &'a SerializedFile,
         reader: &'a mut R,
         tpk: &'a impl TypeTreeProvider,
     ) -> Result<Ancestors<'a, R>, serializedfile::Error> {
         let transform_typetree = tpk
-            .get_typetree_node(Transform::CLASS_ID, serialized.m_UnityVersion.unwrap())
+            .get_typetree_node(Transform::CLASS_ID, file.m_UnityVersion.unwrap())
             .ok_or(serializedfile::Error::NoTypetree(Transform::CLASS_ID))?;
         Ok(Ancestors {
-            serialized,
+            file,
             reader,
             next: self.m_Father.optional().map(|father| father.m_PathID),
             transform_typetree,

@@ -136,18 +136,16 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<P, R> {
     pub fn deref_read_untyped<'de, T>(
         &self,
         pptr: PPtr,
-        serialized: &SerializedFile,
-        serialized_reader: &mut (impl Read + Seek),
+        file: &SerializedFile,
+        reader: &mut (impl Read + Seek),
     ) -> Result<T>
     where
         T: serde::Deserialize<'de>,
     {
         Ok(match pptr.m_FileID {
-            0 => pptr
-                .deref_local(serialized, &self.tpk)?
-                .read(serialized_reader)?,
+            0 => pptr.deref_local(file, &self.tpk)?.read(reader)?,
             file_id => {
-                let external = &serialized.m_Externals[file_id as usize - 1];
+                let external = &file.m_Externals[file_id as usize - 1];
                 let (external_file, external_reader) =
                     self.load_external_file(Path::new(&external.pathName))?;
                 let object = pptr
@@ -162,13 +160,13 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<P, R> {
     pub fn deref_read<'de, T>(
         &self,
         pptr: TypedPPtr<T>,
-        serialized: &SerializedFile,
-        serialized_reader: &mut (impl Read + Seek),
+        file: &SerializedFile,
+        reader: &mut (impl Read + Seek),
     ) -> Result<T>
     where
         T: ClassIdType + serde::Deserialize<'de>,
     {
-        self.deref_read_untyped(pptr.untyped(), serialized, serialized_reader)
+        self.deref_read_untyped(pptr.untyped(), file, reader)
     }
 
     pub fn loaded_files(&mut self) -> impl Iterator<Item = &Path> {
