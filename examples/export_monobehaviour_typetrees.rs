@@ -10,8 +10,8 @@ use rabex::objects::{ClassId, ClassIdType, TypedPPtr};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::env::{EnvResolver, Environment};
-use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 
 fn main() -> Result<()> {
     let tpk = TpkTypeTreeBlob::embedded();

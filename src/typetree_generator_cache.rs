@@ -1,8 +1,7 @@
 use anyhow::{Result, bail};
 use elsa::sync::FrozenMap;
 use rabex::typetree::TypeTreeNode;
-
-use super::TypeTreeGenerator;
+use typetree_generator_api::TypeTreeGenerator;
 
 pub struct TypeTreeGeneratorCache {
     generator: Option<TypeTreeGenerator>,

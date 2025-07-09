@@ -21,6 +21,7 @@ rustc-hash = "2.1"
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
+typetree-generator-api = { path = "./typetree-generator-api" }
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
@@ -28,8 +29,8 @@ too_many_arguments = "allow"
 type_complexity = "allow"
 
 [workspace]
-members = [".", "bindings", "cli"]
-default-members = [".", "bindings", "cli"]
+members = [".", "bindings", "cli", "typetree-generator-api"]
+default-members = [".", "bindings", "cli", "typetree-generator-api"]
 
 [workspace.dependencies]
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [

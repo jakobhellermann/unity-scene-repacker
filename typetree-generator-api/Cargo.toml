@@ -1,0 +1,8 @@
+[package]
+name = "typetree-generator-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libloading = "0.8"
+rabex = { workspace = true, default-features = false }

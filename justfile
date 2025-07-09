@@ -19,3 +19,6 @@ ninesols *args:
         --output /tmp/testing/new.bundle \
         --bundle-name bundle \
         --compression none {{ args }}
+
+bindgen:
+    bindgen --dynamic-loading TypeTreeGeneratorAPI typetree-generator-api/bindings.h -o typetree-generator-api/src/generated.rs

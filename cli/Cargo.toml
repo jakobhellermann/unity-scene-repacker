@@ -17,6 +17,7 @@ paris = { version = "1.5", features = ["macros", "no_logger"] }
 rabex = { workspace = true, features = ["compression-all"] }
 steamlocate = "2.0"
 unity-scene-repacker = { version = "2.1", path = ".." }
+typetree-generator-api = { path = "../typetree-generator-api" }
 
 [features]
 dhat-heap = []

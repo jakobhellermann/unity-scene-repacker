@@ -66,6 +66,7 @@ dependencies = [
  "indexmap",
  "rabex",
  "serde_json",
+ "typetree-generator-api",
  "unity-scene-repacker",
 ]
 
@@ -718,6 +719,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
+name = "typetree-generator-api"
+version = "0.1.0"
+dependencies = [
+ "libloading",
+ "rabex",
+]
+
+[[package]]
 name = "ucd-trie"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -753,6 +762,7 @@ dependencies = [
  "serde",
  "serde_derive",
  "serde_json",
+ "typetree-generator-api",
 ]
 
 [[package]]
@@ -768,6 +778,7 @@ dependencies = [
  "paris",
  "rabex",
  "steamlocate",
+ "typetree-generator-api",
  "unity-scene-repacker",
 ]
 

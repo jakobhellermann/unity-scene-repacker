@@ -5,7 +5,7 @@
 *.nupkg
 /*.unity3d
 /*.bundle
-/*.so
+*.so
 /*.dll
 
 __pycache__

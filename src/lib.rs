@@ -5,7 +5,7 @@ pub mod monobehaviour_typetree_export;
 mod prune;
 pub mod scene_lookup;
 mod trace_pptr;
-pub mod typetree_generator_api;
+pub mod typetree_generator_cache;
 pub mod unity;
 
 pub use game_files::GameFiles;
@@ -31,10 +31,10 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, Write};
-use typetree_generator_api::cache::TypeTreeGeneratorCache;
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
+use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub struct RepackScene<'a> {

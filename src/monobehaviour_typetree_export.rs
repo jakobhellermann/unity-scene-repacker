@@ -3,7 +3,7 @@ use anyhow::Result;
 use elsa::sync::FrozenMap;
 use rabex::typetree::TypeTreeNode;
 
-use crate::typetree_generator_api::reconstruct_typetree_node;
+use typetree_generator_api::reconstruct_typetree_node;
 
 /*
  * n_assemblies x

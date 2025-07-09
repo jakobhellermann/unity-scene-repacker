@@ -11,9 +11,7 @@ use std::sync::LazyLock;
 use rabex::UnityVersion;
 use rabex::typetree::TypeTreeNode;
 
-use crate::typetree_generator_api::generated::{TypeTreeGeneratorAPI, TypeTreeGeneratorHandle};
-
-pub mod cache;
+use generated::{TypeTreeGeneratorAPI, TypeTreeGeneratorHandle};
 
 #[rustfmt::skip]
 static TYPETREE_GENERATOR_API_LIB: LazyLock<Result<TypeTreeGeneratorAPI,libloading::Error>> = LazyLock::new(|| unsafe {
@@ -34,6 +32,8 @@ pub enum GeneratorBackend {
     AssetRipper,
 }
 
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
 #[derive(Debug)]
 pub enum Error {
     CreationError,
@@ -53,7 +53,7 @@ impl From<std::str::Utf8Error> for Error {
     }
 }
 impl Error {
-    fn from_code(status_code: i32) -> Result<(), Error> {
+    fn from_code(status_code: i32) -> Result<()> {
         if status_code == 0 {
             Ok(())
         } else {
@@ -78,7 +78,7 @@ impl TypeTreeGenerator {
     pub fn new(
         unity_version: UnityVersion,
         backend: GeneratorBackend,
-    ) -> Result<TypeTreeGenerator, Error> {
+    ) -> Result<TypeTreeGenerator> {
         let vtable = match &*TYPETREE_GENERATOR_API_LIB {
             Ok(vtable) => vtable,
             Err(e) => return Err(Error::Lib(format!("{e}"))),
@@ -99,12 +99,12 @@ impl TypeTreeGenerator {
         Ok(TypeTreeGenerator { handle, vtable })
     }
 
-    pub fn load_dll_path(&self, path: impl AsRef<Path>) -> Result<(), Error> {
+    pub fn load_dll(&self, path: impl AsRef<Path>) -> Result<()> {
         let data = std::fs::read(&path).map_err(Error::IO)?;
-        self.load_dll(&data)
+        self.load_dll_from_slice(&data)
     }
 
-    pub fn load_dll(&self, dll: &[u8]) -> Result<(), Error> {
+    pub fn load_dll_from_slice(&self, dll: &[u8]) -> Result<()> {
         let res = unsafe {
             self.vtable
                 .TypeTreeGenerator_loadDLL(self.handle, dll.as_ptr(), dll.len() as i32)
@@ -112,25 +112,25 @@ impl TypeTreeGenerator {
         Error::from_code(res)
     }
 
-    pub fn get_loaded_dll_names(&self) -> Result<String, Error> {
+    pub fn get_loaded_dll_names(&self) -> Result<String> {
         let res = unsafe { self.vtable.TypeTreeGenerator_getLoadedDLLNames(self.handle) };
         let str = unsafe { CString::from_raw(res) };
 
         Ok(str.into_string().map_err(|e| e.utf8_error())?)
     }
 
-    pub fn load_all_dll_in_dir(&self, path: impl AsRef<Path>) -> Result<(), Error> {
+    pub fn load_all_dll_in_dir(&self, path: impl AsRef<Path>) -> Result<()> {
         for entry in std::fs::read_dir(path)? {
             let entry = entry?;
             if entry.file_type()?.is_file() && entry.path().extension().is_some_and(|x| x == "dll")
             {
-                self.load_dll_path(entry.path()).unwrap();
+                self.load_dll(entry.path()).unwrap();
             }
         }
         Ok(())
     }
 
-    pub fn get_monobehaviour_definitions(&self) -> Result<HashMap<String, Vec<String>>, Error> {
+    pub fn get_monobehaviour_definitions(&self) -> Result<HashMap<String, Vec<String>>> {
         let mut out = std::ptr::null_mut::<[*mut c_char; 2]>();
         let mut length: c_int = 0;
         let res = unsafe {
@@ -161,7 +161,7 @@ impl TypeTreeGenerator {
         Ok(all)
     }
 
-    pub fn generate_typetree_json(&self, assembly: &str, full_name: &str) -> Result<String, Error> {
+    pub fn generate_typetree_json(&self, assembly: &str, full_name: &str) -> Result<String> {
         let assembly = CString::new(assembly).unwrap();
         let full_name = CString::new(full_name).unwrap();
 
@@ -188,7 +188,7 @@ impl TypeTreeGenerator {
         base: TypeTreeNode,
         assembly: &str,
         full_name: &str,
-    ) -> Result<Option<TypeTreeNode>, Error> {
+    ) -> Result<Option<TypeTreeNode>> {
         let assembly = CString::new(assembly).unwrap();
         let full_name = CString::new(full_name).unwrap();
 
