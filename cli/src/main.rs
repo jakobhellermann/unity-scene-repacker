@@ -18,7 +18,6 @@ use std::io::{BufWriter, Cursor};
 use std::path::PathBuf;
 use std::time::Instant;
 use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
-use utils::TempDir;
 
 use crate::utils::friendly_size;
 
@@ -144,16 +143,9 @@ fn run() -> Result<()> {
     let tpk_blob = TpkTypeTreeBlob::embedded();
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
 
-    let temp_dir = TempDir::named_in_tmp("unity-scene-repacker")?;
-
     let mut game_files = GameFiles::probe(&game_dir)?;
-    let mut repack_scenes = unity_scene_repacker::repack_scenes(
-        &mut game_files,
-        preloads,
-        &tpk,
-        &temp_dir.dir,
-        args.disable,
-    )?;
+    let mut repack_scenes =
+        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, args.disable)?;
 
     if let Some(parent) = args.output.parent() {
         DirBuilder::new()

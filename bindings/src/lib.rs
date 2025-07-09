@@ -100,14 +100,13 @@ fn export_inner(
     let preloads: IndexMap<String, Vec<String>> =
         serde_json::from_str(preload_json).context("error parsing the objects json")?;
 
-    let temp_dir = Path::new("/tmp/todo"); // unused for hollowknight
     let disable = true;
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
     let mut game_files = GameFiles::probe(game_dir)?;
     let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, temp_dir, disable)?;
+        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, disable)?;
 
     let mut out = Cursor::new(Vec::new());
 

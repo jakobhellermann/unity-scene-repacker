@@ -31,7 +31,6 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, Write};
-use std::path::{Path, PathBuf};
 use typetree_generator_api::cache::TypeTreeGeneratorCache;
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity::types::MonoBehaviour;
@@ -43,7 +42,7 @@ pub struct RepackScene {
     pub scene_name: String,
     pub scene_index: usize,
     pub serialized: SerializedFile,
-    pub serialized_path: PathBuf,
+    pub serialized_data: Data,
 
     pub keep_objects: BTreeSet<i64>,
     pub roots: Vec<(String, Transform)>,
@@ -54,7 +53,6 @@ pub fn repack_scenes(
     game_files: &mut GameFiles,
     preloads: IndexMap<String, Vec<String>>,
     tpk: &(impl TypeTreeProvider + Send + Sync),
-    temp_dir: &Path,
     disable_roots: bool,
 ) -> Result<Vec<RepackScene>> {
     match game_files {
@@ -96,7 +94,7 @@ pub fn repack_scenes(
                         scene_name,
                         scene_index,
                         serialized,
-                        serialized_path,
+                        serialized_data: Data::Mmap(data.into_inner()),
                         keep_objects,
                         roots,
                         replacements,
@@ -144,21 +142,30 @@ pub fn repack_scenes(
                         disable_roots,
                     )?;
 
-                    let tmp = temp_dir.join(&scene_name);
-                    std::fs::write(&tmp, data.get_mut())
-                        .context("Writing bundle data to temporary file")?;
-
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
                         serialized,
-                        serialized_path: tmp,
+                        serialized_data: Data::InMemory(data.into_inner()),
                         keep_objects,
                         roots,
                         replacements,
                     })
                 })
                 .collect::<Result<Vec<RepackScene>>>()
+        }
+    }
+}
+
+pub enum Data {
+    InMemory(Vec<u8>),
+    Mmap(Mmap),
+}
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Data::InMemory(data) => data.as_slice(),
+            Data::Mmap(mmap) => mmap.as_ref(),
         }
     }
 }
@@ -262,11 +269,10 @@ pub fn pack_to_scene_bundle(
         let trimmed = {
             let serialized = &mut scene.serialized;
 
-            let file = File::open(&scene.serialized_path)?;
-            let data = Cursor::new(unsafe { Mmap::map(&file)? });
+            let data = scene.serialized_data.as_ref();
 
             stats.objects_before += serialized.objects().len();
-            stats.size_before += data.get_ref().len();
+            stats.size_before += data.len();
 
             serialized.modify_objects(|objects| {
                 objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID));
@@ -282,7 +288,7 @@ pub fn pack_to_scene_bundle(
                     None => {
                         let offset = obj.m_Offset as usize;
                         let size = obj.m_Size as usize;
-                        Cow::Borrowed(&data.get_ref()[offset..offset + size])
+                        Cow::Borrowed(&data[offset..offset + size])
                     }
                 };
 
@@ -372,8 +378,7 @@ pub fn pack_to_asset_bundle(
         .into_iter()
         .map(|mut scene| {
             let serialized = &mut scene.serialized;
-            let file = File::open(&scene.serialized_path)?;
-            let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
+            let mut data = Cursor::new(scene.serialized_data.as_ref());
 
             assert_eq!(serialized.m_bigIDEnabled, None);
             assert!(serialized.m_RefTypes.as_ref().is_some_and(|x| x.is_empty()));
@@ -421,26 +426,19 @@ pub fn pack_to_asset_bundle(
             let (remap_file_id, remap_types) =
                 merge_serialized::add_remapped_scene_header(&mut builder, serialized)?;
 
-            Ok((
-                scene,
-                data,
-                mb_types,
-                remap_file_id,
-                remap_path_id,
-                remap_types,
-            ))
+            Ok((scene, mb_types, remap_file_id, remap_path_id, remap_types))
         })
         .collect::<Result<Vec<_>>>()?;
 
     let objects = intermediate
         .into_par_iter()
         .map(
-            |(mut scene, data, mb_types, remap_file_id, remap_path_id, remap_types)| {
+            |(mut scene, mb_types, remap_file_id, remap_path_id, remap_types)| {
                 merge_serialized::add_remapped_scene(
                     &scene.scene_name,
                     scene.scene_index,
                     &builder.serialized,
-                    data.get_ref(),
+                    scene.serialized_data.as_ref(),
                     tpk,
                     scene.serialized.take_objects(),
                     scene.replacements,
