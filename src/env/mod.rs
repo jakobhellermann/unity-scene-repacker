@@ -7,6 +7,7 @@ use anyhow::{Context, Result};
 use elsa::sync::FrozenMap;
 use rabex::UnityVersion;
 use rabex::files::SerializedFile;
+use rabex::files::serializedfile::ObjectRef;
 use rabex::objects::{PPtr, TypedPPtr};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider;
@@ -19,6 +20,7 @@ pub use resolver::EnvResolver;
 
 use crate::GameFiles;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
+use crate::unity::types::{BuildSettings, MonoBehaviour};
 
 pub enum Data {
     InMemory(Vec<u8>),
@@ -76,6 +78,15 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
                 Ok(unity_version)
             }
         }
+    }
+
+    pub fn build_settings(&self) -> Result<BuildSettings> {
+        let (ggm, mut ggm_reader) = self.load_cached("globalgamemanagers")?;
+        let build_settings = ggm
+            .find_object_of::<BuildSettings>(&self.tpk)?
+            .unwrap()
+            .read(&mut ggm_reader)?;
+        Ok(build_settings)
     }
 
     pub fn load_leaf(
@@ -150,7 +161,114 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
         self.deref_read_untyped(pptr.untyped(), file, reader)
     }
 
+    pub fn deref_read_monobehaviour_untyped<'de, T>(
+        &self,
+        pptr: PPtr,
+        serialized: &SerializedFile,
+        serialized_reader: &mut (impl Read + Seek),
+    ) -> Result<T>
+    where
+        T: serde::Deserialize<'de>,
+    {
+        match pptr.m_FileID {
+            0 => {
+                let mb_obj = pptr.deref_local(serialized, &self.tpk)?;
+                let data = self
+                    .read_monobehaviour_data(&mb_obj, serialized, serialized_reader)?
+                    .read(serialized_reader)?;
+                Ok(data)
+            }
+            file_id => {
+                let external = &serialized.m_Externals[file_id as usize - 1];
+                let (external_file, external_reader) =
+                    self.load_external_file(Path::new(&external.pathName))?;
+                let external_reader = &mut Cursor::new(external_reader);
+                let mb_obj = pptr
+                    .make_local()
+                    .deref_local::<MonoBehaviour>(external_file, &self.tpk)
+                    .with_context(|| format!("In external {} {}", file_id, external.pathName))?;
+
+                let data = self
+                    .read_monobehaviour_data(&mb_obj, external_file, external_reader)?
+                    .read(external_reader)?;
+                Ok(data)
+            }
+        }
+    }
+
+    pub fn deref_data<'a, Reader: 'a>(
+        &'a self,
+        pptr: PPtr,
+        serialized: &'a SerializedFile,
+        serialized_reader: Reader,
+    ) -> Result<(&'a SerializedFile, MaybeCached<'a, Reader>)> {
+        match pptr.m_FileID {
+            0 => Ok((serialized, MaybeCached::A(serialized_reader))),
+            file_id => {
+                let external = &serialized.m_Externals[file_id as usize - 1];
+                let (external_file, external_reader) =
+                    self.load_external_file(Path::new(&external.pathName))?;
+                Ok((external_file, MaybeCached::B(Cursor::new(external_reader))))
+            }
+        }
+    }
+
+    pub fn deref_read_monobehaviour<'de, T>(
+        &self,
+        pptr: TypedPPtr<T>,
+        serialized: &SerializedFile,
+        serialized_reader: &mut (impl Read + Seek),
+    ) -> Result<T>
+    where
+        T: serde::Deserialize<'de>,
+    {
+        self.deref_read_monobehaviour_untyped(pptr.untyped(), serialized, serialized_reader)
+    }
+
     pub fn loaded_files(&mut self) -> impl Iterator<Item = &Path> {
         self.serialized_files.as_mut().keys().map(Deref::deref)
+    }
+
+    fn read_monobehaviour_data<'a, T>(
+        &'a self,
+        mb_obj: &ObjectRef<'a, MonoBehaviour>,
+        file: &SerializedFile,
+        reader: &mut (impl Read + Seek),
+    ) -> Result<ObjectRef<'a, T>> {
+        let mb = mb_obj.read(reader)?;
+        let script = self.deref_read(mb.m_Script, file, reader)?;
+        let ty = self
+            .typetree_generator
+            .generate(&script.m_AssemblyName, &script.full_name())?;
+        Ok(mb_obj.with_typetree::<T>(ty))
+    }
+}
+
+pub enum MaybeCached<'a, A> {
+    A(A),
+    B(Cursor<&'a [u8]>),
+}
+
+impl<A> Read for MaybeCached<'_, A>
+where
+    A: Read,
+{
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            MaybeCached::A(a) => a.read(buf),
+            MaybeCached::B(b) => b.read(buf),
+        }
+    }
+}
+
+impl<A> Seek for MaybeCached<'_, A>
+where
+    A: Seek,
+{
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        match self {
+            MaybeCached::A(a) => a.seek(pos),
+            MaybeCached::B(b) => b.seek(pos),
+        }
     }
 }
