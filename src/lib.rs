@@ -47,22 +47,24 @@ pub struct RepackScene {
     pub keep_objects: BTreeSet<i64>,
     pub roots: Vec<(String, Transform)>,
     pub replacements: FxHashMap<i64, Vec<u8>>,
+
+    pub monobehaviour_script_locations: FxHashMap<i64, (String, String)>,
 }
 
 pub fn repack_scenes(
-    game_files: &mut GameFiles,
+    env: &Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
     preloads: IndexMap<String, Vec<String>>,
-    tpk: &(impl TypeTreeProvider + Send + Sync),
+    prepare_scripts: bool,
     disable_roots: bool,
 ) -> Result<Vec<RepackScene>> {
-    match game_files {
+    match &env.resolver {
         GameFiles::Directory(game_dir) => {
             let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
                 .context("couldn't find globalgamemanagers in game directory")?;
             let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
             let build_settings = ggm
-                .find_object_of::<BuildSettings>(&tpk)?
+                .find_object_of::<BuildSettings>(&env.tpk)?
                 .unwrap()
                 .read(&mut ggm_reader)?;
             let scenes = build_settings.scene_name_lookup();
@@ -79,38 +81,42 @@ pub fn repack_scenes(
 
                     let mut replacements = FxHashMap::default();
                     let scene_paths = deduplicate_objects(&scene_name, &paths);
-                    let serialized = SerializedFile::from_reader(&mut data)
+                    let file = SerializedFile::from_reader(&mut data)
                         .with_context(|| format!("Could not parse {scene_name}"))?;
                     let (keep_objects, roots) = prune::prune_scene(
                         &scene_name,
-                        &serialized,
+                        &file,
                         &mut data,
-                        tpk,
+                        &env.tpk,
                         &scene_paths,
                         &mut replacements,
                         disable_roots,
                     )?;
+                    let monobehaviour_script_locations = prepare_scripts
+                        .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
+                        .transpose()?
+                        .unwrap_or_default();
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
-                        serialized,
+                        serialized: file,
                         serialized_data: Data::Mmap(data.into_inner()),
                         keep_objects,
                         roots,
                         replacements,
+                        monobehaviour_script_locations,
                     })
                 })
                 .collect::<Result<_>>()
         }
         GameFiles::Bundle { bundle, .. } => {
-            let mut ggm = bundle
-                .seek_file("globalgamemanagers")
-                .context("globalgamemanagers not found in bundle")??;
-            let ggm = ggm.read()?;
+            let ggm = bundle
+                .read_at("globalgamemanagers")?
+                .context("globalgamemanagers not found in bundle")?;
             let ggm_reader = &mut Cursor::new(ggm);
             let ggm = SerializedFile::from_reader(ggm_reader)?;
             let build_settings = ggm
-                .find_object_of::<BuildSettings>(&tpk)?
+                .find_object_of::<BuildSettings>(&env.tpk)?
                 .unwrap()
                 .read(ggm_reader)?;
             let scenes = build_settings.scene_name_lookup();
@@ -130,26 +136,31 @@ pub fn repack_scenes(
                     let mut replacements = FxHashMap::default();
                     let scene_paths = deduplicate_objects(&scene_name, &paths);
 
-                    let serialized = SerializedFile::from_reader(&mut data)
+                    let file = SerializedFile::from_reader(&mut data)
                         .with_context(|| format!("Could not parse {scene_name}"))?;
                     let (keep_objects, roots) = prune::prune_scene(
                         &scene_name,
-                        &serialized,
+                        &file,
                         &mut data,
-                        tpk,
+                        &env.tpk,
                         &scene_paths,
                         &mut replacements,
                         disable_roots,
                     )?;
 
+                    let monobehaviour_script_locations = prepare_scripts
+                        .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
+                        .transpose()?
+                        .unwrap_or_default();
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
-                        serialized,
+                        serialized: file,
                         serialized_data: Data::InMemory(data.into_inner()),
                         keep_objects,
                         roots,
                         replacements,
+                        monobehaviour_script_locations,
                     })
                 })
                 .collect::<Result<Vec<RepackScene>>>()
@@ -334,11 +345,10 @@ pub enum MonobehaviourTypetreeMode<'a> {
 }
 
 pub fn pack_to_asset_bundle(
-    game_files: GameFiles,
+    env: Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
-    tpk: &(impl TypeTreeProvider + Send + Sync),
     monobehaviour_typetree_mode: MonobehaviourTypetreeMode,
     unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
@@ -346,10 +356,10 @@ pub fn pack_to_asset_bundle(
 ) -> Result<Stats> {
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
-    let game_dir = game_files.game_dir().to_owned();
-    let env = Environment::new(game_files, tpk);
+    let game_dir = env.resolver.game_dir().to_owned();
 
-    let monobehaviour_node = tpk
+    let monobehaviour_node = env
+        .tpk
         .get_typetree_node(ClassId::MonoBehaviour, unity_version)
         .unwrap()
         .into_owned();
@@ -367,7 +377,8 @@ pub fn pack_to_asset_bundle(
         ),
     };
 
-    let mut builder = SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, false);
+    let mut builder =
+        SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
     builder._next_path_id = 2;
 
     let mut container = IndexMap::new();
@@ -378,23 +389,20 @@ pub fn pack_to_asset_bundle(
         .into_iter()
         .map(|mut scene| {
             let serialized = &mut scene.serialized;
-            let mut data = Cursor::new(scene.serialized_data.as_ref());
+            let data = scene.serialized_data.as_ref();
 
             assert_eq!(serialized.m_bigIDEnabled, None);
             assert!(serialized.m_RefTypes.as_ref().is_some_and(|x| x.is_empty()));
 
-            let mb_types = prepare_monobehaviour_types(
+            let mb_types = prepare_monobehaviour_types_actual(
+                &scene.monobehaviour_script_locations,
                 &scene.scene_name,
                 scene.scene_index,
-                tpk,
-                &env,
                 &generator_cache,
-                serialized,
-                &mut data,
-            )?;
+            );
 
             stats.objects_before += serialized.objects().len();
-            stats.size_before += data.get_ref().len();
+            stats.size_before += data.len();
             serialized.modify_objects(|objects| {
                 objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID))
             });
@@ -439,7 +447,7 @@ pub fn pack_to_asset_bundle(
                     scene.scene_index,
                     &builder.serialized,
                     scene.serialized_data.as_ref(),
-                    tpk,
+                    &env.tpk,
                     scene.serialized.take_objects(),
                     scene.replacements,
                     mb_types,
@@ -459,7 +467,8 @@ pub fn pack_to_asset_bundle(
         Ok(())
     })?;
 
-    let assetbundle_ty = tpk
+    let assetbundle_ty = env
+        .tpk
         .get_typetree_node(AssetBundle::CLASS_ID, unity_version)
         .unwrap();
     let mut assetbundle_serialized_type =
@@ -498,17 +507,13 @@ pub fn pack_to_asset_bundle(
     Ok(stats)
 }
 
-fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
-    scene_name: &str,
-    scene_index: usize,
-    tpk: &'a T,
-    env: &Environment<&T, GameFiles>,
-    generator_cache: &'a TypeTreeGeneratorCache,
+#[inline(never)]
+fn prepare_monobehaviour_script_locations<'a>(
+    env: &Environment<impl TypeTreeProvider, GameFiles>,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
-) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
-    let items = file
-        .objects_of::<MonoBehaviour>(tpk)?
+) -> Result<FxHashMap<i64, (String, String)>> {
+    file.objects_of::<MonoBehaviour>(&env.tpk)?
         .map(|mb_info| -> Result<_> {
             let mb = mb_info.read(reader)?;
             if mb.m_Script.is_null() {
@@ -518,27 +523,34 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
                 .deref_read(mb.m_Script, file, reader)
                 .with_context(|| format!("In monobehaviour {}", mb_info.info.m_PathID))?;
 
-            let assembly_name = match script.m_AssemblyName.ends_with(".dll") {
-                true => Cow::Borrowed(&script.m_AssemblyName),
-                false => Cow::Owned(format!("{}.dll", script.m_AssemblyName)),
+            let (assembly_name, full_name) = script.into_location();
+            let assembly_name = match assembly_name.ends_with(".dll") {
+                true => assembly_name,
+                false => format!("{assembly_name}.dll"),
             };
-            let full_ty = generator_cache
-                .generate(&assembly_name, &script.full_name())
-                .with_context(|| {
-                    format!(
-                        "Reading script {} {}",
-                        script.m_AssemblyName,
-                        script.full_name()
-                    )
-                })
-                .with_context(|| format!("At object {}", mb_info.info.m_PathID))
-                .with_context(|| {
-                    format!("Could not generate type trees from MonoBehaviour in {scene_name} (level{scene_index})")
-                })?;
-
-            Ok(Some((mb_info.info.m_PathID, full_ty)))
+            Ok(Some((mb_info.info.m_PathID, (assembly_name, full_name))))
         })
         .filter_map(|x| x.transpose())
+        .collect::<Result<FxHashMap<_, _>>>()
+}
+
+#[inline(never)]
+fn prepare_monobehaviour_types_actual<'a>(
+    mb_scripts: &FxHashMap<i64, (String, String)>,
+    scene_name: &str,
+    scene_index: usize,
+    generator_cache: &'a TypeTreeGeneratorCache,
+) -> FxHashMap<i64, &'a TypeTreeNode> {
+    mb_scripts
+        .iter()
+        .map(|(path_id, (assembly_name, full_name))| -> Result<_> {
+            let full_ty = generator_cache
+                .generate(&assembly_name, &full_name)
+                .with_context(|| format!("Reading script {} {}", assembly_name, full_name))
+                .with_context(|| format!("At object {}", path_id))
+                .with_context(|| format!("Could not generate type trees from MonoBehaviour in {scene_name} (level{scene_index})") )?;
+            Ok((*path_id, full_ty))
+        })
         .filter_map(|ty| match ty {
             Ok(val) => Some(val),
             Err(e) => {
@@ -546,7 +558,5 @@ fn prepare_monobehaviour_types<'a, T: TypeTreeProvider>(
                 None
             }
         })
-        .collect::<FxHashMap<_, _>>();
-    // .collect::<Result<FxHashMap<_, _>>>()?
-    Ok(items)
+        .collect::<FxHashMap<_, _>>()
 }

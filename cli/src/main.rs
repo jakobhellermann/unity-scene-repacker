@@ -17,6 +17,7 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
 use std::path::PathBuf;
 use std::time::Instant;
+use unity_scene_repacker::env::Environment;
 use unity_scene_repacker::{GameFiles, MonobehaviourTypetreeMode, Stats};
 
 use crate::utils::friendly_size;
@@ -143,9 +144,15 @@ fn run() -> Result<()> {
     let tpk_blob = TpkTypeTreeBlob::embedded();
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
 
-    let mut game_files = GameFiles::probe(&game_dir)?;
-    let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, args.disable)?;
+    let game_files = GameFiles::probe(&game_dir)?;
+    let env = Environment::new(game_files, tpk);
+
+    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+        &env,
+        preloads,
+        matches!(args.mode, Mode::Asset),
+        args.disable,
+    )?;
 
     if let Some(parent) = args.output.parent() {
         DirBuilder::new()
@@ -184,7 +191,7 @@ fn run() -> Result<()> {
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
                 name,
                 &tpk_blob,
-                &tpk,
+                &env.tpk,
                 unity_version,
                 repack_scenes.as_mut_slice(),
             )
@@ -221,11 +228,10 @@ fn run() -> Result<()> {
                 File::create(&args.output).context("Could not write to output file")?,
             );
             let stats = unity_scene_repacker::pack_to_asset_bundle(
-                game_files,
+                env,
                 &mut out,
                 name,
                 &tpk_blob,
-                &tpk,
                 monobehaviour_typetree_mode,
                 unity_version,
                 repack_scenes,

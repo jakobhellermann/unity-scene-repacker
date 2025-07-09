@@ -5,6 +5,7 @@ use std::path::Path;
 
 use anyhow::{Context as _, Result, bail};
 use indexmap::IndexMap;
+use unity_scene_repacker::env::Environment;
 use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
@@ -104,9 +105,15 @@ fn export_inner(
 
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
-    let mut game_files = GameFiles::probe(game_dir)?;
-    let mut repack_scenes =
-        unity_scene_repacker::repack_scenes(&mut game_files, preloads, &tpk, disable)?;
+    let game_files = GameFiles::probe(game_dir)?;
+    let env = Environment::new(game_files, tpk);
+
+    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+        &env,
+        preloads,
+        disable,
+        matches!(mode, Mode::AssetBundle),
+    )?;
 
     let mut out = Cursor::new(Vec::new());
 
@@ -120,7 +127,7 @@ fn export_inner(
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
                 name,
                 &tpk_raw,
-                &tpk,
+                &env.tpk,
                 unity_version,
                 repack_scenes.as_mut_slice(),
             )
@@ -139,11 +146,10 @@ fn export_inner(
             stats
         }
         Mode::AssetBundle => unity_scene_repacker::pack_to_asset_bundle(
-            game_files,
+            env,
             &mut out,
             name,
             &tpk_raw,
-            &tpk,
             monobehaviour_typetree_mode,
             unity_version,
             repack_scenes,

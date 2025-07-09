@@ -135,6 +135,14 @@ impl MonoScript {
             false => Cow::Owned(format!("{}.{}", self.m_Namespace, self.m_ClassName)),
         }
     }
+
+    pub fn into_location(self) -> (String, String) {
+        let full_name = match self.m_Namespace.is_empty() {
+            true => self.m_ClassName,
+            false => format!("{}.{}", self.m_Namespace, self.m_ClassName),
+        };
+        (self.m_AssemblyName, full_name)
+    }
 }
 
 impl ClassIdType for MonoScript {

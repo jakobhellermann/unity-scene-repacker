@@ -56,10 +56,7 @@ impl GameObject {
 
         for ancestor in transform.ancestors(file, reader, tpk)?.collect::<Vec<_>>() {
             let (_, ancestor) = ancestor?;
-            let ancestor_go = ancestor
-                .m_GameObject
-                .deref_local(file, tpk)?
-                .read(reader)?;
+            let ancestor_go = ancestor.m_GameObject.deref_local(file, tpk)?.read(reader)?;
             path.push(ancestor_go.m_Name);
         }
 
