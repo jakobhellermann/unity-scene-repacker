@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use elsa::sync::FrozenMap;
 use rabex::files::SerializedFile;
 use rabex::files::bundlefile::BundleFileReader;
-use rabex::objects::{ClassIdType, PPtr, TypedPPtr};
+use rabex::objects::{PPtr, TypedPPtr};
 use rabex::typetree::TypeTreeProvider;
 
 pub trait EnvResolver {
@@ -164,7 +164,7 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<P, R> {
         reader: &mut (impl Read + Seek),
     ) -> Result<T>
     where
-        T: ClassIdType + serde::Deserialize<'de>,
+        T: serde::Deserialize<'de>,
     {
         self.deref_read_untyped(pptr.untyped(), file, reader)
     }

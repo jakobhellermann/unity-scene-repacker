@@ -3,10 +3,10 @@ mod game_files;
 mod merge_serialized;
 mod monobehaviour_typetree_export;
 mod prune;
-mod scene_lookup;
+pub mod scene_lookup;
 mod trace_pptr;
 pub mod typetree_generator_api;
-mod unity;
+pub mod unity;
 
 pub use game_files::GameFiles;
 pub use rabex;

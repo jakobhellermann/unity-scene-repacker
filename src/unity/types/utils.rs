@@ -1,12 +1,72 @@
 use std::borrow::Cow;
 use std::io::{Read, Seek};
 
+use rabex::files::serializedfile::{ObjectRef, Result};
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::ClassIdType;
 use rabex::objects::pptr::PathId;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 
-use crate::unity::types::Transform;
+use crate::unity::types::{GameObject, Transform};
+
+impl GameObject {
+    pub fn transform<'a>(
+        &'a self,
+        file: &'a SerializedFile,
+        tpk: &'a impl TypeTreeProvider,
+    ) -> Result<Option<ObjectRef<'a, Transform>>> {
+        self.component::<Transform>(file, tpk)
+    }
+
+    pub fn component<'a, T: ClassIdType>(
+        &'a self,
+        file: &'a SerializedFile,
+        tpk: &'a impl TypeTreeProvider,
+    ) -> Result<Option<ObjectRef<'a, T>>> {
+        for component in &self.m_Component {
+            let component = component.component.deref_local(file, tpk)?;
+            if component.info.m_ClassID == T::CLASS_ID {
+                return Ok(Some(component));
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub fn components<'a>(
+        &'a self,
+        file: &'a SerializedFile,
+        tpk: &'a impl TypeTreeProvider,
+    ) -> impl Iterator<Item = Result<ObjectRef<'a, ()>>> {
+        self.m_Component
+            .iter()
+            .map(|component| component.component.deref_local(file, tpk))
+    }
+
+    pub fn path(
+        &self,
+        file: &SerializedFile,
+        reader: &mut (impl Read + Seek),
+        tpk: &impl TypeTreeProvider,
+    ) -> Result<String> {
+        let mut path = Vec::new();
+        path.push(self.m_Name.clone());
+
+        let transform = self.transform(file, tpk)?.unwrap().read(reader)?;
+
+        for ancestor in transform.ancestors(file, reader, tpk)?.collect::<Vec<_>>() {
+            let (_, ancestor) = ancestor?;
+            let ancestor_go = ancestor
+                .m_GameObject
+                .deref_local(file, tpk)?
+                .read(reader)?;
+            path.push(ancestor_go.m_Name);
+        }
+
+        path.reverse();
+        Ok(path.join("/"))
+    }
+}
 
 pub struct Ancestors<'a, R> {
     file: &'a SerializedFile,

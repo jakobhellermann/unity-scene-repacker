@@ -8,6 +8,7 @@ use std::path::Path;
 use indexmap::IndexMap;
 use rabex::objects::pptr::{PPtr, TypedPPtr};
 use rabex::objects::{ClassId, ClassIdType};
+use rustc_hash::FxHashMap;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -18,6 +19,13 @@ impl ClassIdType for BuildSettings {
     const CLASS_ID: ClassId = ClassId::BuildSettings;
 }
 impl BuildSettings {
+    pub fn scene_name_lookup(&self) -> FxHashMap<String, usize> {
+        self.scene_names()
+            .enumerate()
+            .map(|(i, name)| (name.to_owned(), i))
+            .collect()
+    }
+
     pub fn scene_names(&self) -> impl Iterator<Item = &str> {
         self.scenes
             .iter()
