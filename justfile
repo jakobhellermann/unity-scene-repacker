@@ -6,13 +6,16 @@ hollowknight *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \
         --mode asset \
-        --objects objects/hk-realworld.jsonc \
+        --objects objects/hk-representative.jsonc \
         --output out/all.bundle {{ args }} \
-        --bundle-name bundle --compression none
+        --bundle-name bundle \
+        --compression none {{ args }}
 
 ninesols *args:
     cargo run --release -- \
         --game-dir "{{ ninesols }}" \
         --mode asset \
         --objects objects/ns-monsters.json \
-        --output /tmp/testing/new.bundle {{ args }}
+        --output /tmp/testing/new.bundle \
+        --bundle-name bundle \
+        --compression none {{ args }}
