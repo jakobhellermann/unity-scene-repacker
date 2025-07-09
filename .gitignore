@@ -6,6 +6,7 @@
 /*.unity3d
 /*.bundle
 *.so
+*.a
 /*.dll
 
 __pycache__

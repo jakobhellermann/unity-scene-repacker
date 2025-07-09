@@ -3,24 +3,19 @@
 #[allow(non_snake_case, unsafe_op_in_unsafe_fn)]
 mod generated;
 
+use generated::*;
+
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::{CStr, CString, c_char, c_int};
 use std::path::Path;
-use std::sync::LazyLock;
 
 use rabex::UnityVersion;
 use rabex::typetree::TypeTreeNode;
 
-use generated::{TypeTreeGeneratorAPI, TypeTreeGeneratorHandle};
-
-#[rustfmt::skip]
-static TYPETREE_GENERATOR_API_LIB: LazyLock<Result<TypeTreeGeneratorAPI,libloading::Error>> = LazyLock::new(|| unsafe {
-     TypeTreeGeneratorAPI::new("./libTypeTreeGeneratorAPI.so")
-});
+use generated::TypeTreeGeneratorHandle;
 
 pub struct TypeTreeGenerator {
     handle: *mut TypeTreeGeneratorHandle,
-    vtable: &'static TypeTreeGeneratorAPI,
 }
 // The AssetsTools generator API seems to be thread safe
 unsafe impl Send for TypeTreeGenerator {}
@@ -79,24 +74,18 @@ impl TypeTreeGenerator {
         unity_version: UnityVersion,
         backend: GeneratorBackend,
     ) -> Result<TypeTreeGenerator> {
-        let vtable = match &*TYPETREE_GENERATOR_API_LIB {
-            Ok(vtable) => vtable,
-            Err(e) => return Err(Error::Lib(format!("{e}"))),
-        };
-
         let unity_version = CString::new(unity_version.to_string()).unwrap();
         let generator_name = match backend {
             GeneratorBackend::AssetStudio => c"AssetStudio",
             GeneratorBackend::AssetsTools => c"AssetsTools",
             GeneratorBackend::AssetRipper => c"AssetRipper",
         };
-        let handle = unsafe {
-            vtable.TypeTreeGenerator_init(unity_version.as_ptr(), generator_name.as_ptr())
-        };
+        let handle =
+            unsafe { TypeTreeGenerator_init(unity_version.as_ptr(), generator_name.as_ptr()) };
         if handle.is_null() {
             return Err(Error::CreationError);
         }
-        Ok(TypeTreeGenerator { handle, vtable })
+        Ok(TypeTreeGenerator { handle })
     }
 
     pub fn load_dll(&self, path: impl AsRef<Path>) -> Result<()> {
@@ -105,15 +94,12 @@ impl TypeTreeGenerator {
     }
 
     pub fn load_dll_from_slice(&self, dll: &[u8]) -> Result<()> {
-        let res = unsafe {
-            self.vtable
-                .TypeTreeGenerator_loadDLL(self.handle, dll.as_ptr(), dll.len() as i32)
-        };
+        let res = unsafe { TypeTreeGenerator_loadDLL(self.handle, dll.as_ptr(), dll.len() as i32) };
         Error::from_code(res)
     }
 
     pub fn get_loaded_dll_names(&self) -> Result<String> {
-        let res = unsafe { self.vtable.TypeTreeGenerator_getLoadedDLLNames(self.handle) };
+        let res = unsafe { TypeTreeGenerator_getLoadedDLLNames(self.handle) };
         let str = unsafe { CString::from_raw(res) };
 
         Ok(str.into_string().map_err(|e| e.utf8_error())?)
@@ -134,11 +120,7 @@ impl TypeTreeGenerator {
         let mut out = std::ptr::null_mut::<[*mut c_char; 2]>();
         let mut length: c_int = 0;
         let res = unsafe {
-            self.vtable.TypeTreeGenerator_getMonoBehaviorDefinitions(
-                self.handle,
-                &raw mut out,
-                &mut length,
-            )
+            TypeTreeGenerator_getMonoBehaviorDefinitions(self.handle, &raw mut out, &mut length)
         };
         Error::from_code(res)?;
 
@@ -153,10 +135,7 @@ impl TypeTreeGenerator {
             }
         }
 
-        let _ = unsafe {
-            self.vtable
-                .TypeTreeGenerator_freeMonoBehaviorDefinitions(out, length)
-        };
+        let _ = unsafe { TypeTreeGenerator_freeMonoBehaviorDefinitions(out, length) };
 
         Ok(all)
     }
@@ -167,7 +146,7 @@ impl TypeTreeGenerator {
 
         let mut json_ptr = std::ptr::null_mut();
         let res = unsafe {
-            self.vtable.TypeTreeGenerator_generateTreeNodesJson(
+            TypeTreeGenerator_generateTreeNodesJson(
                 self.handle,
                 assembly.as_ptr(),
                 full_name.as_ptr(),
@@ -178,7 +157,7 @@ impl TypeTreeGenerator {
 
         let json = unsafe { CStr::from_ptr(json_ptr).to_str()?.to_string() };
 
-        unsafe { self.vtable.FreeCoTaskMem(json_ptr.cast()) };
+        unsafe { FreeCoTaskMem(json_ptr.cast()) };
 
         Ok(json)
     }
@@ -195,7 +174,7 @@ impl TypeTreeGenerator {
         let mut array = std::ptr::null_mut();
         let mut length: c_int = 0;
         let res = unsafe {
-            self.vtable.TypeTreeGenerator_generateTreeNodesRaw(
+            TypeTreeGenerator_generateTreeNodesRaw(
                 self.handle,
                 assembly.as_ptr(),
                 full_name.as_ptr(),
@@ -227,7 +206,7 @@ impl TypeTreeGenerator {
         let mut node = reconstruct_typetree_node(&items);
         node.children.splice(0..0, base.children);
 
-        unsafe { self.vtable.FreeCoTaskMem(array.cast()) };
+        unsafe { FreeCoTaskMem(array.cast()) };
 
         Ok(Some(node))
     }
@@ -286,6 +265,6 @@ fn build_node_tree<S: AsRef<str>>(
 
 impl Drop for TypeTreeGenerator {
     fn drop(&mut self) {
-        let _ok = unsafe { self.vtable.TypeTreeGenerator_del(self.handle) };
+        let _ok = unsafe { TypeTreeGenerator_del(self.handle) };
     }
 }
