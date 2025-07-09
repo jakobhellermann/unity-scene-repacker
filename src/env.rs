@@ -9,6 +9,8 @@ use rabex::files::bundlefile::BundleFileReader;
 use rabex::objects::{PPtr, TypedPPtr};
 use rabex::typetree::TypeTreeProvider;
 
+use crate::typetree_generator_cache::TypeTreeGeneratorCache;
+
 pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
@@ -83,6 +85,7 @@ pub struct Environment<P, R = PathBuf> {
     pub resolver: R,
     pub tpk: P,
     pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
+    pub typetree_generator: TypeTreeGeneratorCache,
 }
 
 impl<P, R> Environment<P, R> {
@@ -91,6 +94,7 @@ impl<P, R> Environment<P, R> {
             resolver,
             tpk,
             serialized_files: Default::default(),
+            typetree_generator: TypeTreeGeneratorCache::empty(),
         }
     }
 }
@@ -101,6 +105,7 @@ impl<P: TypeTreeProvider> Environment<P, PathBuf> {
             resolver: path.into(),
             tpk,
             serialized_files: Default::default(),
+            typetree_generator: TypeTreeGeneratorCache::empty(),
         }
     }
 }

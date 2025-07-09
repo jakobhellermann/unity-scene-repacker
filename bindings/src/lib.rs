@@ -112,7 +112,7 @@ fn export_inner(
     let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
     let game_files = GameFiles::probe(game_dir)?;
-    let env = Environment::new(game_files, tpk);
+    let mut env = Environment::new(game_files, tpk);
 
     let monobehaviour_node = env
         .tpk
@@ -124,7 +124,7 @@ fn export_inner(
         Some(data) => MonobehaviourTypetreeMode::Export(data),
         None => MonobehaviourTypetreeMode::GenerateRuntime,
     };
-    let generator_cache = match monobehaviour_typetree_mode {
+    env.typetree_generator = match monobehaviour_typetree_mode {
         MonobehaviourTypetreeMode::GenerateRuntime => {
             let generator = TypeTreeGenerator::new_lib_next_to_exe(
                 unity_version,
@@ -143,7 +143,6 @@ fn export_inner(
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
-        &generator_cache,
         preloads,
         disable,
         matches!(mode, Mode::AssetBundle),
@@ -175,7 +174,7 @@ fn export_inner(
             stats
         }
         Mode::AssetBundle => unity_scene_repacker::pack_to_asset_bundle(
-            env,
+            &env,
             &mut out,
             name,
             &tpk_raw,

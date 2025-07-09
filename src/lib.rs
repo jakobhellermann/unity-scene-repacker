@@ -34,7 +34,6 @@ use std::io::{Cursor, Read, Seek, Write};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
-use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub struct RepackScene<'a> {
@@ -51,8 +50,7 @@ pub struct RepackScene<'a> {
 }
 
 pub fn repack_scenes<'a>(
-    env: &Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
-    generator_cache: &'a TypeTreeGeneratorCache,
+    env: &'a Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
     preloads: IndexMap<String, Vec<String>>,
     prepare_scripts: bool,
     disable_roots: bool,
@@ -93,9 +91,7 @@ pub fn repack_scenes<'a>(
                         disable_roots,
                     )?;
                     let monobehaviour_types = prepare_scripts
-                        .then(|| {
-                            prepare_monobehaviour_types(env, generator_cache, &file, &mut data)
-                        })
+                        .then(|| prepare_monobehaviour_types(env, &file, &mut data))
                         .transpose()
                         .with_context(|| {
                             format!(
@@ -156,9 +152,7 @@ pub fn repack_scenes<'a>(
                     )?;
 
                     let monobehaviour_types = prepare_scripts
-                        .then(|| {
-                            prepare_monobehaviour_types(env, generator_cache, &file, &mut data)
-                        })
+                        .then(|| prepare_monobehaviour_types(env, &file, &mut data))
                         .transpose()
                         .with_context(|| {
                             format!(
@@ -359,7 +353,7 @@ pub enum MonobehaviourTypetreeMode<'a> {
 }
 
 pub fn pack_to_asset_bundle(
-    env: Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    env: &Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
@@ -492,8 +486,7 @@ pub fn pack_to_asset_bundle(
 
 #[inline(never)]
 fn prepare_monobehaviour_types<'a>(
-    env: &Environment<impl TypeTreeProvider, GameFiles>,
-    generator_cache: &'a TypeTreeGeneratorCache,
+    env: &'a Environment<impl TypeTreeProvider, GameFiles>,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
 ) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
@@ -516,7 +509,8 @@ fn prepare_monobehaviour_types<'a>(
                 false => format!("{assembly_name}.dll"),
             };
 
-            let ty = generator_cache
+            let ty = env
+                .typetree_generator
                 .generate(&assembly_name, &full_name)
                 .with_context(|| {
                     format!("Reading script {assembly_name} {full_name} at object {path_id}",)

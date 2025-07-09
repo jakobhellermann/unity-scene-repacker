@@ -178,13 +178,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
 
     let game_files = GameFiles::probe(&game_dir)?;
-    let env = Environment::new(game_files, tpk);
-
-    let monobehaviour_node = env
-        .tpk
-        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
-        .unwrap()
-        .into_owned();
+    let mut env = Environment::new(game_files, tpk);
 
     let generator = match libs_dir {
         Some(lib_path) => {
@@ -198,11 +192,15 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     generator
         .load_all_dll_in_dir(game_dir.join("Managed"))
         .context("Cannot load game DLLs")?;
-    let generator_cache = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
+    let monobehaviour_node = env
+        .tpk
+        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+        .unwrap()
+        .into_owned();
+    env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
-        &generator_cache,
         preloads,
         matches!(args.output.mode, Mode::Asset),
         args.output.disable,
@@ -281,7 +279,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 File::create(&args.output.output).context("Could not write to output file")?,
             );
             let stats = unity_scene_repacker::pack_to_asset_bundle(
-                env,
+                &env,
                 &mut out,
                 name,
                 &tpk_blob,

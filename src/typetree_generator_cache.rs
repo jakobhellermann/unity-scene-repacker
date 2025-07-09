@@ -26,6 +26,13 @@ impl TypeTreeGeneratorCache {
             base_node,
         }
     }
+    pub fn empty() -> Self {
+        TypeTreeGeneratorCache {
+            generator: None,
+            cache: FrozenMap::default(),
+            base_node: TypeTreeNode::default(),
+        }
+    }
 
     pub fn generate(&self, assembly_name: &str, full_name: &str) -> Result<&TypeTreeNode> {
         let key = (assembly_name.to_owned(), full_name.to_owned());
