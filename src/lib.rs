@@ -92,17 +92,17 @@ pub fn repack_scenes<'a>(
                         &mut replacements,
                         disable_roots,
                     )?;
-                    let monobehaviour_script_locations = prepare_scripts
-                        .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
-                        .transpose()?
+                    let monobehaviour_types = prepare_scripts
+                        .then(|| {
+                            prepare_monobehaviour_types(env, generator_cache, &file, &mut data)
+                        })
+                        .transpose()
+                        .with_context(|| {
+                            format!(
+                                "Could not generate type trees in {scene_name} (level{scene_index})"
+                            )
+                        })?
                         .unwrap_or_default();
-                    let monobehaviour_types = prepare_monobehaviour_types_actual(
-                        &monobehaviour_script_locations,
-                        &scene_name,
-                        scene_index,
-                        generator_cache,
-                    );
-
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
@@ -155,16 +155,17 @@ pub fn repack_scenes<'a>(
                         disable_roots,
                     )?;
 
-                    let monobehaviour_script_locations = prepare_scripts
-                        .then(|| prepare_monobehaviour_script_locations(&env, &file, &mut data))
-                        .transpose()?
+                    let monobehaviour_types = prepare_scripts
+                        .then(|| {
+                            prepare_monobehaviour_types(env, generator_cache, &file, &mut data)
+                        })
+                        .transpose()
+                        .with_context(|| {
+                            format!(
+                                "Could not generate type trees in {scene_name} (level{scene_index})"
+                            )
+                        })?
                         .unwrap_or_default();
-                    let monobehaviour_types = prepare_monobehaviour_types_actual(
-                        &monobehaviour_script_locations,
-                        &scene_name,
-                        scene_index,
-                        generator_cache,
-                    );
                     Ok(RepackScene {
                         scene_name,
                         scene_index,
@@ -490,13 +491,17 @@ pub fn pack_to_asset_bundle(
 }
 
 #[inline(never)]
-fn prepare_monobehaviour_script_locations<'a>(
+fn prepare_monobehaviour_types<'a>(
     env: &Environment<impl TypeTreeProvider, GameFiles>,
+    generator_cache: &'a TypeTreeGeneratorCache,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
-) -> Result<FxHashMap<i64, (String, String)>> {
-    file.objects_of::<MonoBehaviour>(&env.tpk)?
+) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
+    Ok(file
+        .objects_of::<MonoBehaviour>(&env.tpk)?
         .map(|mb_info| -> Result<_> {
+            let path_id = mb_info.info.m_PathID;
+
             let mb = mb_info.read(reader)?;
             if mb.m_Script.is_null() {
                 return Ok(None);
@@ -510,29 +515,16 @@ fn prepare_monobehaviour_script_locations<'a>(
                 true => assembly_name,
                 false => format!("{assembly_name}.dll"),
             };
-            Ok(Some((mb_info.info.m_PathID, (assembly_name, full_name))))
+
+            let ty = generator_cache
+                .generate(&assembly_name, &full_name)
+                .with_context(|| {
+                    format!("Reading script {assembly_name} {full_name} at object {path_id}",)
+                })?;
+
+            Ok(Some((path_id, ty)))
         })
         .filter_map(|x| x.transpose())
-        .collect::<Result<FxHashMap<_, _>>>()
-}
-
-#[inline(never)]
-fn prepare_monobehaviour_types_actual<'a>(
-    mb_scripts: &FxHashMap<i64, (String, String)>,
-    scene_name: &str,
-    scene_index: usize,
-    generator_cache: &'a TypeTreeGeneratorCache,
-) -> FxHashMap<i64, &'a TypeTreeNode> {
-    mb_scripts
-        .iter()
-        .map(|(path_id, (assembly_name, full_name))| -> Result<_> {
-            let full_ty = generator_cache
-                .generate(&assembly_name, &full_name)
-                .with_context(|| format!("Reading script {} {}", assembly_name, full_name))
-                .with_context(|| format!("At object {}", path_id))
-                .with_context(|| format!("Could not generate type trees from MonoBehaviour in {scene_name} (level{scene_index})") )?;
-            Ok((*path_id, full_ty))
-        })
         .filter_map(|ty| match ty {
             Ok(val) => Some(val),
             Err(e) => {
@@ -540,5 +532,5 @@ fn prepare_monobehaviour_types_actual<'a>(
                 None
             }
         })
-        .collect::<FxHashMap<_, _>>()
+        .collect::<FxHashMap<_, _>>())
 }
