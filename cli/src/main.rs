@@ -19,8 +19,8 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Cursor};
 use std::path::PathBuf;
 use std::time::Instant;
-use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::env::Environment;
+use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::{GameFiles, Stats};
 

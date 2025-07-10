@@ -60,13 +60,12 @@ checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
 name = "bindings"
-version = "0.2.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "indexmap",
  "rabex",
  "serde_json",
- "typetree-generator-api",
  "unity-scene-repacker",
 ]
 
@@ -710,7 +709,7 @@ checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
 
 [[package]]
 name = "typetree-generator-api"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "rabex",
 ]
@@ -766,7 +765,6 @@ dependencies = [
  "paris",
  "rabex",
  "steamlocate",
- "typetree-generator-api",
  "unity-scene-repacker",
 ]
 

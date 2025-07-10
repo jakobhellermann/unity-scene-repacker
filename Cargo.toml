@@ -1,10 +1,10 @@
 [package]
 name = "unity-scene-repacker"
-version = "2.1.0"
-edition = "2024"
-license = "MIT"
-repository = "https://github.com/jakobhellermann/unity-scene-repacker"
-description = "Repack unity level files into filtered asset bundles you can load at runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description.workspace = true
 
 [dependencies]
 anyhow = "1.0"
@@ -20,18 +20,25 @@ rustc-hash = "2.1"
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
-typetree-generator-api = { path = "./typetree-generator-api" }
+typetree-generator-api.workspace = true
+
+[workspace]
+members = [".", "bindings", "cli", "typetree-generator-api"]
+default-members = [".", "bindings", "cli", "typetree-generator-api"]
+
+package.version = "2.1.0"
+package.edition = "2024"
+package.license = "MIT"
+package.repository = "https://github.com/jakobhellermann/unity-scene-repacker"
+package.description = "Repack unity level files into filtered asset bundles you can load at runtime"
 
 [lints.clippy]
 redundant_pattern_matching = "allow"
 too_many_arguments = "allow"
 type_complexity = "allow"
 
-[workspace]
-members = [".", "bindings", "cli", "typetree-generator-api"]
-default-members = [".", "bindings", "cli", "typetree-generator-api"]
-
 [workspace.dependencies]
+typetree-generator-api = { path = "./typetree-generator-api" }
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
     "embed-tpk",
     # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost

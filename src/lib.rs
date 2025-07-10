@@ -9,7 +9,7 @@ pub mod typetree_generator_cache;
 pub mod unity;
 
 pub use game_files::GameFiles;
-pub use rabex;
+pub use {rabex, typetree_generator_api};
 
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
