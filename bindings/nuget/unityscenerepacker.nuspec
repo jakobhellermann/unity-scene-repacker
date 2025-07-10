@@ -19,5 +19,9 @@
     <file src="../../target/release/libunityscenerepacker.so" target="runtimes/linux-x64/native/libunityscenerepacker.so" />
     <file src="../../target/release/unityscenerepacker.dll" target="runtimes/win-x64/native/unityscenerepacker.dll" />
     <file src="../../target/release/libunityscenerepacker.dylib" target="runtimes/osx-x64/native/libunityscenerepacker.dylib" />
+
+    <file src="../../target/release/libTypeTreeGeneratorAPI.so" target="runtimes/linux-x64/native/libTypeTreeGeneratorAPI.so" />
+    <file src="../../target/release/TypeTreeGeneratorAPI.dll" target="runtimes/win-x64/native/TypeTreeGeneratorAPI.dll" />
+    <file src="../../target/release/libTypeTreeGeneratorAPI.dylib" target="runtimes/osx-x64/native/libTypeTreeGeneratorAPI.dylib" />
   </files>
 </package>

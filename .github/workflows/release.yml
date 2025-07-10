@@ -18,53 +18,59 @@ jobs:
           # Linux manylinux
           - runner: ubuntu-22.04
             target: x86_64
-            manylinux: auto
-          - runner: ubuntu-22.04
-            target: x86
-            manylinux: auto
-          - runner: ubuntu-22.04
-            target: aarch64
-            manylinux: auto
-          - runner: ubuntu-22.04
-            target: armv7
-            manylinux: auto
-          - runner: ubuntu-22.04
-            target: s390x
-            manylinux: auto
-          - runner: ubuntu-22.04
-            target: ppc64le
-            manylinux: auto
+            rid: linux-x64
+            manylinux: manylinux_2_34
+          # - runner: ubuntu-22.04
+          #   target: aarch64
+          #   rid: linux-arm64
+          #   manylinux: manylinux_2_34
           # Linux musllinux
-          - runner: ubuntu-22.04
-            target: x86_64
-            manylinux: musllinux_1_2
-          - runner: ubuntu-22.04
-            target: x86
-            manylinux: musllinux_1_2
-          - runner: ubuntu-22.04
-            target: aarch64
-            manylinux: musllinux_1_2
-          - runner: ubuntu-22.04
-            target: armv7
-            manylinux: musllinux_1_2
+          # - runner: ubuntu-22.04
+          #   target: x86_64
+          #   rid: linux-musl-x64
+          #   manylinux: musllinux_1_2
+          # - runner: ubuntu-22.04
+          #   target: aarch64
+          #   rid: linux-musl-arm64
+          #   manylinux: musllinux_1_2
           # Windows
           - runner: windows-latest
             target: x64
-            manylinux: ""
-          - runner: windows-latest
-            target: x86
+            rid: win-x64
             manylinux: ""
           # MacOS
           - runner: macos-13
             target: x86_64
+            rid: osx-x64
             manylinux: ""
           - runner: macos-14
             target: aarch64
+            rid: osx-arm64
             manylinux: ""
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.x"
+
+      - name: Clone TypeTreeGeneratorAPI
+        uses: actions/checkout@v4
+        with:
+          repository: jakobhellermann/TypeTreeGeneratorAPI
+          submodules: true
+          ref: wip
+          path: TypeTreeGeneratorAPI
+      - name: Publish TypeTreeGeneratorAPI with dotnet
+        run: dotnet publish TypeTreeGeneratorAPI/TypeTreeGeneratorAPI -o tt-api-lib --runtime ${{ matrix.rid }} -p:EnableAssetRipper=false -p:EnableAssetStudio=false -p:EnableAssetsTools=true -p:EnableIL2CPP=false
+      - name: Copy importlib to output
+        if: runner.os == 'windows'
+        run: cp TypeTreeGeneratorAPI/TypeTreeGeneratorAPI/bin/Release/net9.0/win-x64/native/TypeTreeGeneratorAPI.lib ./tt-api-lib/
+
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
+        env:
+          RUSTFLAGS: "-L tt-api-lib"
+          LD_LIBRARY_PATH: "${{ github.workspace }}/tt-api-lib"
+        uses: jakobhellermann/maturin-action@allow-ld-env
         with:
           target: ${{ matrix.target }}
           args: --release --out dist

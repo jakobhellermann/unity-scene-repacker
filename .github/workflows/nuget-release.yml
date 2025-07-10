@@ -15,14 +15,32 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.x"
+
+      - name: Clone TypeTreeGeneratorAPI
+        uses: actions/checkout@v4
+        with:
+          repository: jakobhellermann/TypeTreeGeneratorAPI
+          submodules: true
+          ref: wip
+          path: TypeTreeGeneratorAPI
+      - name: Publish TypeTreeGeneratorAPI with dotnet
+        run: dotnet publish TypeTreeGeneratorAPI/TypeTreeGeneratorAPI -o output --use-current-runtime -p:EnableAssetRipper=false -p:EnableAssetStudio=false -p:EnableAssetsTools=true -p:EnableIL2CPP=false
+      - name: Copy importlib to output
+        if: runner.os == 'windows'
+        run: cp TypeTreeGeneratorAPI/TypeTreeGeneratorAPI/bin/Release/net9.0/win-x64/native/TypeTreeGeneratorAPI.lib ./output
 
       - name: Build bindings
+        env:
+          RUSTFLAGS: "-L output"
+          LD_LIBRARY_PATH: "${{ github.workspace }}/output"
         run: cargo build --release -p bindings
 
       - name: Copy artifacts
         shell: bash
         run: |
-          mkdir output
           if [[ "${{ runner.os }}" == "Windows" ]]; then
             cp target/release/unityscenerepacker.dll output/unityscenerepacker.dll
           elif [[ "${{ runner.os }}" == "macOS" ]]; then

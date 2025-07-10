@@ -5,9 +5,12 @@
 *.nupkg
 /*.unity3d
 /*.bundle
+
 *.so
 *.a
-/*.dll
+*.dll
+*.lib
+*.pdb
 
 __pycache__
 *.pyc
