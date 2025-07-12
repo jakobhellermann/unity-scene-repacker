@@ -1,0 +1,2 @@
+- increment workspace.package.version
+- adjust nuspec version

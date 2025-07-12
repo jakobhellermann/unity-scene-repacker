@@ -16,12 +16,17 @@
   </metadata>
   <files>
     <file src="README.md" target="/README.md" />
-    <file src="../../target/release/libunityscenerepacker.so" target="runtimes/linux-x64/native/libunityscenerepacker.so" />
-    <file src="../../target/release/unityscenerepacker.dll" target="runtimes/win-x64/native/unityscenerepacker.dll" />
-    <file src="../../target/release/libunityscenerepacker.dylib" target="runtimes/osx-x64/native/libunityscenerepacker.dylib" />
 
-    <file src="../../target/release/libTypeTreeGeneratorAPI.so" target="runtimes/linux-x64/native/libTypeTreeGeneratorAPI.so" />
-    <file src="../../target/release/TypeTreeGeneratorAPI.dll" target="runtimes/win-x64/native/TypeTreeGeneratorAPI.dll" />
-    <file src="../../target/release/libTypeTreeGeneratorAPI.dylib" target="runtimes/osx-x64/native/libTypeTreeGeneratorAPI.dylib" />
+    <file src="../../out/bindings-linux-x64/libunityscenerepacker.so"   target="runtimes/linux-x64/native/libunityscenerepacker.so" />
+    <file src="../../out/bindings-linux-x64/libTypeTreeGeneratorAPI.so" target="runtimes/linux-x64/native/libTypeTreeGeneratorAPI.so" />
+
+    <file src="../../out/bindings-win-x64/unityscenerepacker.dll"   target="runtimes/win-x64/native/unityscenerepacker.dll" />
+    <file src="../../out/bindings-win-x64/TypeTreeGeneratorAPI.dll" target="runtimes/win-x64/native/TypeTreeGeneratorAPI.dll" />
+
+    <file src="../../out/bindings-osx-x64/libunityscenerepacker.dylib"   target="runtimes/osx-x64/native/libunityscenerepacker.dylib" />
+    <file src="../../out/bindings-osx-x64/libTypeTreeGeneratorAPI.dylib" target="runtimes/osx-x64/native/libTypeTreeGeneratorAPI.dylib" />
+
+    <file src="../../out/bindings-osx-arm64/libunityscenerepacker.dylib"   target="runtimes/osx-arm64/native/libunityscenerepacker.dylib" />
+    <file src="../../out/bindings-osx-arm64/libTypeTreeGeneratorAPI.dylib" target="runtimes/osx-arm64/native/libTypeTreeGeneratorAPI.dylib" />
   </files>
 </package>
