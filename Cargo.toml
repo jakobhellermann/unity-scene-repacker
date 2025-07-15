@@ -26,7 +26,7 @@ typetree-generator-api.workspace = true
 members = [".", "bindings", "cli", "typetree-generator-api"]
 default-members = [".", "bindings", "cli", "typetree-generator-api"]
 
-package.version = "2.2.2"
+package.version = "2.2.3"
 package.edition = "2024"
 package.license = "MIT"
 package.repository = "https://github.com/jakobhellermann/unity-scene-repacker"
