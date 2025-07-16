@@ -34,10 +34,27 @@ use crate::utils::friendly_size;
 struct Arguments {
     #[clap(flatten)]
     game: GameArgs,
+    #[clap(flatten)]
+    repack: RepackArgs,
+    #[clap(flatten)]
+    output: OutputArgs,
+}
 
-    #[arg(long, default_value = "scene")]
-    mode: Mode,
+#[derive(Args, Debug)]
+#[group(required = true, multiple = false)]
+#[clap(next_help_heading = "Game options")]
+struct GameArgs {
+    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data
+    #[arg(long)]
+    game_dir: Option<PathBuf>,
+    #[arg(long, add = ArgValueCompleter::new(completion::complete_steam_game))]
+    /// App ID or search term for the steam game to detect
+    steam_game: Option<String>,
+}
 
+#[derive(Args, Debug)]
+#[clap(next_help_heading = "Repack options")]
+struct RepackArgs {
     /// Path to JSON file, containing a map of scene name to a list of gameobject paths to include
     /// ```json
     /// {
@@ -52,29 +69,28 @@ struct Arguments {
     /// ```
     #[arg(long)]
     objects: PathBuf,
+}
+
+#[derive(Args, Debug)]
+#[clap(next_help_heading = "Output options")]
+struct OutputArgs {
+    #[arg(long, default_value = "scene")]
+    mode: Mode,
+
     /// When true, all gameobjects in the scene will start out disabled
     #[arg(long, default_value = "false")]
     disable: bool,
+
     /// Compression level to apply
     #[arg(long, default_value = "lzma")]
     compression: Compression,
+
     #[arg(long, short = 'o', default_value = "out.unity3d")]
     output: PathBuf,
 
     /// Name to give the assetbundle. Should be unique for your game.
     #[arg(long)]
     bundle_name: Option<String>,
-}
-
-#[derive(Args, Debug)]
-#[group(required = true, multiple = false)]
-struct GameArgs {
-    /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
-    #[arg(long)]
-    game_dir: Option<PathBuf>,
-    #[arg(long, add = ArgValueCompleter::new(completion::complete_steam_game))]
-    /// App ID or search term for the steam game to detect
-    steam_game: Option<String>,
 }
 
 /// What kind of asset bundle to build
@@ -143,8 +159,12 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let start = Instant::now();
 
-    let preloads = std::fs::read_to_string(&args.objects)
-        .with_context(|| format!("couldn't find object json '{}'", args.objects.display()))?;
+    let preloads = std::fs::read_to_string(&args.repack.objects).with_context(|| {
+        format!(
+            "couldn't find object json '{}'",
+            args.repack.objects.display()
+        )
+    })?;
     let preloads: IndexMap<String, Vec<String>> =
         json5::from_str(&preloads).context("error parsing the objects json")?;
 
@@ -184,18 +204,18 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         &env,
         &generator_cache,
         preloads,
-        matches!(args.mode, Mode::Asset),
-        args.disable,
+        matches!(args.output.mode, Mode::Asset),
+        args.output.disable,
     )?;
 
-    if let Some(parent) = args.output.parent() {
+    if let Some(parent) = args.output.output.parent() {
         DirBuilder::new()
             .recursive(true)
             .create(parent)
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
 
-    let compression = match args.compression {
+    let compression = match args.output.compression {
         Compression::None => CompressionType::None,
         Compression::Lzma => CompressionType::Lzma,
         // Compression::Lz4 => CompressionType::Lz4,
@@ -203,10 +223,11 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         // Compression::Lzham => CompressionType::Lzham,
     };
 
-    let name = match &args.bundle_name {
+    let name = match &args.output.bundle_name {
         Some(name) => name,
         None => {
             let name = args
+                .output
                 .output
                 .file_stem()
                 .and_then(OsStr::to_str)
@@ -218,7 +239,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         }
     };
 
-    let new_size = match args.mode {
+    let new_size = match args.output.mode {
         Mode::Scene => {
             let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
                 name,
@@ -241,7 +262,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             println!();
 
             let mut out = BufWriter::new(
-                File::create(&args.output).context("Could not write to output file")?,
+                File::create(&args.output.output).context("Could not write to output file")?,
             );
             bundlefile::write_bundle_iter(
                 &header,
@@ -257,7 +278,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         }
         Mode::Asset => {
             let mut out = BufWriter::new(
-                File::create(&args.output).context("Could not write to output file")?,
+                File::create(&args.output.output).context("Could not write to output file")?,
             );
             let stats = unity_scene_repacker::pack_to_asset_bundle(
                 env,
@@ -277,11 +298,11 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     success!(
         "Repacked '{}' into {} <b>{}</b> <i>({})</i> in {:.2?}",
         name,
-        match args.mode {
+        match args.output.mode {
             Mode::Scene => "scenebundle",
             Mode::Asset => "assetbundle",
         },
-        args.output.display(),
+        args.output.output.display(),
         friendly_size(new_size),
         start.elapsed()
     );

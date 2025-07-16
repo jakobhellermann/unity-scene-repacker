@@ -2,6 +2,11 @@
 ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data"
 
 
+h:
+    cargo run -- -h
+help:
+    cargo run -- --help
+
 hollowknight *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \

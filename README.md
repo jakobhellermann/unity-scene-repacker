@@ -46,19 +46,20 @@ unity-scene-repacker
 Usage: unity-scene-repacker [OPTIONS] --objects <OBJECTS> <--game-dir <GAME_DIR>|--steam-game <STEAM_GAME>>
 
 Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+Game options:
       --game-dir <GAME_DIR>
-          Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data1
+          Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data
 
       --steam-game <STEAM_GAME>
           App ID or search term for the steam game to detect
 
-      --mode <MODE>
-          [default: asset]
-
-          Possible values:
-          - scene: Contains filtered 1:1 scenes you can load via LoadScene
-          - asset: A single bundle letting you load specific objects using LoadAsset
-
+Repack options:
       --objects <OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
 
@@ -72,6 +73,14 @@ Options:
               ]
             }
 
+
+Output options:
+      --mode <MODE>
+          [default: scene]
+
+          Possible values:
+          - scene: Contains filtered 1:1 scenes you can load via LoadScene
+          - asset: A single bundle letting you load specific objects using LoadAsset
 
       --disable
           When true, all gameobjects in the scene will start out disabled
@@ -91,10 +100,4 @@ Options:
 
       --bundle-name <BUNDLE_NAME>
           Name to give the assetbundle. Should be unique for your game
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
 ```
