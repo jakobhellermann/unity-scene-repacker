@@ -64,13 +64,18 @@ jobs:
           path: TypeTreeGeneratorAPI
       - name: Publish TypeTreeGeneratorAPI with dotnet
         run: dotnet publish TypeTreeGeneratorAPI/TypeTreeGeneratorAPI -o out --runtime ${{ matrix.rid }} -p:EnableAssetRipper=false -p:EnableAssetStudio=false -p:EnableAssetsTools=true -p:EnableIL2CPP=false
-      - name: Copy importlib to out
-        if: runner.os == 'windows'
-        run: cp TypeTreeGeneratorAPI/TypeTreeGeneratorAPI/bin/Release/net9.0/win-x64/native/TypeTreeGeneratorAPI.lib ./out/
+      - name: Copy
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp out/TypeTreeGeneratorAPI.dll data/purelib/unity_scene_repacker.libs
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            cp out/libTypeTreeGeneratorAPI.dylib data/purelib/unity_scene_repacker.libs
+          else
+            cp out/libTypeTreeGeneratorAPI.so data/purelib/unity_scene_repacker.libs
+          fi
 
       - name: Build bindings
-        env:
-          RUSTFLAGS: "-L out"
         run: cargo build --release -p bindings
       - name: Copy artifacts
         shell: bash # todo: replace this with --artifact-dir when finally stable
@@ -90,22 +95,12 @@ jobs:
           path: out/*
 
       - name: Build cli wheels
-        env:
-          RUSTFLAGS: "-L out"
-          LD_LIBRARY_PATH: "${{ github.workspace }}/out"
         uses: jakobhellermann/maturin-action@allow-ld-env
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist_pre
+          args: --release --out dist
           sccache: ${{ !startsWith(github.ref, 'refs/tags/') }}
           manylinux: ${{ matrix.manylinux }}
-      - name: Build cli wheels
-        env:
-          LD_LIBRARY_PATH: "${{ github.workspace }}/out"
-        shell: bash
-        run: |
-          uvx auditwheel dist_pre/* -w dist
-
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
