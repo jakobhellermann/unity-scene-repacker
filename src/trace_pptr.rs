@@ -1,11 +1,22 @@
 use anyhow::Result;
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use rabex::files::serializedfile::Endianness;
 use rabex::objects::PPtr;
 use rabex::objects::pptr::{FileId, PathId};
 use rabex::typetree::TypeTreeNode;
 use rustc_hash::FxHashMap;
 use std::io::{Cursor, Read, Seek};
+
+pub fn trace_pptrs_endianned(
+    tt: &TypeTreeNode,
+    reader: &mut (impl Read + Seek),
+    endianness: Endianness,
+) -> Result<Vec<PPtr>> {
+    match endianness {
+        Endianness::Little => trace_pptrs::<LittleEndian>(tt, reader),
+        Endianness::Big => trace_pptrs::<BigEndian>(&tt, reader),
+    }
+}
 
 #[inline(never)]
 pub fn trace_pptrs<B: ByteOrder>(
