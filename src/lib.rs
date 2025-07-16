@@ -80,45 +80,25 @@ pub fn repack_scenes<'a>(
             repack_settings
                 .scene_objects
                 .into_par_iter()
-                .map(|(scene_name, paths)| -> Result<_> {
+                .map(|(scene_name, object_paths)| -> Result<_> {
                     let scene_index = scenes[scene_name.as_str()];
                     let serialized_path = game_dir.join(format!("level{scene_index}"));
 
                     let file = File::open(&serialized_path)?;
-                    let mut data = Cursor::new(unsafe { Mmap::map(&file)? });
+                    let mmap = unsafe { Mmap::map(&file)? };
 
-                    let mut replacements = FxHashMap::default();
-                    let scene_paths = deduplicate_objects(&scene_name, &paths);
-                    let file = SerializedFile::from_reader(&mut data)
-                        .with_context(|| format!("Could not parse {scene_name}"))?;
-                    let (keep_objects, roots) = prune::prune_scene(
-                        &scene_name,
-                        &file,
-                        &mut data,
-                        &env.tpk,
-                        &scene_paths,
-                        &mut replacements,
+                    let settings = RepackSceneSettings {
+                        object_paths,
                         disable_roots,
-                    )?;
-                    let monobehaviour_types = prepare_scripts
-                        .then(|| prepare_monobehaviour_types(env, &file, &mut data))
-                        .transpose()
-                        .with_context(|| {
-                            format!(
-                                "Could not generate type trees in {scene_name} (level{scene_index})"
-                            )
-                        })?
-                        .unwrap_or_default();
-                    Ok(RepackScene {
+                    };
+                    repack_scene(
+                        env,
+                        prepare_scripts,
                         scene_name,
                         scene_index,
-                        serialized: file,
-                        serialized_data: Data::Mmap(data.into_inner()),
-                        keep_objects,
-                        roots,
-                        replacements,
-                        monobehaviour_types,
-                    })
+                        settings,
+                        Data::Mmap(mmap),
+                    )
                 })
                 .collect::<Result<_>>()
         }
@@ -138,7 +118,7 @@ pub fn repack_scenes<'a>(
             repack_settings
                 .scene_objects
                 .into_par_iter()
-                .map(|(scene_name, paths)| -> Result<_> {
+                .map(|(scene_name, object_paths)| -> Result<_> {
                     let scene_index = scenes[scene_name.as_str()];
 
                     let data = bundle
@@ -146,45 +126,73 @@ pub fn repack_scenes<'a>(
                         .with_context(|| {
                             format!("level{scene_index} ({scene_name}) not exist in bundle")
                         })?;
-                    let mut data = Cursor::new(data);
-                    let mut replacements = FxHashMap::default();
-                    let scene_paths = deduplicate_objects(&scene_name, &paths);
-
-                    let file = SerializedFile::from_reader(&mut data)
-                        .with_context(|| format!("Could not parse {scene_name}"))?;
-                    let (keep_objects, roots) = prune::prune_scene(
-                        &scene_name,
-                        &file,
-                        &mut data,
-                        &env.tpk,
-                        &scene_paths,
-                        &mut replacements,
+                    let settings = RepackSceneSettings {
+                        object_paths,
                         disable_roots,
-                    )?;
-
-                    let monobehaviour_types = prepare_scripts
-                        .then(|| prepare_monobehaviour_types(env, &file, &mut data))
-                        .transpose()
-                        .with_context(|| {
-                            format!(
-                                "Could not generate type trees in {scene_name} (level{scene_index})"
-                            )
-                        })?
-                        .unwrap_or_default();
-                    Ok(RepackScene {
+                    };
+                    repack_scene(
+                        env,
+                        prepare_scripts,
                         scene_name,
                         scene_index,
-                        serialized: file,
-                        serialized_data: Data::InMemory(data.into_inner()),
-                        keep_objects,
-                        roots,
-                        replacements,
-                        monobehaviour_types,
-                    })
+                        settings,
+                        Data::InMemory(data),
+                    )
                 })
                 .collect::<Result<Vec<RepackScene>>>()
         }
     }
+}
+
+struct RepackSceneSettings {
+    object_paths: Vec<String>,
+    disable_roots: bool,
+}
+
+fn repack_scene<'a>(
+    env: &'a Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    prepare_scripts: bool,
+    scene_name: String,
+    scene_index: usize,
+    settings: RepackSceneSettings,
+    serialized_data: Data,
+) -> Result<RepackScene<'a>> {
+    let reader = &mut Cursor::new(serialized_data.as_ref());
+
+    let scene_paths = deduplicate_objects(&scene_name, &settings.object_paths);
+
+    let file = SerializedFile::from_reader(reader)
+        .with_context(|| format!("Could not parse {scene_name}"))?;
+
+    let mut replacements = FxHashMap::default();
+    let (keep_objects, roots) = prune::prune_scene(
+        &scene_name,
+        &file,
+        reader,
+        &env.tpk,
+        &scene_paths,
+        &mut replacements,
+        settings.disable_roots,
+    )?;
+
+    let monobehaviour_types = prepare_scripts
+        .then(|| prepare_monobehaviour_types(env, &file, reader))
+        .transpose()
+        .with_context(|| {
+            format!("Could not generate type trees in {scene_name} (level{scene_index})")
+        })?
+        .unwrap_or_default();
+
+    Ok(RepackScene {
+        scene_name,
+        scene_index,
+        serialized: file,
+        serialized_data,
+        keep_objects,
+        roots,
+        replacements,
+        monobehaviour_types,
+    })
 }
 
 pub enum Data {
