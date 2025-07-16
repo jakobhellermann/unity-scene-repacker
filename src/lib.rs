@@ -3,6 +3,7 @@ mod game_files;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 mod prune;
+mod reachable;
 pub mod scene_lookup;
 mod trace_pptr;
 pub mod typetree_generator_cache;
@@ -128,11 +129,11 @@ fn repack_scene<'a>(
 
     let mut replacements = FxHashMap::default();
     let (keep_objects, roots) = prune::prune_scene(
+        env,
         scene_name,
         &original_name,
         &file,
         reader,
-        &env.tpk,
         &scene_paths,
         &mut replacements,
         settings.disable_roots,

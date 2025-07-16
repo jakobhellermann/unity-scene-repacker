@@ -12,21 +12,22 @@ use rustc_hash::FxHashMap;
 use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
 
+use crate::env::Environment;
 use crate::scene_lookup::SceneLookup;
-use crate::scene_name_display;
 use crate::unity::types::Transform;
+use crate::{reachable, scene_name_display};
 
 pub fn prune_scene(
+    env: &Environment,
     scene_name: Option<&str>,
     original_name: &str,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
-    tpk: &impl TypeTreeProvider,
     retain_paths: &IndexSet<&str>,
     replacements: &mut FxHashMap<PathId, Vec<u8>>,
     disable_roots: bool,
 ) -> Result<(BTreeSet<PathId>, Vec<(String, Transform)>)> {
-    let scene_lookup = SceneLookup::new(file, &mut *reader, tpk)?;
+    let scene_lookup = SceneLookup::new(file, &mut *reader, &env.tpk)?;
 
     let mut retain_ids = VecDeque::with_capacity(retain_paths.len());
     let mut retain_objects = Vec::with_capacity(retain_paths.len());
@@ -45,9 +46,8 @@ pub fn prune_scene(
         }
     }
 
-    let mut all_reachable = scene_lookup
-        .reachable(retain_ids, reader)
-        .with_context(|| {
+    let mut all_reachable =
+        reachable::reachable(env, file, reader, retain_ids).with_context(|| {
             format!(
                 "Could not determine reachable nodes in {}",
                 scene_name_display(scene_name, original_name)
@@ -56,7 +56,7 @@ pub fn prune_scene(
 
     let mut ancestors = Vec::new();
     for (_, transform) in &retain_objects {
-        for ancestor in transform.ancestors(file, reader, tpk)? {
+        for ancestor in transform.ancestors(file, reader, &env.tpk)? {
             let (id, transform) = ancestor?;
             if !all_reachable.insert(id) {
                 break;
@@ -66,7 +66,7 @@ pub fn prune_scene(
         }
     }
 
-    let transform_typetree = file.get_typetree_for_class(Transform::CLASS_ID, tpk)?;
+    let transform_typetree = file.get_typetree_for_class(Transform::CLASS_ID, &env.tpk)?;
 
     for (id, transform) in ancestors {
         adjust_ancestor(
@@ -91,7 +91,7 @@ pub fn prune_scene(
             replacements,
             file,
             reader.by_ref(),
-            tpk,
+            &env.tpk,
             root_transform,
             disable_roots,
         )?;
