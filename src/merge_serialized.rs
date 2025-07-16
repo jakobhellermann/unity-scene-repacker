@@ -8,6 +8,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::fmt::Debug;
 
+use crate::scene_name_display;
 use crate::trace_pptr::replace_pptrs_inplace_endianed;
 
 pub struct RemapSerializedIndices {
@@ -69,8 +70,8 @@ pub fn add_scene_meta_to_builder(
 }
 
 pub fn remap_objects(
-    scene_name: &str,
-    scene_index: usize,
+    scene_name: Option<&str>,
+    original_name: String,
     file: &SerializedFile,
     data: &[u8],
     tpk: &impl TypeTreeProvider,
@@ -108,10 +109,8 @@ pub fn remap_objects(
         )
         .with_context(|| {
             format!(
-                "Could not remap path IDs in bundle for {} in '{}' (level{}):\n{}",
-                orig_path_id,
-                scene_name,
-                scene_index,
+                "Could not remap path IDs in bundle for {orig_path_id} in {}:\n{}",
+                scene_name_display(scene_name, &original_name),
                 tt.dump_pretty()
             )
         })?;
