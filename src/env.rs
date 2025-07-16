@@ -12,6 +12,18 @@ use rabex::typetree::TypeTreeProvider;
 pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
+
+    fn level_files(&self) -> Result<Vec<usize>, std::io::Error> {
+        Ok(self
+            .all_files()?
+            .iter()
+            .filter_map(|path| path.file_name()?.to_str())
+            .filter_map(|path| {
+                let index = path.strip_prefix("level")?;
+                index.parse::<usize>().ok()
+            })
+            .collect())
+    }
 }
 
 impl<T: AsRef<[u8]>> EnvResolver for BundleFileReader<Cursor<T>> {
