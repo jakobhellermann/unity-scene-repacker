@@ -2,12 +2,11 @@ use anyhow::Result;
 use log::warn;
 use rabex::files::SerializedFile;
 
-use rabex::objects::pptr::{PPtr, PathId};
+use rabex::objects::pptr::PathId;
 use rabex::typetree::TypeTreeProvider;
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::HashMap;
 use std::io::{Read, Seek};
 
-use crate::trace_pptr;
 use crate::unity::types::Transform;
 
 pub struct SceneLookup<'a, P> {
@@ -81,49 +80,4 @@ impl<'a, P: TypeTreeProvider> SceneLookup<'a, P> {
 
         Ok(current.pop())
     }
-
-    pub fn reachable(
-        &self,
-        from: VecDeque<PathId>,
-        reader: &mut (impl Read + Seek),
-    ) -> Result<BTreeSet<PathId>> {
-        let mut queue = from;
-
-        let mut include = BTreeSet::new();
-
-        while let Some(node) = queue.pop_front() {
-            include.insert(node);
-
-            let reachable = self.reachable_one(node, reader)?;
-            for reachable in reachable {
-                if !reachable.is_local() {
-                    continue;
-                }
-
-                if include.insert(reachable.m_PathID) {
-                    queue.push_back(reachable.m_PathID);
-                }
-            }
-        }
-
-        Ok(include)
-    }
-
-    fn reachable_one(&self, from: PathId, reader: &mut (impl Read + Seek)) -> Result<Vec<PPtr>> {
-        reachable_one(self.file, &self.tpk, from, reader)
-    }
-}
-
-fn reachable_one(
-    file: &SerializedFile,
-    tpk: impl TypeTreeProvider,
-    from: PathId,
-    reader: &mut (impl Read + Seek),
-) -> Result<Vec<PPtr>> {
-    let info = file.get_object_info(from).unwrap();
-    let tt = tpk
-        .get_typetree_node(info.m_ClassID, file.m_UnityVersion.unwrap())
-        .unwrap();
-    reader.seek(std::io::SeekFrom::Start(info.m_Offset as u64))?;
-    trace_pptr::trace_pptrs_endianned(&tt, reader, file.m_Header.m_Endianess)
 }
