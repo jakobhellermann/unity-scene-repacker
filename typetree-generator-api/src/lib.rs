@@ -83,6 +83,18 @@ impl TypeTreeGenerator {
         TypeTreeGenerator::new(&library_path, unity_version, backend)
     }
 
+    pub fn new_lib_in(
+        library_dir: &Path,
+        unity_version: UnityVersion,
+        backend: GeneratorBackend,
+    ) -> Result<TypeTreeGenerator> {
+        TypeTreeGenerator::new(
+            &library_dir.join(libloading::library_filename("TypeTreeGeneratorAPI")),
+            unity_version,
+            backend,
+        )
+    }
+
     pub fn new(
         library_path: &Path,
         unity_version: UnityVersion,

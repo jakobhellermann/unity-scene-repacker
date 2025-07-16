@@ -18,8 +18,16 @@ rabex = { workspace = true, features = ["compression-all"] }
 steamlocate = "2.0"
 unity-scene-repacker = { version = "2.1", path = ".." }
 
+pyo3 = { version = "0.25", optional = true, default-features = false, features = [
+    "extension-module",
+    "macros",
+    "abi3",
+    "abi3-py37",
+] }
+
 [features]
 dhat-heap = []
+python-module = ["dep:pyo3"]
 
 [[bin]]
 name = "unity-scene-repacker"
