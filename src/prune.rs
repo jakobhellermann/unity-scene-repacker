@@ -13,10 +13,12 @@ use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
 
 use crate::scene_lookup::SceneLookup;
+use crate::scene_name_display;
 use crate::unity::types::Transform;
 
 pub fn prune_scene(
-    scene_name: &str,
+    scene_name: Option<&str>,
+    original_name: &str,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
     tpk: &impl TypeTreeProvider,
@@ -35,14 +37,22 @@ pub fn prune_scene(
                 retain_objects.push((path.to_owned(), transform));
             }
             None => {
-                warn!("Could not find path '{path}' in {scene_name}")
+                warn!(
+                    "Could not find path '{path}' in {}",
+                    scene_name_display(scene_name, original_name)
+                )
             }
         }
     }
 
     let mut all_reachable = scene_lookup
         .reachable(retain_ids, reader)
-        .with_context(|| format!("Could not determine reachable nodes in {scene_name}"))?;
+        .with_context(|| {
+            format!(
+                "Could not determine reachable nodes in {}",
+                scene_name_display(scene_name, original_name)
+            )
+        })?;
 
     let mut ancestors = Vec::new();
     for (_, transform) in &retain_objects {

@@ -46,8 +46,9 @@ impl RepackSettings {
 }
 
 pub struct RepackScene<'a> {
-    pub scene_name: String,
-    pub scene_index: usize,
+    pub original_name: String,
+    pub scene_name: Option<String>,
+
     pub serialized: SerializedFile,
     pub serialized_data: Data,
 
@@ -79,7 +80,10 @@ pub fn repack_scenes<'a>(
             let filename = format!("level{scene_index}");
 
             let data = env.resolver.read(&filename).with_context(|| {
-                format!("level{scene_index} ({scene_name}) not exist in bundle")
+                format!(
+                    "{} not exist in bundle",
+                    scene_name_display(Some(&scene_name), &filename)
+                )
             })?;
 
             let settings = RepackSceneSettings {
@@ -89,8 +93,8 @@ pub fn repack_scenes<'a>(
             repack_scene(
                 env,
                 prepare_scripts,
-                scene_name,
-                scene_index,
+                filename,
+                Some(&scene_name),
                 settings,
                 data,
             )
@@ -106,21 +110,26 @@ struct RepackSceneSettings {
 fn repack_scene<'a>(
     env: &'a Environment,
     prepare_scripts: bool,
-    scene_name: String,
-    scene_index: usize,
+    original_name: String,
+    scene_name: Option<&str>,
     settings: RepackSceneSettings,
     serialized_data: Data,
 ) -> Result<RepackScene<'a>> {
     let reader = &mut Cursor::new(serialized_data.as_ref());
 
-    let scene_paths = deduplicate_objects(&scene_name, &settings.object_paths);
+    let scene_paths = deduplicate_objects(&original_name, scene_name, &settings.object_paths);
 
-    let file = SerializedFile::from_reader(reader)
-        .with_context(|| format!("Could not parse {scene_name}"))?;
+    let file = SerializedFile::from_reader(reader).with_context(|| {
+        format!(
+            "Could not parse {}",
+            scene_name_display(scene_name, &original_name)
+        )
+    })?;
 
     let mut replacements = FxHashMap::default();
     let (keep_objects, roots) = prune::prune_scene(
-        &scene_name,
+        scene_name,
+        &original_name,
         &file,
         reader,
         &env.tpk,
@@ -133,13 +142,16 @@ fn repack_scene<'a>(
         .then(|| prepare_monobehaviour_types(env, &file, reader))
         .transpose()
         .with_context(|| {
-            format!("Could not generate type trees in {scene_name} (level{scene_index})")
+            format!(
+                "Could not generate type trees in {}",
+                scene_name_display(scene_name, &original_name)
+            )
         })?
         .unwrap_or_default();
 
     Ok(RepackScene {
-        scene_name,
-        scene_index,
+        original_name,
+        scene_name: scene_name.map(ToOwned::to_owned),
         serialized: file,
         serialized_data,
         keep_objects,
@@ -147,6 +159,13 @@ fn repack_scene<'a>(
         replacements,
         monobehaviour_types,
     })
+}
+
+fn scene_name_display(scene_name: Option<&str>, original_name: &str) -> String {
+    match scene_name {
+        Some(scene_name) => format!("{scene_name} ({original_name}'"),
+        None => format!("'{original_name}'"),
+    }
 }
 
 fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
@@ -165,11 +184,18 @@ fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
     old_to_new
 }
 
-fn deduplicate_objects<'a>(scene_name: &str, paths: &'a [String]) -> IndexSet<&'a str> {
+fn deduplicate_objects<'a>(
+    original_name: &str,
+    scene_name: Option<&str>,
+    paths: &'a [String],
+) -> IndexSet<&'a str> {
     let mut deduplicated = IndexSet::new();
     for item in paths {
         if !deduplicated.insert(item.as_str()) {
-            warn!("Duplicate object: '{item}' in '{scene_name}'");
+            warn!(
+                "Duplicate object: '{item}' in {}",
+                scene_name_display(scene_name, original_name)
+            );
         }
     }
     deduplicated
@@ -198,11 +224,9 @@ pub fn pack_to_scene_bundle(
 
     let container = scenes
         .iter()
-        .map(|scene| {
-            let path = format!(
-                "unity-scene-repacker/{bundle_name}_{}.unity",
-                scene.scene_name
-            );
+        .filter_map(|scene| scene.scene_name.as_deref())
+        .map(|scene_name| {
+            let path = format!("unity-scene-repacker/{bundle_name}_{scene_name}.unity");
             (path, AssetInfo::default())
         })
         .collect();
@@ -211,6 +235,11 @@ pub fn pack_to_scene_bundle(
     let mut builder = BundleFileBuilder::unityfs(7, unity_version);
 
     for scene in scenes {
+        let scene_name = scene
+            .scene_name
+            .as_deref()
+            .expect("non-scene file found for scene bundle");
+
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
         sharedassets.add_object(&PreloadData {
@@ -237,10 +266,7 @@ pub fn pack_to_scene_bundle(
         sharedassets.write(&mut out)?;
 
         builder.add_file(
-            &format!(
-                "BuildPlayer-{bundle_name}_{}.sharedAssets",
-                scene.scene_name
-            ),
+            &format!("BuildPlayer-{bundle_name}_{scene_name}.sharedAssets",),
             Cursor::new(out.into_inner()),
         )?;
 
@@ -290,7 +316,7 @@ pub fn pack_to_scene_bundle(
             out
         };
         builder.add_file(
-            &format!("BuildPlayer-{bundle_name}_{}", scene.scene_name),
+            &format!("BuildPlayer-{bundle_name}_{scene_name}"),
             Cursor::new(trimmed),
         )?;
     }
@@ -349,8 +375,12 @@ pub fn pack_to_asset_bundle(
                     go.m_PathID = *replacement;
                 }
 
-                let path = format!("{}/{}.prefab", scene.scene_name, scene_path).to_lowercase();
+                let scene_name = scene
+                    .scene_name
+                    .as_deref()
+                    .expect("right now every asset comes from a scene");
                 let info = AssetInfo::new(go.untyped());
+                let path = format!("{scene_name}/{scene_path}.prefab").to_lowercase();
 
                 container.insert(path, info);
             }
@@ -363,8 +393,8 @@ pub fn pack_to_asset_bundle(
         .into_par_iter()
         .map(|(mut scene, remap)| {
             merge_serialized::remap_objects(
-                &scene.scene_name,
-                scene.scene_index,
+                scene.scene_name.as_deref(),
+                scene.original_name,
                 &builder.serialized,
                 scene.serialized_data.as_ref(),
                 &env.tpk,
@@ -478,13 +508,14 @@ pub fn pack_to_shallow_asset_bundle(
         .scene_objects
         .into_par_iter()
         .map(|(scene_name, object_paths)| {
-            let object_paths = deduplicate_objects(&scene_name, &object_paths);
-
             let scene_index = *scenes
                 .get(&scene_name)
                 .with_context(|| format!("Scene '{scene_name}' not found in game files"))?;
+            let original_name = format!("level{scene_index}");
+            let object_paths =
+                deduplicate_objects(&original_name, Some(&scene_name), &object_paths);
 
-            let (file, mut reader) = env.load_leaf(format!("level{scene_index}"))?;
+            let (file, mut reader) = env.load_leaf(original_name)?;
             let reader = &mut reader;
 
             objects_before.fetch_add(file.objects().len(), Ordering::Relaxed);
