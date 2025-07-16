@@ -306,16 +306,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             )
             .context("trying to repack bundle")?;
 
-            info!(
-                "Pruned {} -> <b>{}</b> objects",
-                stats.objects_before, stats.objects_after
-            );
-            info!(
-                "{} -> <b>{}</b> raw size",
-                friendly_size(stats.size_before),
-                friendly_size(stats.size_after)
-            );
-            println!();
+            print_stats(&stats, args.repack.scene_objects.is_some());
 
             out.get_ref().metadata()?.len() as usize
         }
@@ -331,7 +322,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 repack_scenes,
                 compression,
             )?;
-            print_stats(&stats);
+            print_stats(&stats, args.repack.scene_objects.is_some());
 
             out.get_ref().metadata()?.len() as usize
         }
@@ -354,15 +345,17 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-fn print_stats(stats: &Stats) {
-    info!(
-        "Pruned {} -> <b>{}</b> objects",
-        stats.objects_before, stats.objects_after
-    );
-    info!(
-        "{} -> <b>{}</b> raw size",
-        friendly_size(stats.size_before),
-        friendly_size(stats.size_after)
-    );
-    println!();
+fn print_stats(stats: &Stats, has_scene_objects: bool) {
+    if has_scene_objects {
+        info!(
+            "Pruned {} -> <b>{}</b> objects",
+            stats.objects_before, stats.objects_after
+        );
+        info!(
+            "{} -> <b>{}</b> raw size",
+            friendly_size(stats.size_before),
+            friendly_size(stats.size_after)
+        );
+        println!();
+    }
 }
