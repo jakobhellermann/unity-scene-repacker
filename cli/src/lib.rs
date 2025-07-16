@@ -6,7 +6,7 @@ mod utils;
 #[cfg(feature = "python-module")]
 mod py;
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::ArgValueCompleter;
 use indexmap::IndexMap;
@@ -25,7 +25,7 @@ use std::time::Instant;
 use unity_scene_repacker::env::Environment;
 use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::typetree_generator_cache::TypeTreeGeneratorCache;
-use unity_scene_repacker::{GameFiles, Stats};
+use unity_scene_repacker::{GameFiles, RepackSettings, Stats};
 
 use crate::utils::friendly_size;
 
@@ -68,7 +68,8 @@ struct RepackArgs {
     /// }
     /// ```
     #[arg(long)]
-    objects: PathBuf,
+    #[arg(alias = "objects")]
+    scene_objects: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -159,20 +160,33 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let start = Instant::now();
 
-    let preloads = std::fs::read_to_string(&args.repack.objects).with_context(|| {
-        format!(
-            "couldn't find object json '{}'",
-            args.repack.objects.display()
-        )
-    })?;
-    let preloads: IndexMap<String, Vec<String>> =
-        json5::from_str(&preloads).context("error parsing the objects json")?;
+    let scene_objects = args
+        .repack
+        .scene_objects
+        .as_ref()
+        .map(|path| -> Result<IndexMap<String, Vec<String>>> {
+            let preloads = std::fs::read_to_string(path)
+                .with_context(|| format!("couldn't find object json '{}'", path.display()))?;
+            Ok(json5::from_str(&preloads).context("error parsing the objects json")?)
+        })
+        .transpose()?
+        .unwrap_or_default();
 
-    let obj_count = preloads
-        .iter()
-        .map(|(_, objects)| objects.len())
-        .sum::<usize>();
-    info!("Repacking {obj_count} objects in {} scenes", preloads.len());
+    if !scene_objects.is_empty() {
+        let obj_count = scene_objects
+            .iter()
+            .map(|(_, objects)| objects.len())
+            .sum::<usize>();
+        info!(
+            "Repacking {obj_count} objects in {} scenes",
+            scene_objects.len()
+        );
+    }
+    let repack_settings = RepackSettings { scene_objects };
+
+    if repack_settings.is_empty() {
+        bail!("Nothing to repack specified. See `--help` for possible repack options.")
+    }
 
     let tpk_blob = TpkTypeTreeBlob::embedded();
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
@@ -201,7 +215,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
-        preloads,
+        repack_settings,
         matches!(args.output.mode, Mode::Asset),
         args.output.disable,
     )?;

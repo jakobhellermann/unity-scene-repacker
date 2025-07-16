@@ -15,7 +15,7 @@ use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::{
-    GameFiles, MonobehaviourTypetreeMode, Stats, monobehaviour_typetree_export,
+    GameFiles, MonobehaviourTypetreeMode, RepackSettings, Stats, monobehaviour_typetree_export,
 };
 
 #[repr(C)]
@@ -86,13 +86,13 @@ pub extern "C" fn free_array(len: c_int, data: *mut u8) {
 fn export_inner(
     name: &CStr,
     game_dir: &CStr,
-    preload_json: &CStr,
+    scene_objects_json: &CStr,
     mode: u8,
     mb_typetree_export: Option<&[u8]>,
 ) -> Result<(Stats, Vec<u8>)> {
     let name = name.to_str()?;
     let game_dir = Path::new(game_dir.to_str()?);
-    let preload_json = preload_json.to_str()?;
+    let scene_objects = scene_objects_json.to_str()?;
     let mode = match mode {
         0 => Mode::SceneBundle,
         1 => Mode::AssetBundle,
@@ -104,8 +104,10 @@ fn export_inner(
 
     let compression = CompressionType::None;
 
-    let preloads: IndexMap<String, Vec<String>> =
-        serde_json::from_str(preload_json).context("error parsing the objects json")?;
+    let scene_objects: IndexMap<String, Vec<String>> =
+        serde_json::from_str(scene_objects).context("error parsing the objects json")?;
+
+    let repack_settings = RepackSettings { scene_objects };
 
     let disable = true;
 
@@ -143,7 +145,7 @@ fn export_inner(
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
-        preloads,
+        repack_settings,
         disable,
         matches!(mode, Mode::AssetBundle),
     )?;

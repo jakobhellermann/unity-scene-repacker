@@ -43,7 +43,7 @@ unity-scene-repacker
 
 
 ```
-Usage: unity-scene-repacker [OPTIONS] --objects <OBJECTS> <--game-dir <GAME_DIR>|--steam-game <STEAM_GAME>>
+Usage: unity-scene-repacker [OPTIONS] <--game-dir <GAME_DIR>|--steam-game <STEAM_GAME>>
 
 Options:
   -h, --help
@@ -60,7 +60,7 @@ Game options:
           App ID or search term for the steam game to detect
 
 Repack options:
-      --objects <OBJECTS>
+      --scene-objects <SCENE_OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
 
             {

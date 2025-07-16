@@ -36,6 +36,15 @@ use unity::types::MonoBehaviour;
 use crate::env::Environment;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
+pub struct RepackSettings {
+    pub scene_objects: IndexMap<String, Vec<String>>,
+}
+impl RepackSettings {
+    pub fn is_empty(&self) -> bool {
+        self.scene_objects.is_empty()
+    }
+}
+
 pub struct RepackScene<'a> {
     pub scene_name: String,
     pub scene_index: usize,
@@ -51,7 +60,7 @@ pub struct RepackScene<'a> {
 
 pub fn repack_scenes<'a>(
     env: &'a Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
-    preloads: IndexMap<String, Vec<String>>,
+    repack_settings: RepackSettings,
     prepare_scripts: bool,
     disable_roots: bool,
 ) -> Result<Vec<RepackScene<'a>>> {
@@ -68,7 +77,8 @@ pub fn repack_scenes<'a>(
             let scenes = build_settings.scene_name_lookup();
 
             use rayon::prelude::*;
-            preloads
+            repack_settings
+                .scene_objects
                 .into_par_iter()
                 .map(|(scene_name, paths)| -> Result<_> {
                     let scene_index = scenes[scene_name.as_str()];
@@ -125,7 +135,8 @@ pub fn repack_scenes<'a>(
             let scenes = build_settings.scene_name_lookup();
 
             use rayon::prelude::*;
-            preloads
+            repack_settings
+                .scene_objects
                 .into_par_iter()
                 .map(|(scene_name, paths)| -> Result<_> {
                     let scene_index = scenes[scene_name.as_str()];
