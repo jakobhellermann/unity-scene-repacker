@@ -126,7 +126,10 @@ fn export_inner(
     };
     let generator_cache = match monobehaviour_typetree_mode {
         MonobehaviourTypetreeMode::GenerateRuntime => {
-            let generator = TypeTreeGenerator::new(unity_version, GeneratorBackend::AssetsTools)?;
+            let generator = TypeTreeGenerator::new_lib_next_to_exe(
+                unity_version,
+                GeneratorBackend::AssetsTools,
+            )?;
             generator
                 .load_all_dll_in_dir(game_dir.join("Managed"))
                 .context("Cannot load game DLLs")?;

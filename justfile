@@ -21,4 +21,4 @@ ninesols *args:
         --compression none {{ args }}
 
 bindgen:
-    bindgen typetree-generator-api/bindings.h -o typetree-generator-api/src/generated.rs
+    bindgen typetree-generator-api/bindings.h -o typetree-generator-api/src/generated.rs --dynamic-loading TypeTreeGeneratorAPI --dynamic-link-require-all

@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     let used = collect_used_script_types(env)?;
 
     let backend: GeneratorBackend = GeneratorBackend::AssetsTools;
-    let generator = TypeTreeGenerator::new(file.m_UnityVersion.unwrap(), backend)?;
+    let generator = TypeTreeGenerator::new_lib_next_to_exe(file.m_UnityVersion.unwrap(), backend)?;
     generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
 
     let mb_typetrees = generate_monobehaviour_types(used, generator)?;

@@ -2,7 +2,7 @@
 name = "typetree-generator-api"
 version = "1.0.0"
 edition = "2024"
-links = "TypetreeGeneratorAPI"
 
 [dependencies]
+libloading = "0.8"
 rabex = { workspace = true, default-features = false }
