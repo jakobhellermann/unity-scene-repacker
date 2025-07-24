@@ -8,7 +8,6 @@ use indexmap::IndexMap;
 use rabex::objects::ClassId;
 use rabex::typetree::TypeTreeProvider as _;
 use unity_scene_repacker::env::Environment;
-use unity_scene_repacker::rabex::UnityVersion;
 use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
@@ -111,10 +110,9 @@ fn export_inner(
 
     let disable = true;
 
-    let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
-
     let game_files = GameFiles::probe(game_dir)?;
     let mut env = Environment::new(game_files, tpk);
+    let unity_version = env.unity_version()?;
 
     let monobehaviour_node = env
         .tpk

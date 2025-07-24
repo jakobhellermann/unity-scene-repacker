@@ -1,9 +1,11 @@
 use std::io::{Cursor, Read, Seek};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result};
 use elsa::sync::FrozenMap;
+use rabex::UnityVersion;
 use rabex::files::SerializedFile;
 use rabex::files::bundlefile::BundleFileReader;
 use rabex::objects::{PPtr, TypedPPtr};
@@ -89,6 +91,7 @@ pub struct Environment<R = GameFiles, P = TypeTreeCache<TpkTypeTreeBlob>> {
     pub tpk: P,
     pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
     pub typetree_generator: TypeTreeGeneratorCache,
+    unity_version: OnceLock<UnityVersion>,
 }
 
 impl<R, P> Environment<R, P> {
@@ -98,6 +101,7 @@ impl<R, P> Environment<R, P> {
             tpk,
             serialized_files: Default::default(),
             typetree_generator: TypeTreeGeneratorCache::empty(),
+            unity_version: OnceLock::new(),
         }
     }
 }
@@ -109,11 +113,24 @@ impl<P: TypeTreeProvider> Environment<PathBuf, P> {
             tpk,
             serialized_files: Default::default(),
             typetree_generator: TypeTreeGeneratorCache::empty(),
+            unity_version: OnceLock::new(),
         }
     }
 }
 
 impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
+    pub fn unity_version(&self) -> Result<UnityVersion> {
+        match self.unity_version.get() {
+            Some(unity_version) => Ok(*unity_version),
+            None => {
+                let (ggm, _) = self.load_cached("globalgamemanagers")?;
+                let unity_version = ggm.m_UnityVersion.expect("missing unity version");
+                let _ = self.unity_version.set(unity_version);
+                Ok(unity_version)
+            }
+        }
+    }
+
     pub fn load_leaf(
         &self,
         relative_path: impl AsRef<Path>,

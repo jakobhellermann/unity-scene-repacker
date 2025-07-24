@@ -11,7 +11,6 @@ use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::ArgValueCompleter;
 use indexmap::IndexMap;
 use paris::{error, info, success, warn};
-use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, CompressionType};
 use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
@@ -153,7 +152,6 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             locate::locate_steam_game(&game)?
         }
     };
-    let unity_version: UnityVersion = "2020.2.2f1".parse().unwrap();
 
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
@@ -193,6 +191,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let game_files = GameFiles::probe(&game_dir)?;
     let mut env = Environment::new(game_files, tpk);
+    let unity_version = env.unity_version()?;
 
     let generator = match libs_dir {
         Some(lib_path) => {
@@ -204,7 +203,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     };
 
     generator
-        .load_all_dll_in_dir(game_dir.join("Managed"))
+        .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
         .context("Cannot load game DLLs")?;
     let monobehaviour_node = env
         .tpk
