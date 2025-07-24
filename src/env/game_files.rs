@@ -6,6 +6,8 @@ use anyhow::{Result, ensure};
 use memmap2::Mmap;
 use rabex::files::bundlefile::{BundleFileReader, ExtractionConfig};
 
+use crate::env::resolver::BasedirEnvResolver;
+
 use super::{Data, EnvResolver};
 
 pub struct GameFiles {
@@ -88,5 +90,11 @@ impl EnvResolver for GameFiles {
             LevelFiles::Unpacked => self.game_dir.all_files(),
             LevelFiles::Packed(bundle) => bundle.all_files(),
         }
+    }
+}
+
+impl BasedirEnvResolver for GameFiles {
+    fn base_dir(&self) -> &Path {
+        &self.game_dir
     }
 }

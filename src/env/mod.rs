@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 use elsa::sync::FrozenMap;
 use rabex::UnityVersion;
 use rabex::files::SerializedFile;
-use rabex::objects::{PPtr, TypedPPtr};
+use rabex::objects::{ClassId, PPtr, TypedPPtr};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
@@ -16,8 +16,10 @@ pub mod game_files;
 mod resolver;
 
 pub use resolver::EnvResolver;
+use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 
 use crate::GameFiles;
+use crate::env::resolver::BasedirEnvResolver;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 
 pub enum Data {
@@ -53,15 +55,32 @@ impl<R, P> Environment<R, P> {
     }
 }
 
-impl<P: TypeTreeProvider> Environment<PathBuf, P> {
-    pub fn new_in(path: impl Into<PathBuf>, tpk: P) -> Self {
-        Environment {
-            resolver: path.into(),
+impl<P: TypeTreeProvider> Environment<GameFiles, P> {
+    pub fn new_in(path: impl AsRef<Path>, tpk: P) -> Result<Self> {
+        Ok(Environment {
+            resolver: GameFiles::probe(path.as_ref())?,
             tpk,
             serialized_files: Default::default(),
             typetree_generator: TypeTreeGeneratorCache::empty(),
             unity_version: OnceLock::new(),
-        }
+        })
+    }
+}
+
+impl<R: BasedirEnvResolver, P: TypeTreeProvider> Environment<R, P> {
+    /// Initializes [`Environment::typetree_generator`] from the `Managed` DLLs.
+    /// Requires `libTypeTreeGenerator.so`/`TypeTreeGenerator.dll` next to the executing binary.
+    pub fn load_typetree_generator(&mut self, backend: GeneratorBackend) -> Result<()> {
+        let unity_version = self.unity_version()?;
+        let generator = TypeTreeGenerator::new_lib_next_to_exe(unity_version, backend)?;
+        generator.load_all_dll_in_dir(self.resolver.base_dir().join("Managed"))?;
+        let base_node = self
+            .tpk
+            .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+            .expect("missing MonoBehaviour class");
+        self.typetree_generator = TypeTreeGeneratorCache::new(generator, base_node.into_owned());
+
+        Ok(())
     }
 }
 

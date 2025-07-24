@@ -7,6 +7,7 @@ use rabex::files::bundlefile::BundleFileReader;
 
 use super::Data;
 
+/// A trait abstracting where the game files are read from.
 pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Data, std::io::Error>;
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
@@ -44,6 +45,12 @@ pub trait EnvResolver {
     }
 }
 
+/// Extends [`EnvResolver`] by providing the path to the game files.
+/// It is expected, that files can be read from there.
+pub trait BasedirEnvResolver: EnvResolver {
+    fn base_dir(&self) -> &Path;
+}
+
 impl EnvResolver for Path {
     fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
         let file = File::open(self.join(path))?;
@@ -65,6 +72,12 @@ impl EnvResolver for Path {
         Ok(all)
     }
 }
+impl BasedirEnvResolver for Path {
+    fn base_dir(&self) -> &Path {
+        self
+    }
+}
+
 impl EnvResolver for PathBuf {
     fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
         (**self).read_path(path)
@@ -72,6 +85,11 @@ impl EnvResolver for PathBuf {
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
         (**self).all_files()
+    }
+}
+impl BasedirEnvResolver for PathBuf {
+    fn base_dir(&self) -> &Path {
+        self
     }
 }
 
