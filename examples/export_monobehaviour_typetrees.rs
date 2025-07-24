@@ -118,9 +118,7 @@ fn generate_monobehaviour_types(
     Ok(output)
 }
 
-fn collect_used_script_types(
-    env: Environment<TypeTreeCache<TpkTypeTreeBlob>, GameFiles>,
-) -> Result<BTreeMap<String, BTreeSet<String>>> {
+fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeSet<String>>> {
     env.resolver
         .all_files()?
         .into_par_iter()

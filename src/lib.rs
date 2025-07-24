@@ -60,7 +60,7 @@ pub struct RepackScene<'a> {
 }
 
 pub fn repack_scenes<'a>(
-    env: &'a Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    env: &'a Environment,
     repack_settings: RepackSettings,
     prepare_scripts: bool,
     disable_roots: bool,
@@ -151,7 +151,7 @@ struct RepackSceneSettings {
 }
 
 fn repack_scene<'a>(
-    env: &'a Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    env: &'a Environment,
     prepare_scripts: bool,
     scene_name: String,
     scene_index: usize,
@@ -373,7 +373,7 @@ pub enum MonobehaviourTypetreeMode<'a> {
 }
 
 pub fn pack_to_asset_bundle(
-    env: &Environment<impl TypeTreeProvider + Send + Sync, GameFiles>,
+    env: &Environment,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
@@ -506,7 +506,7 @@ pub fn pack_to_asset_bundle(
 
 #[inline(never)]
 fn prepare_monobehaviour_types<'a>(
-    env: &'a Environment<impl TypeTreeProvider, GameFiles>,
+    env: &'a Environment,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
 ) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {

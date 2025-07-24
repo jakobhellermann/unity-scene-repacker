@@ -7,8 +7,11 @@ use elsa::sync::FrozenMap;
 use rabex::files::SerializedFile;
 use rabex::files::bundlefile::BundleFileReader;
 use rabex::objects::{PPtr, TypedPPtr};
+use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider;
+use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 
+use crate::GameFiles;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 
 pub trait EnvResolver {
@@ -81,14 +84,14 @@ impl EnvResolver for PathBuf {
     }
 }
 
-pub struct Environment<P, R> {
+pub struct Environment<R = GameFiles, P = TypeTreeCache<TpkTypeTreeBlob>> {
     pub resolver: R,
     pub tpk: P,
     pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
     pub typetree_generator: TypeTreeGeneratorCache,
 }
 
-impl<P, R> Environment<P, R> {
+impl<R, P> Environment<R, P> {
     pub fn new(resolver: R, tpk: P) -> Self {
         Environment {
             resolver,
@@ -99,7 +102,7 @@ impl<P, R> Environment<P, R> {
     }
 }
 
-impl<P: TypeTreeProvider> Environment<P, PathBuf> {
+impl<P: TypeTreeProvider> Environment<PathBuf, P> {
     pub fn new_in(path: impl Into<PathBuf>, tpk: P) -> Self {
         Environment {
             resolver: path.into(),
@@ -110,7 +113,7 @@ impl<P: TypeTreeProvider> Environment<P, PathBuf> {
     }
 }
 
-impl<R: EnvResolver, P: TypeTreeProvider> Environment<P, R> {
+impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
     pub fn load_leaf(
         &self,
         relative_path: impl AsRef<Path>,
