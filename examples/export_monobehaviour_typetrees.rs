@@ -31,7 +31,8 @@ fn main() -> Result<()> {
     let mut data = &mut Cursor::new(std::fs::read(path)?);
     let file = SerializedFile::from_reader(&mut data)?;
 
-    let env = Environment::new_in(game_dir, tpk);
+    let game_files = GameFiles::probe(game_dir)?;
+    let env = Environment::new(game_files, tpk);
     let used = collect_used_script_types(env)?;
 
     let backend: GeneratorBackend = GeneratorBackend::AssetsTools;
@@ -118,7 +119,7 @@ fn generate_monobehaviour_types(
 }
 
 fn collect_used_script_types(
-    env: Environment<TypeTreeCache<TpkTypeTreeBlob>>,
+    env: Environment<TypeTreeCache<TpkTypeTreeBlob>, GameFiles>,
 ) -> Result<BTreeMap<String, BTreeSet<String>>> {
     env.resolver
         .all_files()?
@@ -174,6 +175,7 @@ struct TypetreeNodeDump {
 }
 
 use serde_derive::Deserialize;
+use unity_scene_repacker::GameFiles;
 #[allow(non_snake_case)]
 #[derive(Debug, Deserialize)]
 pub struct MonoScript {

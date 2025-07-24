@@ -81,7 +81,7 @@ impl EnvResolver for PathBuf {
     }
 }
 
-pub struct Environment<P, R = PathBuf> {
+pub struct Environment<P, R> {
     pub resolver: R,
     pub tpk: P,
     pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,

@@ -8,21 +8,16 @@ use rabex::files::bundlefile::{BundleFileReader, ExtractionConfig};
 
 use crate::env::EnvResolver;
 
-pub enum GameFiles {
-    Directory(PathBuf),
-    Bundle {
-        game_dir: PathBuf,
-        bundle: Box<BundleFileReader<Cursor<Mmap>>>,
-    },
+pub struct GameFiles {
+    pub game_dir: PathBuf,
+    pub level_files: LevelFiles,
+}
+pub enum LevelFiles {
+    Unpacked,
+    Packed(Box<BundleFileReader<Cursor<Mmap>>>),
 }
 
 impl GameFiles {
-    pub fn game_dir(&self) -> &Path {
-        match self {
-            GameFiles::Directory(base) => base,
-            GameFiles::Bundle { game_dir, .. } => game_dir,
-        }
-    }
     pub fn probe(game_dir: &Path) -> Result<GameFiles> {
         ensure!(
             game_dir.exists(),
@@ -31,28 +26,30 @@ impl GameFiles {
         );
 
         let bundle_path = game_dir.join("data.unity3d");
-        if bundle_path.exists() {
-            let reader = unsafe { Mmap::map(&File::open(&bundle_path)?) }?;
+        let level_files = if bundle_path.exists() {
+            let reader = unsafe { Mmap::map(&File::open(&bundle_path)?)? };
             let bundle =
                 BundleFileReader::from_reader(Cursor::new(reader), &ExtractionConfig::default())?;
 
-            Ok(GameFiles::Bundle {
-                game_dir: game_dir.to_owned(),
-                bundle: Box::new(bundle),
-            })
+            LevelFiles::Packed(Box::new(bundle))
         } else {
-            Ok(GameFiles::Directory(game_dir.to_owned()))
-        }
+            LevelFiles::Unpacked
+        };
+
+        Ok(GameFiles {
+            game_dir: game_dir.to_owned(),
+            level_files,
+        })
     }
 }
 
 impl EnvResolver for GameFiles {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
-        match self {
-            GameFiles::Directory(base) => base.read_path(path),
-            GameFiles::Bundle { bundle, game_dir } => {
+        match &self.level_files {
+            LevelFiles::Unpacked => self.game_dir.read_path(path),
+            LevelFiles::Packed(bundle) => {
                 if let Ok(suffix) = path.strip_prefix("Library") {
-                    let resource_path = game_dir.join("Resources").join(suffix);
+                    let resource_path = self.game_dir.join("Resources").join(suffix);
                     match std::fs::read(resource_path) {
                         Ok(val) => return Ok(val),
                         Err(e) if e.kind() == ErrorKind::NotFound => {}
@@ -65,9 +62,9 @@ impl EnvResolver for GameFiles {
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
-        match self {
-            GameFiles::Directory(base) => base.all_files(),
-            GameFiles::Bundle { bundle, .. } => bundle.all_files(),
+        match &self.level_files {
+            LevelFiles::Unpacked => self.game_dir.all_files(),
+            LevelFiles::Packed(bundle) => bundle.all_files(),
         }
     }
 }

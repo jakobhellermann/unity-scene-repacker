@@ -34,6 +34,7 @@ use std::io::{Cursor, Read, Seek, Write};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
+use crate::game_files::LevelFiles;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub struct RepackSettings {
@@ -64,9 +65,9 @@ pub fn repack_scenes<'a>(
     prepare_scripts: bool,
     disable_roots: bool,
 ) -> Result<Vec<RepackScene<'a>>> {
-    match &env.resolver {
-        GameFiles::Directory(game_dir) => {
-            let mut ggm_reader = File::open(game_dir.join("globalgamemanagers"))
+    match &env.resolver.level_files {
+        LevelFiles::Unpacked => {
+            let mut ggm_reader = File::open(env.resolver.game_dir.join("globalgamemanagers"))
                 .context("couldn't find globalgamemanagers in game directory")?;
             let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
 
@@ -82,7 +83,7 @@ pub fn repack_scenes<'a>(
                 .into_par_iter()
                 .map(|(scene_name, object_paths)| -> Result<_> {
                     let scene_index = scenes[scene_name.as_str()];
-                    let serialized_path = game_dir.join(format!("level{scene_index}"));
+                    let serialized_path = env.resolver.game_dir.join(format!("level{scene_index}"));
 
                     let file = File::open(&serialized_path)?;
                     let mmap = unsafe { Mmap::map(&file)? };
@@ -102,7 +103,7 @@ pub fn repack_scenes<'a>(
                 })
                 .collect::<Result<_>>()
         }
-        GameFiles::Bundle { bundle, .. } => {
+        LevelFiles::Packed(bundle) => {
             let ggm = bundle
                 .read_at("globalgamemanagers")?
                 .context("globalgamemanagers not found in bundle")?;
