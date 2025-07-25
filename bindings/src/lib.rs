@@ -26,6 +26,7 @@ pub struct CStats {
 enum Mode {
     SceneBundle = 0,
     AssetBundle = 1,
+    AssetBundleShallow = 2,
 }
 impl Mode {
     fn needs_typetree_generator(&self) -> bool {
@@ -100,7 +101,8 @@ fn export_inner(
     let mode = match mode {
         0 => Mode::SceneBundle,
         1 => Mode::AssetBundle,
-        _ => bail!("Expected 0=SceneBundle or 1=AssetBundle, got {mode}"),
+        2 => Mode::AssetBundleShallow,
+        _ => bail!("Expected 0=SceneBundle, 1=AssetBundle or 2=AssetBundleShallow, got {mode}"),
     };
 
     let tpk_raw = TpkTypeTreeBlob::embedded();
@@ -114,6 +116,8 @@ fn export_inner(
     let repack_settings = RepackSettings { scene_objects };
 
     let disable = true;
+
+    let mut out = Cursor::new(Vec::new());
 
     let game_files = GameFiles::probe(game_dir)?;
     let mut env = Environment::new(game_files, tpk);
@@ -147,7 +151,18 @@ fn export_inner(
                 monobehaviour_node,
             ),
         };
-    };
+    }
+
+    if let Mode::AssetBundleShallow = mode {
+        let stats = unity_scene_repacker::pack_to_shallow_asset_bundle(
+            &env,
+            &mut out,
+            name,
+            repack_settings,
+            compression,
+        )?;
+        return Ok((stats, out.into_inner()));
+    }
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,
@@ -155,8 +170,6 @@ fn export_inner(
         disable,
         matches!(mode, Mode::AssetBundle),
     )?;
-
-    let mut out = Cursor::new(Vec::new());
 
     let stats = match mode {
         Mode::SceneBundle => {
@@ -190,6 +203,7 @@ fn export_inner(
             repack_scenes,
             compression,
         )?,
+        Mode::AssetBundleShallow => unreachable!(),
     };
 
     Ok((stats, out.into_inner()))

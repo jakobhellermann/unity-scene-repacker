@@ -96,10 +96,14 @@ struct OutputArgs {
 /// What kind of asset bundle to build
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum Mode {
-    /// Contains filtered 1:1 scenes you can load via `LoadScene`.
+    /// A scene asset bundle, containing the original scenes filtered. Load using `LoadScene`.
     Scene,
-    /// A single bundle letting you load specific objects using `LoadAsset`
+    /// An asset bundle containing individual assets you can load using `LoadAsset`.
+    /// The objects are copied from the original level files.
     Asset,
+    /// An asset bundle containing individual assets you can load using `LoadAsset`.
+    /// The bundle is completely empty, and only references the original game level files.
+    AssetShallow,
 }
 impl Mode {
     fn needs_typetree_generator(&self) -> bool {
@@ -221,28 +225,6 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
     };
 
-    let mut repack_scenes = unity_scene_repacker::repack_scenes(
-        &env,
-        repack_settings,
-        matches!(args.output.mode, Mode::Asset),
-        args.output.disable,
-    )?;
-
-    if let Some(parent) = args.output.output.parent() {
-        DirBuilder::new()
-            .recursive(true)
-            .create(parent)
-            .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
-    }
-
-    let compression = match args.output.compression {
-        Compression::None => CompressionType::None,
-        Compression::Lzma => CompressionType::Lzma,
-        // Compression::Lz4 => CompressionType::Lz4,
-        Compression::Lz4hc => CompressionType::Lz4hc,
-        // Compression::Lzham => CompressionType::Lzham,
-    };
-
     let name = match &args.output.bundle_name {
         Some(name) => name,
         None => {
@@ -258,6 +240,54 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             name
         }
     };
+
+    let compression = match args.output.compression {
+        Compression::None => CompressionType::None,
+        Compression::Lzma => CompressionType::Lzma,
+        // Compression::Lz4 => CompressionType::Lz4,
+        Compression::Lz4hc => CompressionType::Lz4hc,
+        // Compression::Lzham => CompressionType::Lzham,
+    };
+
+    if let Mode::AssetShallow = args.output.mode {
+        let mut out = BufWriter::new(
+            File::create(&args.output.output).context("Could not write to output file")?,
+        );
+
+        unity_scene_repacker::pack_to_shallow_asset_bundle(
+            &env,
+            &mut out,
+            name,
+            repack_settings,
+            compression,
+        )?;
+
+        let new_size = out.get_ref().metadata()?.len() as usize;
+
+        success!(
+            "Repacked '{}' into shallow asset bundle <b>{}</b> <i>({})</i> in {:.2?}",
+            name,
+            args.output.output.display(),
+            friendly_size(new_size),
+            start.elapsed()
+        );
+
+        return Ok(());
+    }
+
+    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+        &env,
+        repack_settings,
+        matches!(args.output.mode, Mode::Asset),
+        args.output.disable,
+    )?;
+
+    if let Some(parent) = args.output.output.parent() {
+        DirBuilder::new()
+            .recursive(true)
+            .create(parent)
+            .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
+    }
 
     let new_size = match args.output.mode {
         Mode::Scene => {
@@ -313,6 +343,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
             out.get_ref().metadata()?.len() as usize
         }
+        Mode::AssetShallow => todo!(),
     };
 
     success!(
@@ -321,6 +352,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         match args.output.mode {
             Mode::Scene => "scenebundle",
             Mode::Asset => "assetbundle",
+            Mode::AssetShallow => todo!(),
         },
         args.output.output.display(),
         friendly_size(new_size),

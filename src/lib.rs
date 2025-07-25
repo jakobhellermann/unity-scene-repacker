@@ -17,9 +17,10 @@ use log::warn;
 use memmap2::Mmap;
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, BundleFileBuilder, BundleFileHeader, CompressionType};
+use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
-use rabex::objects::pptr::PPtr;
+use rabex::objects::pptr::{PPtr, PathId};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -29,10 +30,12 @@ use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::fs::File;
 use std::io::{Cursor, Read, Seek, Write};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
 use crate::game_files::LevelFiles;
+use crate::scene_lookup::SceneLookup;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
 pub struct RepackSettings {
@@ -419,11 +422,8 @@ pub fn pack_to_asset_bundle(
                     go.m_PathID = *replacement;
                 }
 
-                let info = AssetInfo {
-                    asset: go.untyped(),
-                    ..Default::default()
-                };
                 let path = format!("{}/{}.prefab", scene.scene_name, scene_path).to_lowercase();
+                let info = AssetInfo::new(go.untyped());
 
                 container.insert(path, info);
             }
@@ -532,4 +532,111 @@ fn prepare_monobehaviour_types<'a>(
             }
         })
         .collect::<FxHashMap<_, _>>())
+}
+
+pub fn pack_to_shallow_asset_bundle(
+    env: &Environment,
+    writer: impl Write + Seek,
+    bundle_name: &str,
+    repack_settings: RepackSettings,
+    compression: CompressionType,
+) -> Result<Stats> {
+    let (ggm, mut ggm_reader) = env.load_cached("globalgamemanagers")?;
+
+    let build_settings = ggm
+        .find_object_of::<BuildSettings>(&env.tpk)?
+        .unwrap()
+        .read(&mut ggm_reader)?;
+    let scenes = build_settings.scene_name_lookup();
+
+    let objects_before = AtomicUsize::new(0);
+    let size_before = AtomicUsize::new(0);
+
+    let all = repack_settings
+        .scene_objects
+        .into_par_iter()
+        .map(|(scene_name, object_paths)| {
+            let object_paths = deduplicate_objects(&scene_name, &object_paths);
+
+            let scene_index = *scenes
+                .get(&scene_name)
+                .with_context(|| format!("Scene '{scene_name}' not found in game files"))?;
+
+            let (file, mut reader) = env.load_leaf(format!("level{scene_index}"))?;
+            let reader = &mut reader;
+
+            objects_before.fetch_add(file.objects().len(), Ordering::Relaxed);
+            size_before.fetch_add(reader.get_ref().len(), Ordering::Relaxed);
+
+            let mut path_ids = Vec::with_capacity(object_paths.len());
+            let lookup = SceneLookup::new(&file, reader, &env.tpk)?;
+            for path in object_paths {
+                let Some((_, transform)) = lookup.lookup_path(reader, &path)? else {
+                    warn!("Could not find path '{path}' in {scene_name}");
+                    continue;
+                };
+                path_ids.push((path.to_owned(), transform.m_GameObject.m_PathID));
+            }
+
+            Ok(((scene_name, scene_index), path_ids))
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    create_shallow_assetbundle(env, writer, bundle_name, all, compression)?;
+
+    Ok(Stats {
+        objects_before: objects_before.into_inner(),
+        objects_after: 0,
+        size_before: size_before.into_inner(),
+        size_after: 0,
+    })
+}
+
+fn create_shallow_assetbundle(
+    env: &Environment,
+    writer: impl Write + Seek,
+    bundle_name: &str,
+    objects: Vec<((String, usize), Vec<(String, PathId)>)>,
+    compression: CompressionType,
+) -> Result<()> {
+    let unity_version = env.unity_version()?;
+    let common_offset_map = serializedfile::build_common_offset_map(&env.tpk.inner, unity_version);
+
+    let mut builder =
+        SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
+
+    let mut container = IndexMap::default();
+
+    for ((scene_name, scene_index), objects) in objects {
+        let file_index =
+            builder.add_external_uncached(FileIdentifier::new(format!("level{scene_index}")));
+
+        for (scene_path, path_id) in objects {
+            let path = format!("{scene_name}/{scene_path}.prefab").to_lowercase();
+            let info = AssetInfo::new(PPtr::new(file_index, path_id));
+            container.insert(path, info);
+        }
+    }
+
+    let ab = AssetBundle {
+        m_Name: bundle_name.to_owned(),
+        m_Container: container,
+        m_MainAsset: AssetInfo::default(),
+        m_RuntimeCompatibility: 1,
+        m_IsStreamedSceneAssetBundle: false,
+        m_PathFlags: 7,
+        ..Default::default()
+    };
+    builder._next_path_id = 1;
+    builder.add_object(&ab)?;
+
+    let mut builder_out = Vec::new();
+    builder.write(Cursor::new(&mut builder_out))?;
+
+    let mut bundle = BundleFileBuilder::unityfs(7, unity_version);
+    bundle.add_file(&format!("CAB-{bundle_name}"), Cursor::new(builder_out))?;
+
+    bundle.write(writer, compression)?;
+
+    Ok(())
 }

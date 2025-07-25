@@ -3,11 +3,11 @@ use std::io::{Read, Seek};
 
 use rabex::files::serializedfile::{ObjectRef, Result};
 use rabex::files::{SerializedFile, serializedfile};
-use rabex::objects::ClassIdType;
 use rabex::objects::pptr::PathId;
+use rabex::objects::{ClassIdType, PPtr};
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 
-use crate::unity::types::{GameObject, Transform};
+use crate::unity::types::{AssetInfo, GameObject, Transform};
 
 impl GameObject {
     pub fn transform<'a>(
@@ -120,5 +120,15 @@ impl Transform {
             next: self.m_Father.optional().map(|father| father.m_PathID),
             transform_typetree,
         })
+    }
+}
+
+impl AssetInfo {
+    pub fn new(asset: PPtr) -> AssetInfo {
+        AssetInfo {
+            preloadIndex: 0,
+            preloadSize: 0,
+            asset,
+        }
     }
 }
