@@ -17,11 +17,9 @@ use log::warn;
 use memmap2::Mmap;
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{self, BundleFileBuilder, BundleFileHeader, CompressionType};
-use rabex::files::serializedfile::SerializedType;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::PPtr;
-use rabex::objects::{ClassId, ClassIdType};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -464,32 +462,19 @@ pub fn pack_to_asset_bundle(
         Ok(())
     })?;
 
-    let assetbundle_ty = env
-        .tpk
-        .get_typetree_node(AssetBundle::CLASS_ID, unity_version)
-        .unwrap();
-    let mut assetbundle_serialized_type =
-        SerializedType::simple(ClassId::AssetBundle, Some(assetbundle_ty.into_owned()));
-    assetbundle_serialized_type.m_OldTypeHash = [
-        // TODO compute
-        151, 218, 95, 70, 136, 228, 90, 87, 200, 180, 45, 79, 66, 73, 114, 151,
-    ];
-    let ab_type_id = builder.add_type_uncached(assetbundle_serialized_type);
-    builder.add_object_inner(
-        &AssetBundle {
-            m_Name: bundle_name.to_owned(),
-            m_PreloadTable: Vec::new(),
-            m_Container: container,
-            m_MainAsset: AssetInfo::default(),
-            m_RuntimeCompatibility: 1,
-            m_AssetBundleName: bundle_name.to_owned(),
-            m_IsStreamedSceneAssetBundle: false,
-            m_PathFlags: 7,
-            ..Default::default()
-        },
-        1,
-        ab_type_id,
-    )?;
+    builder._next_path_id = 1;
+    builder.add_object(&AssetBundle {
+        m_Name: bundle_name.to_owned(),
+        m_PreloadTable: Vec::new(),
+        m_Container: container,
+        m_MainAsset: AssetInfo::default(),
+        m_RuntimeCompatibility: 1,
+        m_AssetBundleName: bundle_name.to_owned(),
+        m_IsStreamedSceneAssetBundle: false,
+        m_PathFlags: 7,
+        ..Default::default()
+    })?;
+
     builder.objects.sort_by_key(|(info, _)| info.m_PathID);
 
     let mut out = Vec::new();

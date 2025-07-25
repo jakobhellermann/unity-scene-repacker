@@ -421,6 +421,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "md4"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da5ac363534dce5fabf69949225e174fbf111a498bf0ff794c8ea1fba9f3dda"
+dependencies = [
+ "digest",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -627,7 +636,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#574acb5bd30b577bdbbd8ee9ce83fa425247d819"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#98bfface49779d82d5b94374ffa6c69bd2ae554a"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -635,6 +644,7 @@ dependencies = [
  "lz4",
  "lz4_flex",
  "lzma-rs",
+ "md4",
  "num_enum",
  "rustc-hash",
  "serde",
