@@ -10,7 +10,7 @@ help:
 hollowknight *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \
-        --mode scene \
+        --mode asset \
         --objects objects/hk-representative.jsonc \
         --output out/all.bundle {{ args }} \
         --bundle-name bundle \

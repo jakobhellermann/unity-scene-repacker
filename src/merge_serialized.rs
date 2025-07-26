@@ -75,15 +75,16 @@ pub fn add_remapped_scene_header(
         remap_file_id.insert(orig_file_id as FileId, new_file_id as FileId);
         builder.serialized.m_Externals.push(external.clone());
     }
-    let remap_script_types = remap_vecs_all::<i16, _>(
-        file.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
-        builder.serialized.m_ScriptTypes.get_or_insert_default(),
-    );
     for ty in file.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
         ty.m_LocalSerializedFileIndex = *remap_file_id
             .get(&(ty.m_LocalIdentifierInFile as i32))
             .unwrap_or(&ty.m_LocalSerializedFileIndex);
     }
+    // TODO: deduplicate
+    let remap_script_types = remap_vecs_all::<i16, _>(
+        file.m_ScriptTypes.as_mut().unwrap_or(&mut vec![]),
+        builder.serialized.m_ScriptTypes.get_or_insert_default(),
+    );
     for ty in &mut file.m_Types {
         ty.m_ScriptTypeIndex = *remap_script_types
             .get(&ty.m_ScriptTypeIndex)
