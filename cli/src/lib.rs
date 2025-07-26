@@ -101,6 +101,11 @@ pub enum Mode {
     /// A single bundle letting you load specific objects using `LoadAsset`
     Asset,
 }
+impl Mode {
+    fn needs_typetree_generator(&self) -> bool {
+        matches!(self, Mode::Asset)
+    }
+}
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum Compression {
@@ -193,24 +198,28 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     let mut env = Environment::new(game_files, tpk);
     let unity_version = env.unity_version()?;
 
-    let generator = match libs_dir {
-        Some(lib_path) => {
-            TypeTreeGenerator::new_lib_in(lib_path, unity_version, GeneratorBackend::AssetsTools)?
-        }
-        None => {
-            TypeTreeGenerator::new_lib_next_to_exe(unity_version, GeneratorBackend::AssetsTools)?
-        }
+    if args.output.mode.needs_typetree_generator() {
+        let generator = match libs_dir {
+            Some(lib_path) => TypeTreeGenerator::new_lib_in(
+                lib_path,
+                unity_version,
+                GeneratorBackend::AssetsTools,
+            )?,
+            None => TypeTreeGenerator::new_lib_next_to_exe(
+                unity_version,
+                GeneratorBackend::AssetsTools,
+            )?,
+        };
+        generator
+            .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
+            .context("Cannot load game DLLs")?;
+        let monobehaviour_node = env
+            .tpk
+            .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+            .unwrap()
+            .into_owned();
+        env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
     };
-
-    generator
-        .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
-        .context("Cannot load game DLLs")?;
-    let monobehaviour_node = env
-        .tpk
-        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
-        .unwrap()
-        .into_owned();
-    env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
         &env,

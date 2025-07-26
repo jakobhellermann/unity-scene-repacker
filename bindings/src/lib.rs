@@ -27,6 +27,11 @@ enum Mode {
     SceneBundle = 0,
     AssetBundle = 1,
 }
+impl Mode {
+    fn needs_typetree_generator(&self) -> bool {
+        matches!(self, Mode::AssetBundle)
+    }
+}
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn export(
@@ -114,31 +119,34 @@ fn export_inner(
     let mut env = Environment::new(game_files, tpk);
     let unity_version = env.unity_version()?;
 
-    let monobehaviour_node = env
-        .tpk
-        .get_typetree_node(ClassId::MonoBehaviour, unity_version)
-        .unwrap()
-        .into_owned();
+    if mode.needs_typetree_generator() {
+        let monobehaviour_typetree_mode = match mb_typetree_export {
+            Some(data) => MonobehaviourTypetreeMode::Export(data),
+            None => MonobehaviourTypetreeMode::GenerateRuntime,
+        };
 
-    let monobehaviour_typetree_mode = match mb_typetree_export {
-        Some(data) => MonobehaviourTypetreeMode::Export(data),
-        None => MonobehaviourTypetreeMode::GenerateRuntime,
-    };
-    env.typetree_generator = match monobehaviour_typetree_mode {
-        MonobehaviourTypetreeMode::GenerateRuntime => {
-            let generator = TypeTreeGenerator::new_lib_next_to_exe(
-                unity_version,
-                GeneratorBackend::AssetsTools,
-            )?;
-            generator
-                .load_all_dll_in_dir(game_dir.join("Managed"))
-                .context("Cannot load game DLLs")?;
-            TypeTreeGeneratorCache::new(generator, monobehaviour_node)
-        }
-        MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
-            monobehaviour_typetree_export::read(export)?,
-            monobehaviour_node,
-        ),
+        let monobehaviour_node = env
+            .tpk
+            .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+            .unwrap()
+            .into_owned();
+
+        env.typetree_generator = match monobehaviour_typetree_mode {
+            MonobehaviourTypetreeMode::GenerateRuntime => {
+                let generator = TypeTreeGenerator::new_lib_next_to_exe(
+                    unity_version,
+                    GeneratorBackend::AssetsTools,
+                )?;
+                generator
+                    .load_all_dll_in_dir(game_dir.join("Managed"))
+                    .context("Cannot load game DLLs")?;
+                TypeTreeGeneratorCache::new(generator, monobehaviour_node)
+            }
+            MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
+                monobehaviour_typetree_export::read(export)?,
+                monobehaviour_node,
+            ),
+        };
     };
 
     let mut repack_scenes = unity_scene_repacker::repack_scenes(
