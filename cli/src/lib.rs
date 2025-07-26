@@ -11,14 +11,14 @@ use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::ArgValueCompleter;
 use indexmap::IndexMap;
 use paris::{error, info, success, warn};
-use rabex::files::bundlefile::{self, CompressionType};
+use rabex::files::bundlefile::CompressionType;
 use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider as _;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
-use std::io::{BufWriter, Cursor};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use unity_scene_repacker::env::Environment;
@@ -174,7 +174,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         .map(|path| -> Result<IndexMap<String, Vec<String>>> {
             let preloads = std::fs::read_to_string(path)
                 .with_context(|| format!("couldn't find object json '{}'", path.display()))?;
-            Ok(json5::from_str(&preloads).context("error parsing the objects json")?)
+            json5::from_str(&preloads).context("error parsing the objects json")
         })
         .transpose()?
         .unwrap_or_default();
@@ -291,12 +291,18 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let new_size = match args.output.mode {
         Mode::Scene => {
-            let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
+            let mut out = BufWriter::new(
+                File::create(&args.output.output).context("Could not write to output file")?,
+            );
+
+            let stats = unity_scene_repacker::pack_to_scene_bundle(
+                &mut out,
                 name,
                 &tpk_blob,
                 &env.tpk,
                 unity_version,
                 repack_scenes.as_mut_slice(),
+                compression,
             )
             .context("trying to repack bundle")?;
 
@@ -311,19 +317,6 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             );
             println!();
 
-            let mut out = BufWriter::new(
-                File::create(&args.output.output).context("Could not write to output file")?,
-            );
-            bundlefile::write_bundle_iter(
-                &header,
-                &mut out,
-                CompressionType::Lz4hc,
-                compression,
-                files
-                    .into_iter()
-                    .map(|(name, file)| Ok((name, Cursor::new(file)))),
-            )?;
-
             out.get_ref().metadata()?.len() as usize
         }
         Mode::Asset => {
@@ -335,7 +328,6 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 &mut out,
                 name,
                 &tpk_blob,
-                unity_version,
                 repack_scenes,
                 compression,
             )?;

@@ -21,7 +21,7 @@ pub fn prune_scene(
     reader: &mut (impl Read + Seek),
     tpk: &impl TypeTreeProvider,
     retain_paths: &IndexSet<&str>,
-    replacements: &mut FxHashMap<i64, Vec<u8>>,
+    replacements: &mut FxHashMap<PathId, Vec<u8>>,
     disable_roots: bool,
 ) -> Result<(BTreeSet<PathId>, Vec<(String, Transform)>)> {
     let scene_lookup = SceneLookup::new(file, &mut *reader, tpk)?;
@@ -109,7 +109,7 @@ fn adjust_ancestor(
 }
 
 fn adjust_kept(
-    replacements: &mut FxHashMap<i64, Vec<u8>>,
+    replacements: &mut FxHashMap<PathId, Vec<u8>>,
     file: &SerializedFile,
     data: &mut (impl Read + Seek),
     tpk: &impl TypeTreeProvider,

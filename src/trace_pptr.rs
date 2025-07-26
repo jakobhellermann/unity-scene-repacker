@@ -14,7 +14,7 @@ pub fn trace_pptrs_endianned(
 ) -> Result<Vec<PPtr>> {
     match endianness {
         Endianness::Little => trace_pptrs::<LittleEndian>(tt, reader),
-        Endianness::Big => trace_pptrs::<BigEndian>(&tt, reader),
+        Endianness::Big => trace_pptrs::<BigEndian>(tt, reader),
     }
 }
 

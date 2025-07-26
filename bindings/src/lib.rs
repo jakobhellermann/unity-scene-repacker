@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use rabex::objects::ClassId;
 use rabex::typetree::TypeTreeProvider as _;
 use unity_scene_repacker::env::Environment;
-use unity_scene_repacker::rabex::files::bundlefile::{self, CompressionType};
+use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
@@ -172,34 +172,21 @@ fn export_inner(
     )?;
 
     let stats = match mode {
-        Mode::SceneBundle => {
-            let (stats, header, files) = unity_scene_repacker::pack_to_scene_bundle(
-                name,
-                &tpk_raw,
-                &env.tpk,
-                unity_version,
-                repack_scenes.as_mut_slice(),
-            )
-            .context("trying to repack bundle")?;
-
-            bundlefile::write_bundle_iter(
-                &header,
-                &mut out,
-                CompressionType::None,
-                compression,
-                files
-                    .into_iter()
-                    .map(|(name, file)| Ok((name, Cursor::new(file)))),
-            )?;
-
-            stats
-        }
+        Mode::SceneBundle => unity_scene_repacker::pack_to_scene_bundle(
+            &mut out,
+            name,
+            &tpk_raw,
+            &env.tpk,
+            unity_version,
+            repack_scenes.as_mut_slice(),
+            compression,
+        )
+        .context("trying to repack bundle")?,
         Mode::AssetBundle => unity_scene_repacker::pack_to_asset_bundle(
             &env,
             &mut out,
             name,
             &tpk_raw,
-            unity_version,
             repack_scenes,
             compression,
         )?,

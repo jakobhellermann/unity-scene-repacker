@@ -10,65 +10,29 @@ use std::fmt::Debug;
 
 use crate::trace_pptr::replace_pptrs_inplace_endianed;
 
-pub fn add_remapped_scene(
-    scene_name: &str,
-    scene_index: usize,
-    file: &SerializedFile,
-    data: &[u8],
-    tpk: &impl TypeTreeProvider,
-    objects: Vec<ObjectInfo>,
-    mut replacements: FxHashMap<i64, Vec<u8>>,
-    mb_types: FxHashMap<i64, &TypeTreeNode>,
-    remap_file_id: FxHashMap<FileId, FileId>,
-    path_id_remap: FxHashMap<PathId, PathId>,
-    remap_types: FxHashMap<i32, i32>,
-) -> impl Iterator<Item = Result<(ObjectInfo, Cow<'static, [u8]>)>> {
-    objects.into_iter().map(move |mut obj| -> Result<_> {
-        obj.m_TypeID = remap_types[&obj.m_TypeID];
-
-        let tt = match mb_types.get(&obj.m_PathID) {
-            Some(ty) => ty,
-            // TODO: take types from file if they exist
-            None => &*file.get_typetree_for(&obj, &tpk)?,
-        };
-        let mut object_data = match replacements.remove(&obj.m_PathID) {
-            Some(owned) => Cow::Owned(owned),
-            None => {
-                let offset = obj.m_Offset as usize;
-                let size = obj.m_Size as usize;
-                Cow::Borrowed(&data[offset..offset + size])
-            }
-        };
-
-        let orig_path_id = obj.m_PathID;
-        obj.m_PathID = *path_id_remap.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
-
-        replace_pptrs_inplace_endianed(
-            object_data.to_mut().as_mut_slice(),
-            tt,
-            &path_id_remap,
-            &remap_file_id,
-            file.m_Header.m_Endianess,
-        )
-        .with_context(|| {
-            format!(
-                "Could not remap path IDs in bundle for {} in '{}' (level{}):\n{}",
-                orig_path_id,
-                scene_name,
-                scene_index,
-                tt.dump_pretty()
-            )
-        })?;
-
-        Ok((obj, Cow::Owned(object_data.into_owned())))
-    })
+pub struct RemapSerializedIndices {
+    pub path_id: FxHashMap<PathId, PathId>,
+    pub file_id: FxHashMap<FileId, FileId>,
+    pub types: FxHashMap<i32, i32>,
 }
 
-pub fn add_remapped_scene_header(
+/// Takes the metadata (types, externals etc.) from `file` and moves them into `builder`.
+pub fn add_scene_meta_to_builder(
     builder: &mut SerializedFileBuilder<impl TypeTreeProvider>,
     file: &mut SerializedFile,
-) -> Result<(FxHashMap<FileId, FileId>, FxHashMap<i32, i32>)> {
+) -> Result<RemapSerializedIndices> {
+    assert!(
+        file.m_RefTypes.as_ref().is_none_or(|x| x.is_empty()),
+        "TODO: merge reftypes"
+    );
+
+    let mut remap_path_id = FxHashMap::default();
+    for obj in file.objects() {
+        remap_path_id.insert(obj.m_PathID, builder.get_next_path_id());
+    }
+
     let mut remap_file_id = FxHashMap::default();
+    // TODO: deduplicate
     for (i, external) in file.m_Externals.iter().enumerate() {
         let orig_file_id = i + 1;
         let new_file_id = builder.serialized.m_Externals.len() + 1;
@@ -97,9 +61,66 @@ pub fn add_remapped_scene_header(
         &mut builder.serialized.m_Types,
     );
 
-    Ok((remap_file_id, remap_types))
+    Ok(RemapSerializedIndices {
+        path_id: remap_path_id,
+        file_id: remap_file_id,
+        types: remap_types,
+    })
 }
 
+pub fn remap_objects(
+    scene_name: &str,
+    scene_index: usize,
+    file: &SerializedFile,
+    data: &[u8],
+    tpk: &impl TypeTreeProvider,
+    objects: Vec<ObjectInfo>,
+    mut replacements: FxHashMap<PathId, Vec<u8>>,
+    mb_types: FxHashMap<PathId, &TypeTreeNode>,
+    remap: RemapSerializedIndices,
+) -> impl Iterator<Item = Result<(ObjectInfo, Cow<'static, [u8]>)>> {
+    objects.into_iter().map(move |mut obj| -> Result<_> {
+        obj.m_TypeID = remap.types[&obj.m_TypeID];
+
+        let tt = match mb_types.get(&obj.m_PathID) {
+            Some(ty) => ty,
+            // TODO: take types from file if they exist
+            None => &*file.get_typetree_for(&obj, &tpk)?,
+        };
+        let mut object_data = match replacements.remove(&obj.m_PathID) {
+            Some(owned) => Cow::Owned(owned),
+            None => {
+                let offset = obj.m_Offset as usize;
+                let size = obj.m_Size as usize;
+                Cow::Borrowed(&data[offset..offset + size])
+            }
+        };
+
+        let orig_path_id = obj.m_PathID;
+        obj.m_PathID = *remap.path_id.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
+
+        replace_pptrs_inplace_endianed(
+            object_data.to_mut().as_mut_slice(),
+            tt,
+            &remap.path_id,
+            &remap.file_id,
+            file.m_Header.m_Endianess,
+        )
+        .with_context(|| {
+            format!(
+                "Could not remap path IDs in bundle for {} in '{}' (level{}):\n{}",
+                orig_path_id,
+                scene_name,
+                scene_index,
+                tt.dump_pretty()
+            )
+        })?;
+
+        Ok((obj, Cow::Owned(object_data.into_owned())))
+    })
+}
+
+/// Moves the elements from `old` into `new`, returning where each index ended up in
 #[must_use]
 fn remap_vecs_all<I, T>(old: &mut Vec<T>, new: &mut Vec<T>) -> FxHashMap<I, I>
 where

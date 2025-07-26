@@ -16,7 +16,7 @@ use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use memmap2::Mmap;
 use rabex::UnityVersion;
-use rabex::files::bundlefile::{self, BundleFileBuilder, BundleFileHeader, CompressionType};
+use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
@@ -55,7 +55,7 @@ pub struct RepackScene<'a> {
 
     pub keep_objects: BTreeSet<i64>,
     pub roots: Vec<(String, Transform)>,
-    pub replacements: FxHashMap<i64, Vec<u8>>,
+    pub replacements: FxHashMap<PathId, Vec<u8>>,
 
     pub monobehaviour_types: FxHashMap<i64, &'a TypeTreeNode>,
 }
@@ -245,37 +245,35 @@ pub struct Stats {
 }
 
 pub fn pack_to_scene_bundle(
+    writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
     tpk: &impl TypeTreeProvider,
     unity_version: UnityVersion,
     scenes: &mut [RepackScene],
-) -> Result<(Stats, BundleFileHeader, Vec<(String, Vec<u8>)>)> {
-    let mut files = Vec::new();
-
-    let mut stats = Stats {
-        objects_before: 0,
-        objects_after: 0,
-        size_before: 0,
-        size_after: 0,
-    };
+    compression: CompressionType,
+) -> Result<Stats> {
+    let mut stats = Stats::default();
 
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
-    let prefix = bundle_name;
     let container = scenes
         .iter()
         .map(|scene| {
-            let path = format!("unity-scene-repacker/{prefix}_{}.unity", scene.scene_name);
+            let path = format!(
+                "unity-scene-repacker/{bundle_name}_{}.unity",
+                scene.scene_name
+            );
             (path, AssetInfo::default())
         })
         .collect();
     let mut container = Some(container);
 
+    let mut builder = BundleFileBuilder::unityfs(7, unity_version);
+
     for scene in scenes {
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
-
         sharedassets.add_object(&PreloadData {
             m_Name: "".into(),
             m_Assets: vec![PPtr {
@@ -284,7 +282,6 @@ pub fn pack_to_scene_bundle(
             }],
             ..Default::default()
         })?;
-
         if let Some(container) = container.take() {
             sharedassets.add_object(&AssetBundle {
                 m_Name: bundle_name.to_owned(),
@@ -299,12 +296,14 @@ pub fn pack_to_scene_bundle(
 
         let mut out = Cursor::new(Vec::new());
         sharedassets.write(&mut out)?;
-        out.set_position(0);
 
-        files.push((
-            format!("BuildPlayer-{prefix}_{}.sharedAssets", scene.scene_name),
-            out.into_inner(),
-        ));
+        builder.add_file(
+            &format!(
+                "BuildPlayer-{bundle_name}_{}.sharedAssets",
+                scene.scene_name
+            ),
+            Cursor::new(out.into_inner()),
+        )?;
 
         let trimmed = {
             let serialized = &mut scene.serialized;
@@ -351,21 +350,15 @@ pub fn pack_to_scene_bundle(
 
             out
         };
-        files.push((
-            format!("BuildPlayer-{prefix}_{}", scene.scene_name),
-            trimmed,
-        ));
+        builder.add_file(
+            &format!("BuildPlayer-{bundle_name}_{}", scene.scene_name),
+            Cursor::new(trimmed),
+        )?;
     }
 
-    let header = BundleFileHeader {
-        signature: bundlefile::BundleSignature::UnityFS,
-        version: 7,
-        unity_version: "5.x.x".to_owned(),
-        unity_revision: Some(unity_version),
-        size: 0, // unused
-    };
+    builder.write(writer, compression)?;
 
-    Ok((stats, header, files))
+    Ok(stats)
 }
 
 pub enum MonobehaviourTypetreeMode<'a> {
@@ -378,10 +371,10 @@ pub fn pack_to_asset_bundle(
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
-    unity_version: UnityVersion,
     scenes: Vec<RepackScene>,
     compression: CompressionType,
 ) -> Result<Stats> {
+    let unity_version = env.unity_version()?;
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let mut builder =
@@ -408,17 +401,12 @@ pub fn pack_to_asset_bundle(
             });
             stats.objects_after += serialized.objects().len();
 
-            let mut remap_path_id = FxHashMap::default();
-
-            for obj in serialized.objects() {
-                builder.get_next_path_id();
-                remap_path_id.insert(obj.m_PathID, builder.get_next_path_id());
-            }
+            let remap = merge_serialized::add_scene_meta_to_builder(&mut builder, serialized)?;
 
             for (scene_path, transform) in scene.roots.iter() {
                 let mut go = transform.m_GameObject;
                 assert!(go.is_local());
-                if let Some(replacement) = remap_path_id.get(&go.m_PathID) {
+                if let Some(replacement) = remap.path_id.get(&go.m_PathID) {
                     go.m_PathID = *replacement;
                 }
 
@@ -428,17 +416,14 @@ pub fn pack_to_asset_bundle(
                 container.insert(path, info);
             }
 
-            let (remap_file_id, remap_types) =
-                merge_serialized::add_remapped_scene_header(&mut builder, serialized)?;
-
-            Ok((scene, remap_file_id, remap_path_id, remap_types))
+            Ok((scene, remap))
         })
         .collect::<Result<Vec<_>>>()?;
 
     let objects = intermediate
         .into_par_iter()
-        .map(|(mut scene, remap_file_id, remap_path_id, remap_types)| {
-            merge_serialized::add_remapped_scene(
+        .map(|(mut scene, remap)| {
+            merge_serialized::remap_objects(
                 &scene.scene_name,
                 scene.scene_index,
                 &builder.serialized,
@@ -447,9 +432,7 @@ pub fn pack_to_asset_bundle(
                 scene.serialized.take_objects(),
                 scene.replacements,
                 scene.monobehaviour_types,
-                remap_file_id,
-                remap_path_id,
-                remap_types,
+                remap,
             )
             .collect::<Vec<_>>()
         })
@@ -571,7 +554,7 @@ pub fn pack_to_shallow_asset_bundle(
             let mut path_ids = Vec::with_capacity(object_paths.len());
             let lookup = SceneLookup::new(&file, reader, &env.tpk)?;
             for path in object_paths {
-                let Some((_, transform)) = lookup.lookup_path(reader, &path)? else {
+                let Some((_, transform)) = lookup.lookup_path(reader, path)? else {
                     warn!("Could not find path '{path}' in {scene_name}");
                     continue;
                 };
