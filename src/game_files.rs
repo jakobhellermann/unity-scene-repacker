@@ -41,6 +41,35 @@ impl GameFiles {
             level_files,
         })
     }
+
+    pub fn read(&self, filename: &str) -> Result<Data, std::io::Error> {
+        match &self.level_files {
+            LevelFiles::Unpacked => {
+                let path = self.game_dir.join(filename);
+                let file = File::open(path)?;
+                let mmap = unsafe { Mmap::map(&file)? };
+                Ok(Data::Mmap(mmap))
+            }
+            LevelFiles::Packed(bundle) => {
+                let data = bundle.read_at(filename)?.ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::NotFound, "File not found in bundle")
+                })?;
+                Ok(Data::InMemory(data))
+            }
+        }
+    }
+}
+pub enum Data {
+    InMemory(Vec<u8>),
+    Mmap(Mmap),
+}
+impl AsRef<[u8]> for Data {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Data::InMemory(data) => data.as_slice(),
+            Data::Mmap(mmap) => mmap.as_ref(),
+        }
+    }
 }
 
 impl EnvResolver for GameFiles {

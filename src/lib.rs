@@ -14,7 +14,6 @@ pub use {rabex, typetree_generator_api};
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
-use memmap2::Mmap;
 use rabex::UnityVersion;
 use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
@@ -28,13 +27,12 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use std::fs::File;
 use std::io::{Cursor, Read, Seek, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
 use crate::env::Environment;
-use crate::game_files::LevelFiles;
+use crate::game_files::Data;
 use crate::scene_lookup::SceneLookup;
 use crate::unity::types::{AssetBundle, AssetInfo, BuildSettings, PreloadData, Transform};
 
@@ -73,57 +71,31 @@ pub fn repack_scenes<'a>(
         .read(&mut ggm_reader)?;
 
     let scenes = build_settings.scene_name_lookup();
-    match &env.resolver.level_files {
-        LevelFiles::Unpacked => repack_settings
-            .scene_objects
-            .into_par_iter()
-            .map(|(scene_name, object_paths)| -> Result<_> {
-                let scene_index = scenes[scene_name.as_str()];
-                let serialized_path = env.resolver.game_dir.join(format!("level{scene_index}"));
+    repack_settings
+        .scene_objects
+        .into_par_iter()
+        .map(|(scene_name, object_paths)| -> Result<_> {
+            let scene_index = scenes[scene_name.as_str()];
+            let filename = format!("level{scene_index}");
 
-                let file = File::open(&serialized_path)?;
-                let mmap = unsafe { Mmap::map(&file)? };
+            let data = env.resolver.read(&filename).with_context(|| {
+                format!("level{scene_index} ({scene_name}) not exist in bundle")
+            })?;
 
-                let settings = RepackSceneSettings {
-                    object_paths,
-                    disable_roots,
-                };
-                repack_scene(
-                    env,
-                    prepare_scripts,
-                    scene_name,
-                    scene_index,
-                    settings,
-                    Data::Mmap(mmap),
-                )
-            })
-            .collect::<Result<_>>(),
-        LevelFiles::Packed(bundle) => repack_settings
-            .scene_objects
-            .into_par_iter()
-            .map(|(scene_name, object_paths)| -> Result<_> {
-                let scene_index = scenes[scene_name.as_str()];
-
-                let data = bundle
-                    .read_at(&format!("level{scene_index}"))?
-                    .with_context(|| {
-                        format!("level{scene_index} ({scene_name}) not exist in bundle")
-                    })?;
-                let settings = RepackSceneSettings {
-                    object_paths,
-                    disable_roots,
-                };
-                repack_scene(
-                    env,
-                    prepare_scripts,
-                    scene_name,
-                    scene_index,
-                    settings,
-                    Data::InMemory(data),
-                )
-            })
-            .collect::<Result<Vec<RepackScene>>>(),
-    }
+            let settings = RepackSceneSettings {
+                object_paths,
+                disable_roots,
+            };
+            repack_scene(
+                env,
+                prepare_scripts,
+                scene_name,
+                scene_index,
+                settings,
+                data,
+            )
+        })
+        .collect::<Result<_>>()
 }
 
 struct RepackSceneSettings {
@@ -175,19 +147,6 @@ fn repack_scene<'a>(
         replacements,
         monobehaviour_types,
     })
-}
-
-pub enum Data {
-    InMemory(Vec<u8>),
-    Mmap(Mmap),
-}
-impl AsRef<[u8]> for Data {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            Data::InMemory(data) => data.as_slice(),
-            Data::Mmap(mmap) => mmap.as_ref(),
-        }
-    }
 }
 
 fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
