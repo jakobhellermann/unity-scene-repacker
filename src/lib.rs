@@ -66,83 +66,63 @@ pub fn repack_scenes<'a>(
     prepare_scripts: bool,
     disable_roots: bool,
 ) -> Result<Vec<RepackScene<'a>>> {
+    let (ggm, mut ggm_reader) = env.load_cached("globalgamemanagers")?;
+    let build_settings = ggm
+        .find_object_of::<BuildSettings>(&env.tpk)?
+        .unwrap()
+        .read(&mut ggm_reader)?;
+
+    let scenes = build_settings.scene_name_lookup();
     match &env.resolver.level_files {
-        LevelFiles::Unpacked => {
-            let mut ggm_reader = File::open(env.resolver.game_dir.join("globalgamemanagers"))
-                .context("couldn't find globalgamemanagers in game directory")?;
-            let ggm = SerializedFile::from_reader(&mut ggm_reader)?;
+        LevelFiles::Unpacked => repack_settings
+            .scene_objects
+            .into_par_iter()
+            .map(|(scene_name, object_paths)| -> Result<_> {
+                let scene_index = scenes[scene_name.as_str()];
+                let serialized_path = env.resolver.game_dir.join(format!("level{scene_index}"));
 
-            let build_settings = ggm
-                .find_object_of::<BuildSettings>(&env.tpk)?
-                .unwrap()
-                .read(&mut ggm_reader)?;
-            let scenes = build_settings.scene_name_lookup();
+                let file = File::open(&serialized_path)?;
+                let mmap = unsafe { Mmap::map(&file)? };
 
-            use rayon::prelude::*;
-            repack_settings
-                .scene_objects
-                .into_par_iter()
-                .map(|(scene_name, object_paths)| -> Result<_> {
-                    let scene_index = scenes[scene_name.as_str()];
-                    let serialized_path = env.resolver.game_dir.join(format!("level{scene_index}"));
+                let settings = RepackSceneSettings {
+                    object_paths,
+                    disable_roots,
+                };
+                repack_scene(
+                    env,
+                    prepare_scripts,
+                    scene_name,
+                    scene_index,
+                    settings,
+                    Data::Mmap(mmap),
+                )
+            })
+            .collect::<Result<_>>(),
+        LevelFiles::Packed(bundle) => repack_settings
+            .scene_objects
+            .into_par_iter()
+            .map(|(scene_name, object_paths)| -> Result<_> {
+                let scene_index = scenes[scene_name.as_str()];
 
-                    let file = File::open(&serialized_path)?;
-                    let mmap = unsafe { Mmap::map(&file)? };
-
-                    let settings = RepackSceneSettings {
-                        object_paths,
-                        disable_roots,
-                    };
-                    repack_scene(
-                        env,
-                        prepare_scripts,
-                        scene_name,
-                        scene_index,
-                        settings,
-                        Data::Mmap(mmap),
-                    )
-                })
-                .collect::<Result<_>>()
-        }
-        LevelFiles::Packed(bundle) => {
-            let ggm = bundle
-                .read_at("globalgamemanagers")?
-                .context("globalgamemanagers not found in bundle")?;
-            let ggm_reader = &mut Cursor::new(ggm);
-            let ggm = SerializedFile::from_reader(ggm_reader)?;
-            let build_settings = ggm
-                .find_object_of::<BuildSettings>(&env.tpk)?
-                .unwrap()
-                .read(ggm_reader)?;
-            let scenes = build_settings.scene_name_lookup();
-
-            use rayon::prelude::*;
-            repack_settings
-                .scene_objects
-                .into_par_iter()
-                .map(|(scene_name, object_paths)| -> Result<_> {
-                    let scene_index = scenes[scene_name.as_str()];
-
-                    let data = bundle
-                        .read_at(&format!("level{scene_index}"))?
-                        .with_context(|| {
-                            format!("level{scene_index} ({scene_name}) not exist in bundle")
-                        })?;
-                    let settings = RepackSceneSettings {
-                        object_paths,
-                        disable_roots,
-                    };
-                    repack_scene(
-                        env,
-                        prepare_scripts,
-                        scene_name,
-                        scene_index,
-                        settings,
-                        Data::InMemory(data),
-                    )
-                })
-                .collect::<Result<Vec<RepackScene>>>()
-        }
+                let data = bundle
+                    .read_at(&format!("level{scene_index}"))?
+                    .with_context(|| {
+                        format!("level{scene_index} ({scene_name}) not exist in bundle")
+                    })?;
+                let settings = RepackSceneSettings {
+                    object_paths,
+                    disable_roots,
+                };
+                repack_scene(
+                    env,
+                    prepare_scripts,
+                    scene_name,
+                    scene_index,
+                    settings,
+                    Data::InMemory(data),
+                )
+            })
+            .collect::<Result<Vec<RepackScene>>>(),
     }
 }
 
