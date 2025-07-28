@@ -9,7 +9,7 @@ mod py;
 use anyhow::{Context, Result, bail, ensure};
 use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::ArgValueCompleter;
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 use paris::{error, info, success, warn};
 use rabex::files::bundlefile::CompressionType;
 use rabex::objects::ClassId;
@@ -69,6 +69,16 @@ struct RepackArgs {
     #[arg(long)]
     #[arg(alias = "objects")]
     scene_objects: Option<PathBuf>,
+
+    /// Path to JSON file, containing a map of C# type to monobehaviour names.
+    /// Useful for scriptable objects etc., which do not exist in the transform hierarchy.
+    /// ```json
+    /// {
+    ///   "FXDealerMaterialTag": ["[FXDealer] 0_YeeAttack _PostureDecrease"]
+    /// }
+    /// ```
+    #[arg(long)]
+    extra_objects: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -172,9 +182,25 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         .scene_objects
         .as_ref()
         .map(|path| -> Result<IndexMap<String, Vec<String>>> {
-            let preloads = std::fs::read_to_string(path)
-                .with_context(|| format!("couldn't find object json '{}'", path.display()))?;
-            json5::from_str(&preloads).context("error parsing the objects json")
+            let preloads = std::fs::read_to_string(path).with_context(|| {
+                format!("couldn't find scene objects json '{}'", path.display())
+            })?;
+            json5::from_str(&preloads).context("error parsing the scene objects json")
+        })
+        .transpose()?
+        .unwrap_or_default();
+    let extra_objects = args
+        .repack
+        .extra_objects
+        .as_ref()
+        .map(|path| -> Result<IndexMap<String, IndexSet<String>>> {
+            let preloads = std::fs::read_to_string(path).with_context(|| {
+                format!(
+                    "couldn't find extra monobehaviour json '{}'",
+                    path.display()
+                )
+            })?;
+            json5::from_str(&preloads).context("error parsing the extra monobehaviours json")
         })
         .transpose()?
         .unwrap_or_default();
@@ -189,7 +215,20 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             scene_objects.len()
         );
     }
-    let repack_settings = RepackSettings { scene_objects };
+    if !extra_objects.is_empty() {
+        let obj_count = extra_objects
+            .iter()
+            .map(|(_, objects)| objects.len())
+            .sum::<usize>();
+        info!(
+            "Repacking {obj_count} extra monobehaviour{}",
+            if obj_count == 1 { "" } else { "s" }
+        );
+    }
+    let repack_settings = RepackSettings {
+        scene_objects,
+        extra_objects,
+    };
 
     if repack_settings.is_empty() {
         bail!("Nothing to repack specified. See `--help` for possible repack options.")
@@ -275,7 +314,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         return Ok(());
     }
 
-    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+    let (mut repack_scenes, extra_objects) = unity_scene_repacker::repack_scenes(
         &env,
         repack_settings,
         matches!(args.output.mode, Mode::Asset),
@@ -320,6 +359,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 name,
                 &tpk_blob,
                 repack_scenes,
+                extra_objects,
                 compression,
             )?;
             print_stats(&stats, args.repack.scene_objects.is_some());

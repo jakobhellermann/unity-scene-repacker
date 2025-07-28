@@ -22,6 +22,15 @@ ninesols *args:
         --mode asset \
         --objects objects/ns-monsters.json \
         --output /tmp/testing/new.bundle \
+        --bundle-name test \
+        --compression none {{ args }}
+
+ninesols-fx *args:
+    cargo run --release -- \
+        --game-dir "{{ ninesols }}" \
+        --mode asset \
+        --extra-objects objects/ns-by-type.json \
+        --output /tmp/testing/new.bundle \
         --bundle-name bundle \
         --compression none {{ args }}
 

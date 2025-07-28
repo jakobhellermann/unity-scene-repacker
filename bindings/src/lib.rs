@@ -113,7 +113,10 @@ fn export_inner(
     let scene_objects: IndexMap<String, Vec<String>> =
         serde_json::from_str(scene_objects).context("error parsing the objects json")?;
 
-    let repack_settings = RepackSettings { scene_objects };
+    let repack_settings = RepackSettings {
+        scene_objects,
+        extra_objects: IndexMap::new(),
+    };
 
     let disable = true;
 
@@ -164,7 +167,7 @@ fn export_inner(
         return Ok((stats, out.into_inner()));
     }
 
-    let mut repack_scenes = unity_scene_repacker::repack_scenes(
+    let (mut repack_scenes, extra_objects) = unity_scene_repacker::repack_scenes(
         &env,
         repack_settings,
         disable,
@@ -188,6 +191,7 @@ fn export_inner(
             name,
             &tpk_raw,
             repack_scenes,
+            extra_objects,
             compression,
         )?,
         Mode::AssetBundleShallow => unreachable!(),

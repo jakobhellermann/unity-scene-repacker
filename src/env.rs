@@ -20,6 +20,26 @@ pub trait EnvResolver {
     fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
 
+    fn serialized_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
+        Ok(self
+            .all_files()?
+            .into_iter()
+            .filter_map(|path| {
+                let name = path.file_name()?.to_str()?;
+                let is_level = name
+                    .strip_prefix("level")
+                    .and_then(|x| x.parse::<usize>().ok())
+                    .is_some();
+
+                let is_serialized = is_level
+                    || path.extension().is_some_and(|e| e == "assets")
+                    || name == "globalgamemanagers";
+
+                is_serialized.then_some(path)
+            })
+            .collect())
+    }
+
     fn level_files(&self) -> Result<Vec<usize>, std::io::Error> {
         Ok(self
             .all_files()?
