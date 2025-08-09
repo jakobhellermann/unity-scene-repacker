@@ -8,6 +8,8 @@ This works, but is slow and memory intensive.
 
 This project lets you read scenes from the distributed game, take only what you need, and package those objects into an [AssetBundle](https://docs.unity3d.com/Manual/AssetBundlesIntro.html) that you can load at runtime.
 
+Check out the changelog at [docs/CHANGELOG.md](./docs/CHANGELOG.md).
+
 ## Installation
 
 ```sh
