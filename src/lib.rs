@@ -368,7 +368,7 @@ pub fn pack_to_scene_bundle(
         .iter()
         .filter_map(|scene| scene.scene_name.as_deref())
         .map(|scene_name| {
-            let path = format!("unity-scene-repacker/{bundle_name}_{scene_name}.unity");
+            let path = get_scene_bundle_scene_name(bundle_name, scene_name);
             (path, AssetInfo::default())
         })
         .collect();
@@ -530,7 +530,7 @@ pub fn pack_to_asset_bundle(
                     .as_deref()
                     .expect("right now every asset comes from a scene");
                 let info = AssetInfo::new(go.untyped());
-                let path = format!("{scene_name}/{scene_path}.prefab").to_lowercase();
+                let path = get_asset_bundle_object_asset_name(scene_name, scene_path);
 
                 container.insert(path, info);
             }
@@ -717,7 +717,7 @@ fn create_shallow_assetbundle(
             builder.add_external_uncached(FileIdentifier::new(format!("level{scene_index}")));
 
         for (scene_path, path_id) in objects {
-            let path = format!("{scene_name}/{scene_path}.prefab").to_lowercase();
+            let path = get_asset_bundle_object_asset_name(&scene_name, &scene_path);
             let info = AssetInfo::new(PPtr::new(file_index, path_id));
             container.insert(path, info);
         }
@@ -746,6 +746,12 @@ fn create_shallow_assetbundle(
     Ok(())
 }
 
+fn get_scene_bundle_scene_name(bundle_name: &str, scene_name: &str) -> String {
+    format!("unity-scene-repacker/{bundle_name}_{scene_name}.unity")
+}
+fn get_asset_bundle_object_asset_name(scene_name: &str, scene_path: &str) -> String {
+    format!("{scene_name}/{scene_path}.prefab").to_lowercase()
+}
 fn get_extra_object_asset_name(class_name: &str, object_name: &str) -> String {
     format!("ExtraObjects/{class_name}/{object_name}.prefab").to_lowercase()
 }

@@ -17,6 +17,12 @@ cargo install --git https://github.com/jakobhellermann/unity-scene-repacker --lo
 
 ## Usage
 
+`unity-scene-repacker` can repack objects into two kinds of [`AssetBundle`](https://docs.unity3d.com/ScriptReference/AssetBundle.html)s.
+- Scene bundles contain the original scenes, filtered down to only the requested objects.
+- Asset bundles allow you to selectively load objects without having to load all of them, but are a bit more experimental.
+
+**Scene bundle**:
+
 ```jsonc
 objects.json
 {
@@ -29,18 +35,74 @@ objects.json
   "White_Palace_01": [
     "WhiteBench",
     "White_ Spikes"
-  ],
-  ...
+  ]
 }
 ```
 
 ```sh
-unity-scene-repacker
-    --steam-game 'Hollow Knight'
-    --objects objects.json \
+unity-scene-repacker \
+    --steam-game 'Hollow Knight' \
+    --scene-objects objects.json \
+    --mode scene \
     --output mybundle.unity3d
 ```
 
+
+```cs
+const string bundleName = "mybundle";
+var bundle = AssetBundle.LoadFromFile(path);
+
+// load single scene
+SceneManager.LoadScene($"unity-scene-repacker/{bundleName}/Fungus1_12.unity")
+
+// load add scenes
+foreach (string scenePath in bundle.GetAllScenePaths()) {
+    string sceneName = Path.GetFileNameWithoutExtension(scenePath);
+    SceneManager.LoadScene(sceneName, LoadSceneMode.Additive);
+    var scene = USceneManager.GetSceneByPath(scenePath);
+    var roots = scene.GetRootGameObjects();
+}
+bundle.Unload();
+```
+
+**Asset bundle**:
+
+Asset bundles allow you to selectively load objects, without having to load the others into memory.
+However, the implementation is a bit more experimental, so if something doesn't work, try the scene output instead.
+
+```sh
+unity-scene-repacker \
+    --steam-game 'Hollow Knight' \
+    --scene-objects objects.json \
+    --mode asset \
+    --output mybundle.unity3d
+```
+
+
+```cs
+var bundle = AssetBundle.LoadFromFile(path);
+var prefab = bundle.LoadAsset<GameObject>("Fungus1_12/simple_grass");
+var object = Instantiate(prefab);
+bundle.Unload();
+```
+
+The `asset` output mode also allows you to additionally specify arbitrary other objects (e.g. `ScriptableObject`s) by name:
+
+```json
+{
+  "FXDealerMaterialTag": ["[FXDealer] 0_YeeAttack _PostureDecrease"]
+}
+```
+
+```sh
+unity-scene-repacker ... --extra-objects objects-by-type.json --mode asset
+```
+
+```cs
+var object = bundle.LoadAsset<FXDealerMaterialTag>("ExtraObjects/FXDealerMaterialTag/[FXDealer] 0_YeeAttack _PostureDecrease.prefab");
+```
+
+### CLI Reference
 
 ```
 Usage: unity-scene-repacker [OPTIONS] <--game-dir <GAME_DIR>|--steam-game <STEAM_GAME>>
@@ -62,7 +124,7 @@ Game options:
 Repack options:
       --scene-objects <SCENE_OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
-          
+
             {
               "Fungus1_12": [
                 "simple_grass",
@@ -72,15 +134,15 @@ Repack options:
                 "WhiteBench",
               ]
             }
-          
+
 
       --extra-objects <EXTRA_OBJECTS>
           Path to JSON file, containing a map of C# type to monobehaviour names. Useful for scriptable objects etc., which do not exist in the transform hierarchy.
-          
+
             {
               "FXDealerMaterialTag": ["[FXDealer] 0_YeeAttack _PostureDecrease"]
             }
-          
+
 
 Output options:
       --mode <MODE>
@@ -96,7 +158,7 @@ Output options:
 
       --compression <COMPRESSION>
           Compression level to apply
-          
+
           [default: lzma]
 
           Possible values:
