@@ -11,8 +11,7 @@ This project lets you read scenes from the distributed game, take only what you 
 ## Installation
 
 ```sh
-uv tool install unity-scene-repacker # if you have uv installed
-cargo install --git https://github.com/jakobhellermann/unity-scene-repacker --locked # to compile from source
+uv tool install unity-scene-repacker
 ```
 
 ## Usage
