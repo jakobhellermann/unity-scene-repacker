@@ -73,14 +73,18 @@ impl AsRef<[u8]> for Data {
 }
 
 impl EnvResolver for GameFiles {
-    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
         match &self.level_files {
             LevelFiles::Unpacked => self.game_dir.read_path(path),
             LevelFiles::Packed(bundle) => {
                 if let Ok(suffix) = path.strip_prefix("Library") {
                     let resource_path = self.game_dir.join("Resources").join(suffix);
-                    match std::fs::read(resource_path) {
-                        Ok(val) => return Ok(val),
+
+                    match File::open(resource_path) {
+                        Ok(val) => {
+                            let mmap = unsafe { memmap2::Mmap::map(&val)? };
+                            return Ok(Data::Mmap(mmap));
+                        }
                         Err(e) if e.kind() == ErrorKind::NotFound => {}
                         Err(e) => return Err(e),
                     }

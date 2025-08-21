@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io::{Cursor, Read, Seek};
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -14,10 +15,11 @@ use rabex::typetree::TypeTreeProvider;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 
 use crate::GameFiles;
+use crate::game_files::Data;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 
 pub trait EnvResolver {
-    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error>;
+    fn read_path(&self, path: &Path) -> Result<Data, std::io::Error>;
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error>;
 
     fn serialized_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
@@ -54,7 +56,7 @@ pub trait EnvResolver {
 }
 
 impl<T: AsRef<[u8]>> EnvResolver for BundleFileReader<Cursor<T>> {
-    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
         let path = path
             .to_str()
             .ok_or_else(|| std::io::Error::other("non-utf8 string"))?;
@@ -65,7 +67,7 @@ impl<T: AsRef<[u8]>> EnvResolver for BundleFileReader<Cursor<T>> {
             )
         })?;
 
-        Ok(data)
+        Ok(Data::InMemory(data))
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
@@ -78,8 +80,10 @@ impl<T: AsRef<[u8]>> EnvResolver for BundleFileReader<Cursor<T>> {
 }
 
 impl EnvResolver for Path {
-    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
-        std::fs::read(self.join(path))
+    fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
+        let file = File::open(self.join(path))?;
+        let mmap = unsafe { memmap2::Mmap::map(&file)? };
+        Ok(Data::Mmap(mmap))
     }
 
     fn all_files(&self) -> Result<Vec<PathBuf>, std::io::Error> {
@@ -97,7 +101,7 @@ impl EnvResolver for Path {
     }
 }
 impl EnvResolver for PathBuf {
-    fn read_path(&self, path: &Path) -> Result<Vec<u8>, std::io::Error> {
+    fn read_path(&self, path: &Path) -> Result<Data, std::io::Error> {
         (**self).read_path(path)
     }
 
@@ -109,7 +113,7 @@ impl EnvResolver for PathBuf {
 pub struct Environment<R = GameFiles, P = TypeTreeCache<TpkTypeTreeBlob>> {
     pub resolver: R,
     pub tpk: P,
-    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Vec<u8>)>>,
+    pub serialized_files: FrozenMap<PathBuf, Box<(SerializedFile, Data)>>,
     pub typetree_generator: TypeTreeGeneratorCache,
     unity_version: OnceLock<UnityVersion>,
 }
@@ -154,9 +158,9 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
     pub fn load_leaf(
         &self,
         relative_path: impl AsRef<Path>,
-    ) -> Result<(SerializedFile, Cursor<Vec<u8>>)> {
+    ) -> Result<(SerializedFile, Cursor<Data>)> {
         let data = self.resolver.read_path(relative_path.as_ref())?;
-        let file = SerializedFile::from_reader(&mut Cursor::new(data.as_slice()))?;
+        let file = SerializedFile::from_reader(&mut Cursor::new(data.as_ref()))?;
         Ok((file, Cursor::new(data)))
     }
 
@@ -170,7 +174,7 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
 
     fn load_external_file(&self, path_name: &Path) -> Result<(&SerializedFile, &[u8])> {
         Ok(match self.serialized_files.get(path_name) {
-            Some((file, data)) => (file, data.as_slice()),
+            Some((file, data)) => (file, data.as_ref()),
             None => {
                 let data = self
                     .resolver
@@ -178,11 +182,11 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
                     .with_context(|| {
                         format!("Cannot read external file {}", path_name.display())
                     })?;
-                let serialized = SerializedFile::from_reader(&mut Cursor::new(data.as_slice()))?;
+                let serialized = SerializedFile::from_reader(&mut Cursor::new(data.as_ref()))?;
                 let items = self
                     .serialized_files
                     .insert(path_name.to_owned(), Box::new((serialized, data)));
-                (&items.0, items.1.as_slice())
+                (&items.0, items.1.as_ref())
             }
         })
     }
