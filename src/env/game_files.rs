@@ -6,12 +6,13 @@ use anyhow::{Result, ensure};
 use memmap2::Mmap;
 use rabex::files::bundlefile::{BundleFileReader, ExtractionConfig};
 
-use crate::env::EnvResolver;
+use super::{Data, EnvResolver};
 
 pub struct GameFiles {
     pub game_dir: PathBuf,
     pub level_files: LevelFiles,
 }
+
 pub enum LevelFiles {
     Unpacked,
     Packed(Box<BundleFileReader<Cursor<Mmap>>>),
@@ -56,18 +57,6 @@ impl GameFiles {
                 })?;
                 Ok(Data::InMemory(data))
             }
-        }
-    }
-}
-pub enum Data {
-    InMemory(Vec<u8>),
-    Mmap(Mmap),
-}
-impl AsRef<[u8]> for Data {
-    fn as_ref(&self) -> &[u8] {
-        match self {
-            Data::InMemory(data) => data.as_slice(),
-            Data::Mmap(mmap) => mmap.as_ref(),
         }
     }
 }

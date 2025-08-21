@@ -1,5 +1,4 @@
 pub mod env;
-mod game_files;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 mod prune;
@@ -9,7 +8,7 @@ mod trace_pptr;
 pub mod typetree_generator_cache;
 pub mod unity;
 
-pub use game_files::GameFiles;
+pub use env::game_files::GameFiles;
 pub use {rabex, typetree_generator_api};
 
 use anyhow::{Context, Result};
@@ -32,8 +31,7 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
-use crate::env::{EnvResolver, Environment};
-use crate::game_files::Data;
+use crate::env::{Data, EnvResolver, Environment};
 use crate::scene_lookup::SceneLookup;
 use crate::unity::types::{
     AssetBundle, AssetInfo, BuildSettings, MonoScript, PreloadData, Transform,
