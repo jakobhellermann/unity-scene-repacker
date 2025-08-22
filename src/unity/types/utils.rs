@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use rabex::files::serializedfile::{ObjectRef, Result};
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::PathId;
-use rabex::objects::{ClassIdType, PPtr};
+use rabex::objects::{ClassId, ClassIdType, PPtr};
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 
 use crate::unity::types::{AssetInfo, GameObject, Transform};
@@ -15,7 +15,16 @@ impl GameObject {
         file: &'a SerializedFile,
         tpk: &'a impl TypeTreeProvider,
     ) -> Result<Option<ObjectRef<'a, Transform>>> {
-        self.component::<Transform>(file, tpk)
+        for component in &self.m_Component {
+            let component = component.component.deref_local(file, tpk)?;
+            if component.info.m_ClassID == ClassId::Transform
+                || component.info.m_ClassID == ClassId::RectTransform
+            {
+                return Ok(Some(component));
+            }
+        }
+
+        Ok(None)
     }
 
     pub fn component<'a, T: ClassIdType>(
