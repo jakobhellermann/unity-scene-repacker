@@ -31,9 +31,10 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
+use crate::env::handle::SerializedFileHandle;
 use crate::env::{Data, EnvResolver, Environment};
 use crate::scene_lookup::SceneLookup;
-use crate::unity::types::{AssetBundle, AssetInfo, MonoScript, PreloadData, Transform};
+use crate::unity::types::{AssetBundle, AssetInfo, PreloadData, Transform};
 
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
@@ -142,16 +143,11 @@ fn collect_what_to_repack<T: Send + Sync>(
             .map(|filename| -> Result<_> {
                 let filename = filename.to_str().expect("non-utf8 scene path");
 
-                let (data, file) = read(filename, None)?;
+                let (data, file_raw) = read(filename, None)?;
+                let file = SerializedFileHandle::new(env, &file_raw, data.as_ref());
 
-                let mut reader = Cursor::new(data.as_ref());
-                let extra_objects = find_extra_objects(
-                    env,
-                    &file,
-                    filename,
-                    &mut reader,
-                    &repack_settings.extra_objects,
-                )?;
+                let extra_objects =
+                    find_extra_objects(file, filename, &repack_settings.extra_objects)?;
 
                 if let Some(scene_index) = filename
                     .strip_prefix("level")
@@ -160,7 +156,7 @@ fn collect_what_to_repack<T: Send + Sync>(
                     let scene_name = scene_lookup[scene_index];
 
                     if let Some(object_paths) = repack_settings.scene_objects.get(scene_name) {
-                        let x = f(filename, scene_name, object_paths, file, data)?;
+                        let x = f(filename, scene_name, object_paths, file_raw, data)?;
                         return Ok((extra_objects, Some(x)));
                     }
                 }
@@ -262,30 +258,27 @@ fn repack_scene<'a>(
 }
 
 fn find_extra_objects(
-    env: &Environment,
-    file: &SerializedFile,
+    file: SerializedFileHandle<GameFiles, impl TypeTreeProvider>,
     filename: &str,
-    reader: &mut (impl Read + Seek),
     // classname: [objectname]
     extra_objects: &IndexMap<String, IndexSet<String>>,
 ) -> Result<Vec<(String, PathId, String, String)>, anyhow::Error> {
     let mut roots = Vec::new();
 
-    for mb_obj in file.objects_of::<MonoBehaviour>(&env.tpk)? {
-        let Some(script) = file.script_type(mb_obj.info) else {
+    for mb_obj in file.objects_of::<MonoBehaviour>()? {
+        let Some(script) = mb_obj.mono_script()? else {
             continue;
         };
-        let script = env.deref_read(script.typed::<MonoScript>(), file, reader)?;
 
         let Some(mb_names) = extra_objects.get(&script.m_ClassName) else {
             continue;
         };
 
-        let mb = mb_obj.read(reader)?;
+        let mb = mb_obj.read()?;
         if mb_names.contains(&mb.m_Name) {
             roots.push((
                 filename.to_owned(),
-                mb_obj.info.m_PathID,
+                mb_obj.path_id(),
                 script.m_ClassName,
                 mb.m_Name,
             ));
