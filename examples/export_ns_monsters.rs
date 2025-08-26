@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -7,9 +6,10 @@ use rabex::objects::TypedPPtr;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::GameFiles;
+use unity_scene_repacker::env::handle::SerializedFileHandle;
 use unity_scene_repacker::env::{EnvResolver, Environment};
 use unity_scene_repacker::typetree_generator_api::GeneratorBackend;
-use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour, MonoScript};
+use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour};
 
 fn main() -> Result<()> {
     let include_mbs = ["StealthGameMonster", "FlyingMonster"];
@@ -35,44 +35,44 @@ fn main() -> Result<()> {
     for level_index in env.resolver.level_files()? {
         let scene = scenes[level_index];
 
-        let (file, mut data) = env.load_leaf(format!("level{level_index}"))?;
-        let data = &mut Cursor::new(&mut data);
+        let (file, data) = env.load_leaf(format!("level{level_index}"))?;
+        let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-        for mb_obj in file.objects_of::<MonoBehaviour>(tpk)? {
-            let Some(script) = file.script_type(mb_obj.info) else {
+        for mb_obj in file.objects_of::<MonoBehaviour>()? {
+            let Some(script) = mb_obj.mono_script()? else {
                 continue;
             };
-            let script = env.deref_read(script.typed::<MonoScript>(), &file, data)?;
 
             if include_mbs.contains(&script.m_Name.as_str()) {
-                let ty = env
-                    .typetree_generator
-                    .generate(&script.m_AssemblyName, &script.full_name())?;
-
-                let monster = mb_obj.with_typetree::<StealthGameMonster>(ty).read(data)?;
+                let monster = mb_obj
+                    .cast::<StealthGameMonster>()
+                    .load_typetree()?
+                    .read()?;
 
                 if monster.monster_stat.is_null() {
                     continue;
                 }
 
-                let monster_stat =
-                    env.deref_read_monobehaviour(monster.monster_stat, &file, data)?;
-                let (stat_file, mut stat_data) =
-                    env.deref_data(monster.monster_stat.untyped(), &file, &mut *data)?;
+                let monster_stat_handle = file.deref(monster.monster_stat)?;
+                let monster_stat = monster_stat_handle.load_typetree()?.read()?;
 
                 let hurt_interrupt_data = monster_stat
                     .hurt_interrupt_data
                     .optional()
                     .map(|hurt_interrupt| {
-                        env.deref_read_monobehaviour(hurt_interrupt, stat_file, &mut stat_data)
+                        monster_stat_handle
+                            .file
+                            .deref(hurt_interrupt)?
+                            .load_typetree()?
+                            .read()
                     })
                     .transpose()?;
                 let level = hurt_interrupt_data.map_or(0, |x| x.monster_level);
 
                 let kind = monster_stat.name.trim_end_matches("_monsterStat");
-                let go = monster.game_object.deref_local(&file, tpk)?.read(data)?;
+                let go = file.deref_read(monster.game_object)?;
 
-                let path = go.path(&file, data, tpk)?;
+                let path = go.path(&file.file, &mut file.reader(), tpk)?;
 
                 if level >= 0 {
                     monsters

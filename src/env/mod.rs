@@ -22,6 +22,7 @@ pub use resolver::EnvResolver;
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 
 use crate::GameFiles;
+use crate::env::handle::SerializedFileHandle;
 use crate::env::resolver::BasedirEnvResolver;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
 use crate::unity::types::{BuildSettings, MonoBehaviour, MonoScript};
@@ -93,8 +94,8 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
         match self.unity_version.get() {
             Some(unity_version) => Ok(*unity_version),
             None => {
-                let (ggm, _) = self.load_cached("globalgamemanagers")?;
-                let unity_version = ggm.m_UnityVersion.expect("missing unity version");
+                let ggm = self.load_cached("globalgamemanagers")?;
+                let unity_version = ggm.file.m_UnityVersion.expect("missing unity version");
                 let _ = self.unity_version.set(unity_version);
                 Ok(unity_version)
             }
@@ -119,14 +120,17 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
     pub fn load_cached(
         &self,
         relative_path: impl AsRef<Path>,
-    ) -> Result<(&SerializedFile, Cursor<&[u8]>)> {
-        let (file, data) = self.load_external_file(relative_path.as_ref())?;
-        Ok((file, Cursor::new(data)))
+    ) -> Result<SerializedFileHandle<'_, R, P>> {
+        self.load_external_file(relative_path.as_ref())
     }
 
-    fn load_external_file(&self, path_name: &Path) -> Result<(&SerializedFile, &[u8])> {
+    fn load_external_file(&self, path_name: &Path) -> Result<SerializedFileHandle<'_, R, P>> {
         Ok(match self.serialized_files.get(path_name) {
-            Some((file, data)) => (file, data.as_ref()),
+            Some((file, data)) => SerializedFileHandle {
+                file,
+                data: data.as_ref(),
+                env: self,
+            },
             None => {
                 let data = self
                     .resolver
@@ -135,10 +139,14 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
                         format!("Cannot read external file {}", path_name.display())
                     })?;
                 let serialized = SerializedFile::from_reader(&mut Cursor::new(data.as_ref()))?;
-                let items = self
+                let file = self
                     .serialized_files
                     .insert(path_name.to_owned(), Box::new((serialized, data)));
-                (&items.0, items.1.as_ref())
+                SerializedFileHandle {
+                    file: &file.0,
+                    data: file.1.as_ref(),
+                    env: self,
+                }
             }
         })
     }
@@ -155,14 +163,15 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
         Ok(match pptr.m_FileID {
             0 => pptr.deref_local(file, &self.tpk)?.read(reader)?,
             file_id => {
-                let external = &file.m_Externals[file_id as usize - 1];
-                let (external_file, external_reader) =
-                    self.load_external_file(Path::new(&external.pathName))?;
+                let external_info = &file.m_Externals[file_id as usize - 1];
+                let external = self.load_external_file(Path::new(&external_info.pathName))?;
                 let object = pptr
                     .make_local()
-                    .deref_local(external_file, &self.tpk)
-                    .with_context(|| format!("In external {} {}", file_id, external.pathName))?;
-                object.read(&mut Cursor::new(external_reader))?
+                    .deref_local(external.file, &self.tpk)
+                    .with_context(|| {
+                        format!("In external {} {}", file_id, external_info.pathName)
+                    })?;
+                object.read(&mut Cursor::new(external.data))?
             }
         })
     }
@@ -209,18 +218,19 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
                 Ok(data)
             }
             file_id => {
-                let external = &serialized.m_Externals[file_id as usize - 1];
-                let (external_file, external_reader) =
-                    self.load_external_file(Path::new(&external.pathName))?;
-                let external_reader = &mut Cursor::new(external_reader);
+                let external_info = &serialized.m_Externals[file_id as usize - 1];
+                let external = self.load_external_file(Path::new(&external_info.pathName))?;
                 let mb_obj = pptr
                     .make_local()
-                    .deref_local::<MonoBehaviour>(external_file, &self.tpk)
-                    .with_context(|| format!("In external {} {}", file_id, external.pathName))?;
+                    .deref_local::<MonoBehaviour>(external.file, &self.tpk)
+                    .with_context(|| {
+                        format!("In external {} {}", file_id, external_info.pathName)
+                    })?;
 
                 let data = self
-                    .read_monobehaviour_data(&mb_obj, external_file, external_reader)?
-                    .read(external_reader)?;
+                    .read_monobehaviour_data(&mb_obj, external.file, &mut external.reader())?
+                    .read(&mut external.reader())?;
+
                 Ok(data)
             }
         }
@@ -236,9 +246,8 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
             0 => Ok((serialized, MaybeCached::A(serialized_reader))),
             file_id => {
                 let external = &serialized.m_Externals[file_id as usize - 1];
-                let (external_file, external_reader) =
-                    self.load_external_file(Path::new(&external.pathName))?;
-                Ok((external_file, MaybeCached::B(Cursor::new(external_reader))))
+                let external = self.load_external_file(Path::new(&external.pathName))?;
+                Ok((external.file, MaybeCached::B(external.reader())))
             }
         }
     }

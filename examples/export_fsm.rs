@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -8,9 +7,10 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use serde_derive::{Deserialize, Serialize};
 use unity_scene_repacker::GameFiles;
+use unity_scene_repacker::env::handle::SerializedFileHandle;
 use unity_scene_repacker::env::{EnvResolver, Environment};
 use unity_scene_repacker::typetree_generator_api::GeneratorBackend;
-use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour, MonoScript};
+use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour};
 
 fn main() -> Result<()> {
     let include_mbs = ["PlayMakerFSM"];
@@ -32,27 +32,24 @@ fn main() -> Result<()> {
 
     for file_path in env.resolver.serialized_files()? {
         let (file, data) = env.load_leaf(&file_path)?;
-        let data = &mut Cursor::new(data);
+        let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-        for mb_obj in file.objects_of::<MonoBehaviour>(tpk)? {
-            let Some(script) = file.script_type(mb_obj.info) else {
+        for mb_obj in file.objects_of::<MonoBehaviour>()? {
+            let Some(script) = mb_obj.mono_script()? else {
                 continue;
             };
-            let script = env.deref_read(script.typed::<MonoScript>(), &file, data)?;
 
             if include_mbs.contains(&script.m_Name.as_str()) {
-                let fsm = env
-                    .load_typetree_as::<PlayMakerFSM>(&mb_obj, &script)?
-                    .read(data)?;
+                let fsm = mb_obj.load_typetree_as::<PlayMakerFSM>(&script)?.read()?;
+                let go = file.deref_read(fsm.game_object)?;
 
-                let go = fsm.game_object.deref_local(&file, tpk)?.read(data)?;
-                let path = go.path(&file, data, tpk)?;
+                let path = go.path(&file.file, &mut file.reader(), tpk)?;
 
                 let template = fsm
                     .template
                     .optional()
                     .map(|template| -> Result<_> {
-                        let template = env.deref_read_monobehaviour(template, &file, data)?;
+                        let template = file.deref(template)?.load_typetree()?.read()?;
                         Ok(FsmTemplateInfo {
                             fsm: template.fsm.name,
                         })

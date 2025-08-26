@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -9,6 +9,7 @@ use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::GameFiles;
+use unity_scene_repacker::env::handle::SerializedFileHandle;
 use unity_scene_repacker::env::{EnvResolver, Environment};
 use unity_scene_repacker::unity::types::MonoBehaviour;
 
@@ -121,17 +122,13 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
             let name = file.file_name().unwrap().to_str().unwrap();
             if name.starts_with("level") {
                 // PERF: this can be optimized for the BundleFileReader resolver
-                let (serialized, data) = env.load_leaf(file)?;
-                let data = &mut Cursor::new(data);
+                let (file, data) = env.load_leaf(file)?;
+                let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-                for mb in serialized.objects_of::<MonoBehaviour>(&env.tpk)? {
-                    let mb = mb.read(data)?;
-
-                    if mb.m_Script.is_null() {
+                for mb in file.objects_of::<MonoBehaviour>()? {
+                    let Some(script) = mb.mono_script()? else {
                         continue;
-                    }
-
-                    let script = env.deref_read(mb.m_Script, &serialized, data)?;
+                    };
 
                     used.push((
                         script.assembly_name().into_owned(),

@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
-use std::io::Cursor;
 
 use anyhow::{Context, Result};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::GeneratorBackend;
+use unity_scene_repacker::env::handle::SerializedFileHandle;
 use unity_scene_repacker::env::{EnvResolver, Environment};
-use unity_scene_repacker::unity::types::{MonoBehaviour, MonoScript};
+use unity_scene_repacker::unity::types::MonoBehaviour;
 
 fn main() -> Result<()> {
     let game_dir = std::env::args().nth(1).context("missing path to game")?;
@@ -23,11 +23,12 @@ fn main() -> Result<()> {
         .map(|path| -> Result<_> {
             let mut map = BTreeMap::default();
             let (file, data) = env.load_leaf(path)?;
-            let data = &mut Cursor::new(data);
+            let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-            for mb_obj in file.objects_of::<MonoBehaviour>(&env.tpk)? {
-                let script_type = file.script_type(mb_obj.info).unwrap().typed::<MonoScript>();
-                let script = env.deref_read(script_type, &file, data)?;
+            for mb in file.objects_of::<MonoBehaviour>()? {
+                let Some(script) = mb.mono_script()? else {
+                    continue;
+                };
 
                 *map.entry(script.full_name().into_owned()).or_insert(0) += 1;
             }

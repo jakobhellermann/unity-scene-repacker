@@ -4,10 +4,10 @@ use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::io::Cursor;
 use typetree_generator_api::GeneratorBackend;
 use unity_scene_repacker::env::Environment;
-use unity_scene_repacker::unity::types::{MonoBehaviour, MonoScript};
+use unity_scene_repacker::env::handle::SerializedFileHandle;
+use unity_scene_repacker::unity::types::MonoBehaviour;
 
 fn main() -> Result<()> {
     let game_dir = std::env::args().nth(1).context("missing path to game")?;
@@ -23,18 +23,17 @@ fn main() -> Result<()> {
         .map(|(scene_name, scene_idx)| -> Result<_> {
             let mut map = BTreeMap::default();
             let (file, data) = env.load_leaf(format!("level{scene_idx}"))?;
-            let data = &mut Cursor::new(data);
+            let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
             let mut transitions = Vec::new();
 
-            for mb_obj in file.objects_of::<MonoBehaviour>(&env.tpk)? {
-                let script_type = file.script_type(mb_obj.info).unwrap().typed::<MonoScript>();
-                let script = env.deref_read(script_type, &file, data)?;
+            for mb in file.objects_of::<MonoBehaviour>()? {
+                let Some(script) = mb.mono_script()? else {
+                    continue;
+                };
 
                 if script.full_name() == "TransitionPoint" {
-                    let data = env
-                        .load_typetree_as::<TransitionPoint>(&mb_obj, &script)?
-                        .read(data)?;
+                    let data = mb.load_typetree_as::<TransitionPoint>(&script)?.read()?;
 
                     if !data.targetScene.is_empty() {
                         transitions.push(Transition {
