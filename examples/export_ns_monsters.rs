@@ -44,28 +44,19 @@ fn main() -> Result<()> {
             };
 
             if include_mbs.contains(&script.m_Name.as_str()) {
-                let monster = mb_obj
-                    .cast::<StealthGameMonster>()
-                    .load_typetree()?
-                    .read()?;
+                let monster = mb_obj.cast::<StealthGameMonster>().read()?;
 
                 if monster.monster_stat.is_null() {
                     continue;
                 }
 
                 let monster_stat_handle = file.deref(monster.monster_stat)?;
-                let monster_stat = monster_stat_handle.load_typetree()?.read()?;
+                let monster_stat = monster_stat_handle.read()?;
 
                 let hurt_interrupt_data = monster_stat
                     .hurt_interrupt_data
                     .optional()
-                    .map(|hurt_interrupt| {
-                        monster_stat_handle
-                            .file
-                            .deref(hurt_interrupt)?
-                            .load_typetree()?
-                            .read()
-                    })
+                    .map(|hurt_interrupt| monster_stat_handle.file.deref(hurt_interrupt)?.read())
                     .transpose()?;
                 let level = hurt_interrupt_data.map_or(0, |x| x.monster_level);
 

@@ -40,7 +40,7 @@ fn main() -> Result<()> {
             };
 
             if include_mbs.contains(&script.m_Name.as_str()) {
-                let fsm = mb_obj.load_typetree_as::<PlayMakerFSM>(&script)?.read()?;
+                let fsm = mb_obj.cast::<PlayMakerFSM>().read()?;
                 let go = file.deref_read(fsm.game_object)?;
 
                 let path = go.path(&file.file, &mut file.reader(), tpk)?;
@@ -49,7 +49,7 @@ fn main() -> Result<()> {
                     .template
                     .optional()
                     .map(|template| -> Result<_> {
-                        let template = file.deref(template)?.load_typetree()?.read()?;
+                        let template = file.deref(template)?.read()?;
                         Ok(FsmTemplateInfo {
                             fsm: template.fsm.name,
                         })

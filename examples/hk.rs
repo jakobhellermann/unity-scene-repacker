@@ -33,7 +33,7 @@ fn main() -> Result<()> {
                 };
 
                 if script.full_name() == "TransitionPoint" {
-                    let data = mb.load_typetree_as::<TransitionPoint>(&script)?.read()?;
+                    let data = mb.cast::<TransitionPoint>().read()?;
 
                     if !data.targetScene.is_empty() {
                         transitions.push(Transition {

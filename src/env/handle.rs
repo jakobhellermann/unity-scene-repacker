@@ -5,7 +5,7 @@ use anyhow::{Context as _, Result};
 use rabex::files::SerializedFile;
 use rabex::files::serializedfile::ObjectRef;
 use rabex::objects::pptr::PathId;
-use rabex::objects::{ClassIdType, TypedPPtr};
+use rabex::objects::{ClassId, ClassIdType, TypedPPtr};
 use rabex::typetree::TypeTreeProvider;
 use serde::Deserialize;
 
@@ -93,6 +93,13 @@ impl<'a, T, R: EnvResolver, P: TypeTreeProvider> ObjectRefHandle<'a, T, R, P> {
     where
         T: for<'de> Deserialize<'de>,
     {
+        if self.object.info.m_ClassID == ClassId::MonoBehaviour {
+            if self.object.tt.m_Type == "MonoBehaviour" {
+                let with_tt = self.load_typetree()?;
+                return with_tt.read();
+            }
+        }
+
         let data = self.object.read(&mut self.file.reader())?;
         Ok(data)
     }
@@ -110,7 +117,7 @@ impl<'a, T, R: EnvResolver, P: TypeTreeProvider> ObjectRefHandle<'a, T, R, P> {
         }
     }
 
-    pub fn load_typetree(&'a self) -> Result<ObjectRefHandle<'a, T, R, P>>
+    fn load_typetree(&'a self) -> Result<ObjectRefHandle<'a, T, R, P>>
     where
         for<'de> T: Deserialize<'de>,
     {
@@ -120,10 +127,7 @@ impl<'a, T, R: EnvResolver, P: TypeTreeProvider> ObjectRefHandle<'a, T, R, P> {
         self.load_typetree_as(&script)
     }
 
-    pub fn load_typetree_as<U>(
-        &'a self,
-        script: &MonoScript,
-    ) -> Result<ObjectRefHandle<'a, U, R, P>>
+    fn load_typetree_as<U>(&'a self, script: &MonoScript) -> Result<ObjectRefHandle<'a, U, R, P>>
     where
         U: for<'de> Deserialize<'de>,
     {

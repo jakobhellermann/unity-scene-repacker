@@ -195,7 +195,8 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
     ) -> Result<ObjectRef<'a, T>> {
         let tt = self
             .typetree_generator
-            .generate(&script.assembly_name(), &script.full_name())?;
+            .generate(&script.assembly_name(), &script.full_name());
+        let tt = tt?;
         let data = mb_obj.with_typetree::<T>(tt);
         Ok(data)
     }
