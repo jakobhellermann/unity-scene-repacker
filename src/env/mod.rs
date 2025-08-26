@@ -21,6 +21,7 @@ use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use crate::GameFiles;
 use crate::env::resolver::BasedirEnvResolver;
 use crate::typetree_generator_cache::TypeTreeGeneratorCache;
+use crate::unity::types::BuildSettings;
 
 pub enum Data {
     InMemory(Vec<u8>),
@@ -95,6 +96,15 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
                 Ok(unity_version)
             }
         }
+    }
+
+    pub fn build_settings(&self) -> Result<BuildSettings> {
+        let (ggm, mut ggm_data) = self.load_leaf("globalgamemanagers")?;
+        let build_settings = ggm
+            .find_object_of::<BuildSettings>(&self.tpk)?
+            .unwrap()
+            .read(&mut ggm_data)?;
+        Ok(build_settings)
     }
 
     pub fn load_leaf(

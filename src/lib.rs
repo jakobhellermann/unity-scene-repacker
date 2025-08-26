@@ -33,9 +33,7 @@ use unity::types::MonoBehaviour;
 
 use crate::env::{Data, EnvResolver, Environment};
 use crate::scene_lookup::SceneLookup;
-use crate::unity::types::{
-    AssetBundle, AssetInfo, BuildSettings, MonoScript, PreloadData, Transform,
-};
+use crate::unity::types::{AssetBundle, AssetInfo, MonoScript, PreloadData, Transform};
 
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
@@ -112,12 +110,7 @@ fn collect_what_to_repack<T: Send + Sync>(
     repack_settings: &RepackSettings,
     f: impl Fn(&str, &str, &[String], SerializedFile, Data) -> Result<T> + Send + Sync,
 ) -> Result<(Vec<T>, Vec<ExtraObject>)> {
-    let (ggm, mut ggm_reader) = env.load_cached("globalgamemanagers")?;
-    let build_settings = ggm
-        .find_object_of::<BuildSettings>(&env.tpk)?
-        .unwrap()
-        .read(&mut ggm_reader)?;
-
+    let build_settings = env.build_settings()?;
     let has_extra_objects = !repack_settings.extra_objects.is_empty();
 
     let read = |filename: &str, scene_name| -> Result<_> {

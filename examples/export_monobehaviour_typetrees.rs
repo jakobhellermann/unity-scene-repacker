@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::{Cursor, Write};
+use std::io::Write;
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use byteorder::{LE, WriteBytesExt};
-use rabex::files::SerializedFile;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -26,21 +25,14 @@ fn main() -> Result<()> {
         .next()
         .context("expected output file as second argument")?;
 
-    let path = game_dir.join("globalgamemanagers");
-
-    let mut data = &mut Cursor::new(std::fs::read(path)?);
-    let file = SerializedFile::from_reader(&mut data)?;
-
     let game_files = GameFiles::probe(game_dir)?;
     let env = Environment::new(game_files, tpk);
-    let used = collect_used_script_types(env)?;
 
-    let generator = TypeTreeGenerator::new_lib_next_to_exe(
-        file.m_UnityVersion.unwrap(),
-        GeneratorBackend::default(),
-    )?;
+    let backend: GeneratorBackend = GeneratorBackend::default();
+    let generator = TypeTreeGenerator::new_lib_next_to_exe(env.unity_version()?, backend)?;
     generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
 
+    let used = collect_used_script_types(env)?;
     let mb_typetrees = generate_monobehaviour_types(used, generator)?;
 
     /*
