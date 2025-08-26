@@ -99,21 +99,18 @@ impl<R: EnvResolver, P: TypeTreeProvider> Environment<R, P> {
     }
 
     pub fn build_settings(&self) -> Result<BuildSettings> {
-        let (ggm, mut ggm_data) = self.load_leaf("globalgamemanagers")?;
+        let (ggm, ggm_data) = self.load_leaf("globalgamemanagers")?;
         let build_settings = ggm
             .find_object_of::<BuildSettings>(&self.tpk)?
             .unwrap()
-            .read(&mut ggm_data)?;
+            .read(&mut Cursor::new(ggm_data))?;
         Ok(build_settings)
     }
 
-    pub fn load_leaf(
-        &self,
-        relative_path: impl AsRef<Path>,
-    ) -> Result<(SerializedFile, Cursor<Data>)> {
+    pub fn load_leaf(&self, relative_path: impl AsRef<Path>) -> Result<(SerializedFile, Data)> {
         let data = self.resolver.read_path(relative_path.as_ref())?;
         let file = SerializedFile::from_reader(&mut Cursor::new(data.as_ref()))?;
-        Ok((file, Cursor::new(data)))
+        Ok((file, data))
     }
 
     pub fn load_cached(

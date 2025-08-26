@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
-use std::io::Write;
+use std::io::{Cursor, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -121,15 +121,17 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
             let name = file.file_name().unwrap().to_str().unwrap();
             if name.starts_with("level") {
                 // PERF: this can be optimized for the BundleFileReader resolver
-                let (serialized, mut data) = env.load_leaf(file)?;
+                let (serialized, data) = env.load_leaf(file)?;
+                let data = &mut Cursor::new(data);
+
                 for mb in serialized.objects_of::<MonoBehaviour>(&env.tpk)? {
-                    let mb = mb.read(&mut data)?;
+                    let mb = mb.read(data)?;
 
                     if mb.m_Script.is_null() {
                         continue;
                     }
 
-                    let script = env.deref_read(mb.m_Script, &serialized, &mut data)?;
+                    let script = env.deref_read(mb.m_Script, &serialized, data)?;
 
                     used.push((
                         script.assembly_name().into_owned(),
