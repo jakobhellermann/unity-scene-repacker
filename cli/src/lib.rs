@@ -243,15 +243,12 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     if args.output.mode.needs_typetree_generator() {
         let generator = match libs_dir {
-            Some(lib_path) => TypeTreeGenerator::new_lib_in(
-                lib_path,
-                unity_version,
-                GeneratorBackend::AssetsTools,
-            )?,
-            None => TypeTreeGenerator::new_lib_next_to_exe(
-                unity_version,
-                GeneratorBackend::AssetsTools,
-            )?,
+            Some(lib_path) => {
+                TypeTreeGenerator::new_lib_in(lib_path, unity_version, GeneratorBackend::default())?
+            }
+            None => {
+                TypeTreeGenerator::new_lib_next_to_exe(unity_version, GeneratorBackend::default())?
+            }
         };
         generator
             .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))

@@ -142,7 +142,7 @@ fn export_inner(
             MonobehaviourTypetreeMode::GenerateRuntime => {
                 let generator = TypeTreeGenerator::new_lib_next_to_exe(
                     unity_version,
-                    GeneratorBackend::AssetsTools,
+                    GeneratorBackend::default(),
                 )?;
                 generator
                     .load_all_dll_in_dir(game_dir.join("Managed"))

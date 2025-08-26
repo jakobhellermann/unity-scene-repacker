@@ -21,8 +21,10 @@ pub struct TypeTreeGenerator {
 unsafe impl Send for TypeTreeGenerator {}
 unsafe impl Sync for TypeTreeGenerator {}
 
+#[derive(Default)]
 pub enum GeneratorBackend {
     AssetStudio,
+    #[default]
     AssetsTools,
     AssetRipper,
 }
