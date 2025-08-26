@@ -129,19 +129,18 @@ pub struct MonoScript {
     pub m_AssemblyName: String,
 }
 impl MonoScript {
+    pub fn assembly_name(&self) -> Cow<'_, str> {
+        match self.m_AssemblyName.ends_with(".dll") {
+            true => Cow::Borrowed(&self.m_AssemblyName),
+            false => Cow::Owned(format!("{}.dll", self.m_AssemblyName)),
+        }
+    }
+
     pub fn full_name(&self) -> Cow<'_, str> {
         match self.m_Namespace.is_empty() {
             true => Cow::Borrowed(&self.m_ClassName),
             false => Cow::Owned(format!("{}.{}", self.m_Namespace, self.m_ClassName)),
         }
-    }
-
-    pub fn into_location(self) -> (String, String) {
-        let full_name = match self.m_Namespace.is_empty() {
-            true => self.m_ClassName,
-            false => format!("{}.{}", self.m_Namespace, self.m_ClassName),
-        };
-        (self.m_AssemblyName, full_name)
     }
 }
 

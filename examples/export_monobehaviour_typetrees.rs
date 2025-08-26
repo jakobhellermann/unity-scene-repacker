@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Write};
 use std::path::Path;
@@ -6,12 +5,13 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use byteorder::{LE, WriteBytesExt};
 use rabex::files::SerializedFile;
-use rabex::objects::{ClassId, ClassIdType, TypedPPtr};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
+use unity_scene_repacker::GameFiles;
 use unity_scene_repacker::env::{EnvResolver, Environment};
+use unity_scene_repacker::unity::types::MonoBehaviour;
 
 fn main() -> Result<()> {
     let tpk = TpkTypeTreeBlob::embedded();
@@ -170,61 +170,4 @@ struct TypetreeNodeDump {
     m_Name: String,
     m_Level: u8,
     m_MetaFlag: i32,
-}
-
-use serde_derive::Deserialize;
-use unity_scene_repacker::GameFiles;
-#[allow(non_snake_case)]
-#[derive(Debug, Deserialize)]
-pub struct MonoScript {
-    pub m_Name: String,
-    pub m_ExecutionOrder: i32,
-    pub m_PropertiesHash: [u8; 16],
-    pub m_ClassName: String,
-    pub m_Namespace: String,
-    pub m_AssemblyName: String,
-}
-impl MonoScript {
-    pub fn assembly_name(&self) -> Cow<'_, str> {
-        match self.m_AssemblyName.ends_with(".dll") {
-            true => Cow::Borrowed(&self.m_AssemblyName),
-            false => Cow::Owned(format!("{}.dll", self.m_AssemblyName)),
-        }
-    }
-    pub fn full_name(&self) -> Cow<'_, str> {
-        match self.m_Namespace.is_empty() {
-            true => Cow::Borrowed(&self.m_ClassName),
-            false => Cow::Owned(format!("{}.{}", self.m_Namespace, self.m_ClassName)),
-        }
-    }
-}
-
-impl ClassIdType for MonoScript {
-    const CLASS_ID: ClassId = ClassId::MonoScript;
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-pub struct MonoBehaviour {
-    pub m_GameObject: TypedPPtr<GameObject>,
-    pub m_Enabled: u8,
-    pub m_Script: TypedPPtr<MonoScript>,
-    pub m_Name: String,
-}
-
-impl ClassIdType for MonoBehaviour {
-    const CLASS_ID: ClassId = ClassId::MonoBehaviour;
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(non_snake_case)]
-pub struct GameObject {
-    // pub m_Component: Vec<ComponentPair>,
-    pub m_Layer: u32,
-    pub m_Name: String,
-    pub m_Tag: u16,
-    pub m_IsActive: bool,
-}
-impl ClassIdType for GameObject {
-    const CLASS_ID: ClassId = ClassId::GameObject;
 }

@@ -594,7 +594,7 @@ fn prepare_monobehaviour_types<'a>(
     env: &'a Environment,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
-) -> Result<FxHashMap<i64, &'a TypeTreeNode>> {
+) -> Result<FxHashMap<PathId, &'a TypeTreeNode>> {
     Ok(file
         .objects_of::<MonoBehaviour>(&env.tpk)?
         .map(|mb_info| -> Result<_> {
@@ -608,11 +608,8 @@ fn prepare_monobehaviour_types<'a>(
                 .deref_read(mb.m_Script, file, reader)
                 .with_context(|| format!("In monobehaviour {}", mb_info.info.m_PathID))?;
 
-            let (assembly_name, full_name) = script.into_location();
-            let assembly_name = match assembly_name.ends_with(".dll") {
-                true => assembly_name,
-                false => format!("{assembly_name}.dll"),
-            };
+            let assembly_name = script.assembly_name();
+            let full_name = script.full_name();
 
             let ty = env
                 .typetree_generator
