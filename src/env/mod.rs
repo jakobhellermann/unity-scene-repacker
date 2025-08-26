@@ -13,6 +13,8 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 
+pub mod handle;
+
 pub mod game_files;
 mod resolver;
 
