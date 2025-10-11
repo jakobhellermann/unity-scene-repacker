@@ -6,10 +6,10 @@ use rabex::objects::TypedPPtr;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::unity::types::{GameObject, MonoBehaviour};
 use rabex_env::{EnvResolver, Environment};
 use unity_scene_repacker::GameFiles;
 use unity_scene_repacker::typetree_generator_api::GeneratorBackend;
-use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour};
 
 fn main() -> Result<()> {
     let include_mbs = ["StealthGameMonster", "FlyingMonster"];

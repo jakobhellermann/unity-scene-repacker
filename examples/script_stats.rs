@@ -4,10 +4,10 @@ use anyhow::{Context, Result};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::unity::types::MonoBehaviour;
 use rabex_env::{EnvResolver, Environment};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::GeneratorBackend;
-use unity_scene_repacker::unity::types::MonoBehaviour;
 
 fn main() -> Result<()> {
     let game_dir = std::env::args().nth(1).context("missing path to game")?;

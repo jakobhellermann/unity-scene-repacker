@@ -472,7 +472,7 @@ pub fn pack_to_asset_bundle(
 
     let mut builder =
         SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
-    builder._next_path_id = 2;
+    builder.next_path_id = 2;
 
     let mut container = IndexMap::new();
 
@@ -544,25 +544,26 @@ pub fn pack_to_asset_bundle(
 
     objects.into_iter().try_for_each(|objects| -> Result<_> {
         for obj in objects {
-            builder.objects.push(obj?);
+            let (obj, data) = obj?;
+            builder.objects.insert(obj.m_PathID, (obj, data));
         }
         Ok(())
     })?;
 
-    builder._next_path_id = 1;
-    builder.add_object(&AssetBundle {
-        m_Name: bundle_name.to_owned(),
-        m_PreloadTable: Vec::new(),
-        m_Container: container,
-        m_MainAsset: AssetInfo::default(),
-        m_RuntimeCompatibility: 1,
-        m_AssetBundleName: bundle_name.to_owned(),
-        m_IsStreamedSceneAssetBundle: false,
-        m_PathFlags: 7,
-        ..Default::default()
-    })?;
-
-    builder.objects.sort_by_key(|(info, _)| info.m_PathID);
+    builder.add_object_at(
+        1,
+        &AssetBundle {
+            m_Name: bundle_name.to_owned(),
+            m_PreloadTable: Vec::new(),
+            m_Container: container,
+            m_MainAsset: AssetInfo::default(),
+            m_RuntimeCompatibility: 1,
+            m_AssetBundleName: bundle_name.to_owned(),
+            m_IsStreamedSceneAssetBundle: false,
+            m_PathFlags: 7,
+            ..Default::default()
+        },
+    )?;
 
     let mut out = Vec::new();
     builder.write(&mut Cursor::new(&mut out))?;
@@ -714,8 +715,7 @@ fn create_shallow_assetbundle(
         m_PathFlags: 7,
         ..Default::default()
     };
-    builder._next_path_id = 1;
-    builder.add_object(&ab)?;
+    builder.add_object_at(1, &ab)?;
 
     let mut builder_out = Vec::new();
     builder.write(Cursor::new(&mut builder_out))?;
