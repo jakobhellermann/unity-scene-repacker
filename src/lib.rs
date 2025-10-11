@@ -28,6 +28,7 @@ use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::io::{Cursor, Read, Seek, Write};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
@@ -45,7 +46,7 @@ impl RepackSettings {
 }
 
 pub struct RepackScene<'a> {
-    pub original_name: String,
+    pub original_name: PathBuf,
     pub scene_name: Option<String>,
 
     pub serialized: SerializedFile,
@@ -59,7 +60,7 @@ pub struct RepackScene<'a> {
 }
 
 // Filename, PathId, Classname, Objectname
-type ExtraObject = (String, PathId, String, String);
+type ExtraObject = (PathBuf, PathId, String, String);
 
 pub fn repack_scenes<'a>(
     env: &'a Environment,
@@ -107,12 +108,13 @@ pub fn repack_scenes<'a>(
 fn collect_what_to_repack<T: Send + Sync>(
     env: &Environment,
     repack_settings: &RepackSettings,
-    f: impl Fn(&str, &str, &[String], SerializedFile, Data) -> Result<T> + Send + Sync,
+    // |filename, scene_name, object_paths, file, data|
+    f: impl Fn(&Path, &str, &[String], SerializedFile, Data) -> Result<T> + Send + Sync,
 ) -> Result<(Vec<T>, Vec<ExtraObject>)> {
     let build_settings = env.build_settings()?;
     let has_extra_objects = !repack_settings.extra_objects.is_empty();
 
-    let read = |filename: &str, scene_name| -> Result<_> {
+    let read = |filename: &Path, scene_name| -> Result<_> {
         let data = env.resolver.read(filename).with_context(|| {
             format!(
                 "{} not exist in bundle",
@@ -139,22 +141,21 @@ fn collect_what_to_repack<T: Send + Sync>(
             .serialized_files()?
             .into_par_iter()
             .map(|filename| -> Result<_> {
-                let filename = filename.to_str().expect("non-utf8 scene path");
-
-                let (data, file_raw) = read(filename, None)?;
+                let (data, file_raw) = read(&filename, None)?;
                 let file = SerializedFileHandle::new(env, &file_raw, data.as_ref());
 
                 let extra_objects =
-                    find_extra_objects(file, filename, &repack_settings.extra_objects)?;
+                    find_extra_objects(file, &filename, &repack_settings.extra_objects)?;
 
                 if let Some(scene_index) = filename
-                    .strip_prefix("level")
+                    .to_str()
+                    .and_then(|name| name.strip_prefix("level"))
                     .and_then(|x| x.parse::<usize>().ok())
                 {
                     let scene_name = scene_lookup[scene_index];
 
                     if let Some(object_paths) = repack_settings.scene_objects.get(scene_name) {
-                        let x = f(filename, scene_name, object_paths, file_raw, data)?;
+                        let x = f(&filename, scene_name, object_paths, file_raw, data)?;
                         return Ok((extra_objects, Some(x)));
                     }
                 }
@@ -183,15 +184,21 @@ fn collect_what_to_repack<T: Send + Sync>(
     } else {
         let scene_lookup = build_settings.scene_name_lookup();
 
-        let scenes = repack_settings
+        let scene_files = repack_settings
             .scene_objects
-            .par_iter()
-            .map(|(scene_name, object_paths)| -> Result<_> {
+            .iter()
+            .map(|(scene_name, object_paths)| {
                 let scene_index = *scene_lookup
                     .get(scene_name)
                     .with_context(|| format!("Scene '{scene_name}' was not found in game files"))?;
                 let filename = format!("level{scene_index}");
+                Ok((scene_name, PathBuf::from(filename), object_paths.as_slice()))
+            })
+            .collect::<Result<Vec<_>>>()?;
 
+        let scenes = scene_files
+            .par_iter()
+            .map(|(scene_name, filename, object_paths)| -> Result<_> {
                 let (data, file) = read(&filename, None)?;
                 f(&filename, scene_name, object_paths, file, data)
             })
@@ -210,7 +217,7 @@ struct RepackSceneSettings<'a> {
 fn repack_scene<'a>(
     env: &'a Environment,
     prepare_scripts: bool,
-    original_name: &str,
+    original_name: &Path,
     scene_name: Option<&str>,
     settings: RepackSceneSettings,
     file: SerializedFile,
@@ -257,10 +264,10 @@ fn repack_scene<'a>(
 
 fn find_extra_objects(
     file: SerializedFileHandle<GameFiles, impl TypeTreeProvider>,
-    filename: &str,
+    filename: &Path,
     // classname: [objectname]
     extra_objects: &IndexMap<String, IndexSet<String>>,
-) -> Result<Vec<(String, PathId, String, String)>, anyhow::Error> {
+) -> Result<Vec<(PathBuf, PathId, String, String)>, anyhow::Error> {
     let mut roots = Vec::new();
 
     for mb_obj in file.objects_of::<MonoBehaviour>()? {
@@ -285,10 +292,10 @@ fn find_extra_objects(
     Ok(roots)
 }
 
-fn scene_name_display(scene_name: Option<&str>, original_name: &str) -> String {
+fn scene_name_display(scene_name: Option<&str>, original_name: &Path) -> String {
     match scene_name {
-        Some(scene_name) => format!("{scene_name} ({original_name}'"),
-        None => format!("'{original_name}'"),
+        Some(scene_name) => format!("{scene_name} ({})'", original_name.display()),
+        None => format!("'{}'", original_name.display()),
     }
 }
 
@@ -309,7 +316,7 @@ fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
 }
 
 fn deduplicate_objects<'a>(
-    original_name: &str,
+    original_name: &Path,
     scene_name: Option<&str>,
     paths: &'a [String],
 ) -> IndexSet<&'a str> {
@@ -475,7 +482,7 @@ pub fn pack_to_asset_bundle(
 
     for (filename, path_id, class_name, object_name) in extra_objects {
         // TODO cached
-        let file_id = builder.add_external_uncached(FileIdentifier::new(filename));
+        let file_id = builder.add_external_uncached(FileIdentifier::try_from(filename)?);
         let info = AssetInfo::new(PPtr::new(file_id, path_id));
         container.insert(get_extra_object_asset_name(&class_name, &object_name), info);
     }
@@ -672,7 +679,7 @@ fn create_shallow_assetbundle(
     writer: impl Write + Seek,
     bundle_name: &str,
     // (scenename, Filename)
-    objects: Vec<((String, String), Vec<(String, PathId)>)>,
+    objects: Vec<((String, PathBuf), Vec<(String, PathId)>)>,
     extra_objects: Vec<ExtraObject>,
     compression: CompressionType,
 ) -> Result<()> {
@@ -686,14 +693,14 @@ fn create_shallow_assetbundle(
 
     for (filename, path_id, class_name, object_name) in extra_objects {
         // TODO cached
-        let file_id = builder.add_external_uncached(FileIdentifier::new(filename));
+        let file_id = builder.add_external_uncached(FileIdentifier::try_from(filename)?);
         let info = AssetInfo::new(PPtr::new(file_id, path_id));
         container.insert(get_extra_object_asset_name(&class_name, &object_name), info);
     }
 
-    for ((scene_name, scene_index), objects) in objects {
-        let file_index =
-            builder.add_external_uncached(FileIdentifier::new(format!("level{scene_index}")));
+    for ((scene_name, original_name), objects) in objects {
+        // TODO: is this right?
+        let file_index = builder.add_external_uncached(FileIdentifier::try_from(original_name)?);
 
         for (scene_path, path_id) in objects {
             let path = get_asset_bundle_object_asset_name(&scene_name, &scene_path);

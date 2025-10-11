@@ -12,6 +12,7 @@ use rabex_env::Environment;
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
+use std::path::Path;
 
 use crate::scene_lookup::SceneLookup;
 use crate::unity::types::Transform;
@@ -20,7 +21,7 @@ use crate::{reachable, scene_name_display};
 pub fn prune_scene(
     env: &Environment,
     scene_name: Option<&str>,
-    original_name: &str,
+    original_name: &Path,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
     retain_paths: &IndexSet<&str>,

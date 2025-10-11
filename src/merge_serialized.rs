@@ -7,6 +7,7 @@ use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::fmt::Debug;
+use std::path::PathBuf;
 
 use crate::scene_name_display;
 use crate::trace_pptr::replace_pptrs_inplace_endianed;
@@ -71,7 +72,7 @@ pub fn add_scene_meta_to_builder(
 
 pub fn remap_objects(
     scene_name: Option<&str>,
-    original_name: String,
+    original_name: PathBuf,
     file: &SerializedFile,
     data: &[u8],
     tpk: &impl TypeTreeProvider,
