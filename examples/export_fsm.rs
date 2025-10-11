@@ -5,11 +5,11 @@ use anyhow::{Context, Result};
 use rabex::objects::TypedPPtr;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::handle::SerializedFileHandle;
+use rabex_env::{EnvResolver as _, Environment};
 use serde_derive::{Deserialize, Serialize};
+use typetree_generator_api::GeneratorBackend;
 use unity_scene_repacker::GameFiles;
-use unity_scene_repacker::env::handle::SerializedFileHandle;
-use unity_scene_repacker::env::{EnvResolver, Environment};
-use unity_scene_repacker::typetree_generator_api::GeneratorBackend;
 use unity_scene_repacker::unity::types::{GameObject, MonoBehaviour};
 
 fn main() -> Result<()> {

@@ -16,3 +16,4 @@ rabex = { workspace = true, default-features = false, features = [
     "embed-tpk",
     "compression-lz4",
 ] }
+rabex-env.workspace = true

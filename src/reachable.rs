@@ -3,10 +3,10 @@ use rabex::files::SerializedFile;
 use rabex::objects::PPtr;
 use rabex::objects::pptr::PathId;
 use rabex::typetree::TypeTreeProvider;
+use rabex_env::Environment;
 use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
 
-use crate::env::Environment;
 use crate::trace_pptr;
 
 /// Returns all reachable local objects from the starting point,

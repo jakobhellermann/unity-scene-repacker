@@ -16,14 +16,14 @@ use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::TypeTreeProvider as _;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::Environment;
+use rabex_env::typetree_generator_cache::TypeTreeGeneratorCache;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
 use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use unity_scene_repacker::env::Environment;
 use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
-use unity_scene_repacker::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::{GameFiles, RepackSettings, Stats};
 
 use crate::utils::friendly_size;

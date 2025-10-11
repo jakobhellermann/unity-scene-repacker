@@ -1,14 +1,14 @@
-pub mod env;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 mod prune;
 mod reachable;
 pub mod scene_lookup;
 mod trace_pptr;
-pub mod typetree_generator_cache;
 pub mod unity;
 
-pub use env::game_files::GameFiles;
+pub use rabex_env::game_files::GameFiles;
+use rabex_env::handle::SerializedFileHandle;
+use rabex_env::{Data, EnvResolver as _, Environment};
 pub use {rabex, typetree_generator_api};
 
 use anyhow::{Context, Result};
@@ -31,8 +31,6 @@ use std::io::{Cursor, Read, Seek, Write};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use unity::types::MonoBehaviour;
 
-use crate::env::handle::SerializedFileHandle;
-use crate::env::{Data, EnvResolver, Environment};
 use crate::scene_lookup::SceneLookup;
 use crate::unity::types::{AssetBundle, AssetInfo, PreloadData, Transform};
 

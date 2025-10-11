@@ -8,11 +8,11 @@ use rabex::objects::pptr::PathId;
 use rabex::objects::{ClassId, ClassIdType};
 use rabex::serde_typetree;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
+use rabex_env::Environment;
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
 
-use crate::env::Environment;
 use crate::scene_lookup::SceneLookup;
 use crate::unity::types::Transform;
 use crate::{reachable, scene_name_display};

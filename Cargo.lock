@@ -71,6 +71,7 @@ dependencies = [
  "anyhow",
  "indexmap",
  "rabex",
+ "rabex-env",
  "serde_json",
  "unity-scene-repacker",
 ]
@@ -657,6 +658,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rabex-env"
+version = "0.1.0"
+source = "git+https://github.com/jakobhellermann/rabex-env#afa76c9dca6c42912635c809e716482080f4f039"
+dependencies = [
+ "anyhow",
+ "elsa",
+ "indexmap",
+ "memmap2",
+ "rabex",
+ "rayon",
+ "rustc-hash",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "typetree-generator-api",
+ "walkdir",
+]
+
+[[package]]
 name = "rayon"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -693,6 +713,15 @@ name = "ryu"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28d3b2b1366ec20994f1fd18c3c594f05c5dd4bc44d8bb0c1c632c8d6829481f"
+
+[[package]]
+name = "same-file"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502"
+dependencies = [
+ "winapi-util",
+]
 
 [[package]]
 name = "serde"
@@ -849,6 +878,7 @@ dependencies = [
  "lz4_flex",
  "memmap2",
  "rabex",
+ "rabex-env",
  "rayon",
  "rustc-hash",
  "serde",
@@ -870,6 +900,7 @@ dependencies = [
  "paris",
  "pyo3",
  "rabex",
+ "rabex-env",
  "steamlocate",
  "unity-scene-repacker",
 ]
@@ -885,6 +916,25 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "walkdir"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
+dependencies = [
+ "same-file",
+ "winapi-util",
+]
+
+[[package]]
+name = "winapi-util"
+version = "0.1.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
+dependencies = [
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "windows-link"
@@ -908,6 +958,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
  "windows-targets 0.53.5",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

@@ -1,12 +1,12 @@
 use anyhow::{Context, Result};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::Environment;
+use rabex_env::handle::SerializedFileHandle;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use typetree_generator_api::GeneratorBackend;
-use unity_scene_repacker::env::Environment;
-use unity_scene_repacker::env::handle::SerializedFileHandle;
 use unity_scene_repacker::unity::types::MonoBehaviour;
 
 fn main() -> Result<()> {

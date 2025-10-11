@@ -7,12 +7,12 @@ use anyhow::{Context as _, Result, bail};
 use indexmap::IndexMap;
 use rabex::objects::ClassId;
 use rabex::typetree::TypeTreeProvider as _;
-use unity_scene_repacker::env::Environment;
+use rabex_env::Environment;
+use rabex_env::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
-use unity_scene_repacker::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::{
     GameFiles, MonobehaviourTypetreeMode, RepackSettings, Stats, monobehaviour_typetree_export,
 };

@@ -15,6 +15,7 @@ json5 = "0.4"
 log = "0.4"
 paris = { version = "1.5", features = ["macros", "no_logger"] }
 rabex = { workspace = true, features = ["compression-all"] }
+rabex-env.workspace = true
 steamlocate = "2.0"
 unity-scene-repacker = { version = "2.1", path = ".." }
 
