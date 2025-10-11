@@ -22,11 +22,18 @@ pub fn locate_steam_game(game: &str) -> Result<PathBuf> {
             .libraries()?
             .filter_map(Result::ok)
             .find_map(|library| {
-                let app = library.apps().filter_map(Result::ok).find(|app| {
-                    let name = app.name.as_ref().unwrap_or(&app.install_dir);
-                    search_transform(name).contains(&game)
-                })?;
-                Some((app, library))
+                let mut candidates = library
+                    .apps()
+                    .filter_map(Result::ok)
+                    .filter_map(|app| {
+                        let name = app.name.as_ref().unwrap_or(&app.install_dir);
+                        let name = search_transform(name);
+                        let contains = name.contains(&game);
+                        contains.then(|| (app, name.len() - game.len()))
+                    })
+                    .collect::<Vec<_>>();
+                candidates.sort_by_key(|&(_, score)| score);
+                candidates.into_iter().next().map(|(app, _)| (app, library))
             })
             .with_context(|| format!("Didn't find any steam game matching '{game}'"))?
     };
