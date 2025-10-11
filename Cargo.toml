@@ -15,16 +15,16 @@ log = "0.4"
 lz4_flex = { version = "0.11", default-features = false }
 memmap2 = "0.9"
 rabex.workspace = true
+typetree-generator-api.workspace = true
 rayon = "1.10"
 rustc-hash = "2.1"
 serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
-typetree-generator-api.workspace = true
 
 [workspace]
-members = [".", "bindings", "cli", "typetree-generator-api"]
-default-members = [".", "bindings", "cli", "typetree-generator-api"]
+members = [".", "bindings", "cli"]
+default-members = [".", "bindings", "cli"]
 
 package.version = "2.4.0"
 package.edition = "2024"
@@ -38,7 +38,7 @@ too_many_arguments = "allow"
 type_complexity = "allow"
 
 [workspace.dependencies]
-typetree-generator-api = { path = "./typetree-generator-api" }
+typetree-generator-api = { git = "https://github.com/jakobhellermann/typetree-generator-api-bindings" }
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", branch = "all", default-features = false, features = [
     "embed-tpk",
     # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
