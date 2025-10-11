@@ -1,8 +1,5 @@
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
-mod prune;
-mod reachable;
-mod trace_pptr;
 
 pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
@@ -224,16 +221,15 @@ fn repack_scene<'a>(
     let scene_paths = deduplicate_objects(original_name, scene_name, settings.object_paths);
 
     let mut replacements = FxHashMap::default();
-    let (keep_objects, roots) = prune::prune_scene(
+    let result = rabex_env::prune::prune_scene(
         env,
-        scene_name,
-        original_name,
         &file,
         reader,
-        &scene_paths,
+        scene_paths.iter().copied(),
         &mut replacements,
         settings.disable_roots,
-    )?;
+    )
+    .with_context(|| scene_name_display(scene_name, original_name))?;
 
     let monobehaviour_types = prepare_scripts
         .then(|| prepare_monobehaviour_types(env, &file, reader))
@@ -251,8 +247,8 @@ fn repack_scene<'a>(
         scene_name: scene_name.map(ToOwned::to_owned),
         serialized: file,
         serialized_data,
-        keep_objects,
-        roots,
+        keep_objects: result.reachable,
+        roots: result.roots,
         replacements,
         monobehaviour_types,
     })

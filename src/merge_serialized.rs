@@ -4,13 +4,13 @@ use rabex::files::serializedfile::ObjectInfo;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::objects::pptr::{FileId, PathId};
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
+use rabex_env::trace_pptr::replace_pptrs_inplace_endianed;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::fmt::Debug;
 use std::path::PathBuf;
 
 use crate::scene_name_display;
-use crate::trace_pptr::replace_pptrs_inplace_endianed;
 
 pub struct RemapSerializedIndices {
     pub path_id: FxHashMap<PathId, PathId>,
