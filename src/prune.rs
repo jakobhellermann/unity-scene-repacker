@@ -9,13 +9,13 @@ use rabex::objects::{ClassId, ClassIdType};
 use rabex::serde_typetree;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex_env::Environment;
+use rabex_env::scene_lookup::SceneLookup;
+use rabex_env::unity::types::Transform;
 use rustc_hash::FxHashMap;
 use std::collections::{BTreeSet, VecDeque};
 use std::io::{Read, Seek};
 use std::path::Path;
 
-use crate::scene_lookup::SceneLookup;
-use crate::unity::types::Transform;
 use crate::{reachable, scene_name_display};
 
 pub fn prune_scene(

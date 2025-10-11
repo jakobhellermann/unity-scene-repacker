@@ -2,12 +2,12 @@ mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 mod prune;
 mod reachable;
-pub mod scene_lookup;
 mod trace_pptr;
-pub mod unity;
 
 pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::scene_lookup::SceneLookup;
+use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
 use rabex_env::{Data, EnvResolver as _, Environment};
 pub use {rabex, typetree_generator_api};
 
@@ -30,10 +30,6 @@ use std::fmt::Debug;
 use std::io::{Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use unity::types::MonoBehaviour;
-
-use crate::scene_lookup::SceneLookup;
-use crate::unity::types::{AssetBundle, AssetInfo, PreloadData, Transform};
 
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
