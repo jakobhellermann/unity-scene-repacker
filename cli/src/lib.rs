@@ -243,24 +243,30 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     if args.output.mode.needs_typetree_generator() {
         let generator = match libs_dir {
-            Some(lib_path) => TypeTreeGenerator::new_lib_in(
-                lib_path,
-                &unity_version,
-                GeneratorBackend::default(),
-            )?,
+            Some(lib_path) => {
+                TypeTreeGenerator::new_lib_in(lib_path, &unity_version, GeneratorBackend::default())
+            }
             None => {
-                TypeTreeGenerator::new_lib_next_to_exe(&unity_version, GeneratorBackend::default())?
+                TypeTreeGenerator::new_lib_next_to_exe(&unity_version, GeneratorBackend::default())
             }
         };
-        generator
-            .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
-            .context("Cannot load game DLLs")?;
-        let monobehaviour_node = env
-            .tpk
-            .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
-            .unwrap()
-            .into_owned();
-        env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
+
+        match generator {
+            Ok(generator) => {
+                generator
+                    .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
+                    .context("Cannot load game DLLs")?;
+                let monobehaviour_node = env
+                    .tpk
+                    .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
+                    .unwrap()
+                    .into_owned();
+                env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
+            }
+            Err(e) => {
+                log::warn!("Failed to load typetree generator: {e}");
+            }
+        };
     };
 
     let name = match &args.output.bundle_name {
