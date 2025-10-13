@@ -325,6 +325,8 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
 
+    let enable_typetree = false; // TODO make this configurable / infer if necessary
+
     let new_size = match args.output.mode {
         Mode::Scene => {
             let mut out = BufWriter::new(
@@ -358,6 +360,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 repack_scenes,
                 extra_objects,
                 compression,
+                enable_typetree,
             )?;
             print_stats(&stats, args.repack.scene_objects.is_some());
 

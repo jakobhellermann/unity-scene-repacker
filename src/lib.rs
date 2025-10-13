@@ -1,6 +1,7 @@
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 
+use rabex::objects::ClassId;
 pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
 use rabex_env::scene_lookup::SceneLookup;
@@ -462,12 +463,13 @@ pub fn pack_to_asset_bundle(
     scenes: Vec<RepackScene>,
     extra_objects: Vec<ExtraObject>,
     compression: CompressionType,
+    enable_typetree: bool,
 ) -> Result<Stats> {
     let unity_version = env.unity_version()?;
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let mut builder =
-        SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
+        SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, enable_typetree);
     builder.next_path_id = 2;
 
     let mut container = IndexMap::new();
@@ -498,6 +500,22 @@ pub fn pack_to_asset_bundle(
             stats.objects_after += serialized.objects().len();
 
             let remap = merge_serialized::add_scene_meta_to_builder(&mut builder, serialized)?;
+
+            if builder.serialized.m_EnableTypeTree {
+                for ty in &mut builder.serialized.m_Types {
+                    if ty.m_Type.is_none() {
+                        if ty.m_ClassID == ClassId::MonoBehaviour  {
+                            log::warn!("Asset bundle is to be serialized with type tree information, but the repack sources don't contain them. Type trees for monobehaviours will not contain information about the serialized fields.");
+                        }
+                        ty.m_Type = Some(
+                            env.tpk
+                                .get_typetree_node(ty.m_ClassID, unity_version)
+                                .ok_or(serializedfile::Error::NoTypetree(ty.m_ClassID))?
+                                .into_owned(),
+                        );
+                    }
+                }
+            }
 
             for (scene_path, transform) in scene.roots.iter() {
                 let mut go = transform.m_GameObject;

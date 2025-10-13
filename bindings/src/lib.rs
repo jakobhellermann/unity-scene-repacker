@@ -174,6 +174,8 @@ fn export_inner(
         matches!(mode, Mode::AssetBundle),
     )?;
 
+    let enable_typetree = false; // TODO: make this configurable / infer if necessary
+
     let stats = match mode {
         Mode::SceneBundle => unity_scene_repacker::pack_to_scene_bundle(
             &mut out,
@@ -193,6 +195,7 @@ fn export_inner(
             repack_scenes,
             extra_objects,
             compression,
+            enable_typetree,
         )?,
         Mode::AssetBundleShallow => unreachable!(),
     };
