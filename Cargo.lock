@@ -271,9 +271,9 @@ checksum = "52051878f80a721bb68ebfbc930e07b65ba72f2da88968ea5c06fd6ca3d3a127"
 
 [[package]]
 name = "generic-array"
-version = "0.14.7"
+version = "0.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
+checksum = "1dc8f7d2ded5f9209535e4b3fd4d39c002f30902ff5ce9f64e2c33d549576500"
 dependencies = [
  "typenum",
  "version_check",
@@ -835,7 +835,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "typetree-generator-api"
 version = "1.0.0"
-source = "git+https://github.com/jakobhellermann/typetree-generator-api-bindings#97147a20209fb11915897c716bf230c02becbad5"
+source = "git+https://github.com/jakobhellermann/typetree-generator-api-bindings#a994c3eeaaddcd78abbee9a72e01c9f1d6f63260"
 dependencies = [
  "libloading",
  "rabex",
@@ -932,7 +932,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -957,6 +957,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
 dependencies = [
  "windows-targets 0.53.5",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

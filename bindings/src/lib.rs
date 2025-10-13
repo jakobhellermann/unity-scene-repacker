@@ -124,7 +124,7 @@ fn export_inner(
 
     let game_files = GameFiles::probe(game_dir)?;
     let mut env = Environment::new(game_files, tpk);
-    let unity_version = env.unity_version()?;
+    let unity_version = env.unity_version()?.clone();
 
     if mode.needs_typetree_generator() {
         let monobehaviour_typetree_mode = match mb_typetree_export {
@@ -134,14 +134,14 @@ fn export_inner(
 
         let monobehaviour_node = env
             .tpk
-            .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+            .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
             .unwrap()
             .into_owned();
 
         env.typetree_generator = match monobehaviour_typetree_mode {
             MonobehaviourTypetreeMode::GenerateRuntime => {
                 let generator = TypeTreeGenerator::new_lib_next_to_exe(
-                    unity_version,
+                    &unity_version,
                     GeneratorBackend::default(),
                 )?;
                 generator
@@ -182,7 +182,7 @@ fn export_inner(
             name,
             &tpk_raw,
             &env.tpk,
-            unity_version,
+            &unity_version,
             repack_scenes.as_mut_slice(),
             compression,
         )

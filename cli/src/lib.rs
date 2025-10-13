@@ -239,15 +239,17 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
 
     let game_files = GameFiles::probe(&game_dir)?;
     let mut env = Environment::new(game_files, tpk);
-    let unity_version = env.unity_version()?;
+    let unity_version = env.unity_version()?.clone();
 
     if args.output.mode.needs_typetree_generator() {
         let generator = match libs_dir {
-            Some(lib_path) => {
-                TypeTreeGenerator::new_lib_in(lib_path, unity_version, GeneratorBackend::default())?
-            }
+            Some(lib_path) => TypeTreeGenerator::new_lib_in(
+                lib_path,
+                &unity_version,
+                GeneratorBackend::default(),
+            )?,
             None => {
-                TypeTreeGenerator::new_lib_next_to_exe(unity_version, GeneratorBackend::default())?
+                TypeTreeGenerator::new_lib_next_to_exe(&unity_version, GeneratorBackend::default())?
             }
         };
         generator
@@ -255,7 +257,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             .context("Cannot load game DLLs")?;
         let monobehaviour_node = env
             .tpk
-            .get_typetree_node(ClassId::MonoBehaviour, unity_version)
+            .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
             .unwrap()
             .into_owned();
         env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
@@ -338,7 +340,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                 name,
                 &tpk_blob,
                 &env.tpk,
-                unity_version,
+                &unity_version,
                 repack_scenes.as_mut_slice(),
                 compression,
             )

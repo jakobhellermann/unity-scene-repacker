@@ -338,7 +338,7 @@ pub fn pack_to_scene_bundle(
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
     tpk: &impl TypeTreeProvider,
-    unity_version: UnityVersion,
+    unity_version: &UnityVersion,
     scenes: &mut [RepackScene],
     compression: CompressionType,
 ) -> Result<Stats> {
