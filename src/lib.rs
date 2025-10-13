@@ -369,7 +369,7 @@ pub fn pack_to_scene_bundle(
         sharedassets.add_object(&PreloadData {
             m_Name: "".into(),
             m_Assets: vec![PPtr {
-                m_FileID: 1,
+                m_FileID: 1.into(),
                 m_PathID: 10001,
             }],
             ..Default::default()

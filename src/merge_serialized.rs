@@ -36,14 +36,15 @@ pub fn add_scene_meta_to_builder(
     let mut remap_file_id = FxHashMap::default();
     // TODO: deduplicate
     for (i, external) in file.m_Externals.iter().enumerate() {
-        let orig_file_id = i + 1;
-        let new_file_id = builder.serialized.m_Externals.len() + 1;
-        remap_file_id.insert(orig_file_id as FileId, new_file_id as FileId);
+        let orig_file_id = FileId::from_externals_index(i);
+        let new_file_id = FileId::from_externals_index(builder.serialized.m_Externals.len());
+        remap_file_id.insert(orig_file_id, new_file_id);
         builder.serialized.m_Externals.push(external.clone());
     }
     for ty in file.m_ScriptTypes.as_deref_mut().unwrap_or_default() {
         ty.m_LocalSerializedFileIndex = *remap_file_id
-            .get(&(ty.m_LocalIdentifierInFile as i32))
+            // .get(&(ty.m_LocalIdentifierInFile as i32)) TODO: this was previously here??
+            .get(&ty.m_LocalSerializedFileIndex)
             .unwrap_or(&ty.m_LocalSerializedFileIndex);
     }
     // TODO: deduplicate
