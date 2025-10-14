@@ -72,7 +72,7 @@ pub fn add_scene_meta_to_builder(
 }
 
 pub fn remap_objects(
-    scene_name: Option<&str>,
+    scene_name: &str,
     original_name: PathBuf,
     file: &SerializedFile,
     data: &[u8],

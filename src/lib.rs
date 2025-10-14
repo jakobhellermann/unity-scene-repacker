@@ -41,7 +41,7 @@ impl RepackSettings {
 
 pub struct RepackScene<'a> {
     pub original_name: PathBuf,
-    pub scene_name: Option<String>,
+    pub scene_name: String,
 
     pub serialized: SerializedFile,
     pub serialized_data: Data,
@@ -74,7 +74,7 @@ pub fn repack_scenes<'a>(
                 env,
                 prepare_scripts,
                 filename,
-                Some(scene_name),
+                scene_name,
                 settings,
                 file,
                 data,
@@ -212,7 +212,7 @@ fn repack_scene<'a>(
     env: &'a Environment,
     prepare_scripts: bool,
     original_name: &Path,
-    scene_name: Option<&str>,
+    scene_name: &str,
     settings: RepackSceneSettings,
     file: SerializedFile,
     serialized_data: Data,
@@ -245,7 +245,7 @@ fn repack_scene<'a>(
 
     Ok(RepackScene {
         original_name: original_name.to_owned(),
-        scene_name: scene_name.map(ToOwned::to_owned),
+        scene_name: scene_name.to_owned(),
         serialized: file,
         serialized_data,
         keep_objects: result.reachable,
@@ -285,8 +285,8 @@ fn find_extra_objects(
     Ok(roots)
 }
 
-fn scene_name_display(scene_name: Option<&str>, original_name: &Path) -> String {
-    match scene_name {
+fn scene_name_display<'a>(scene_name: impl Into<Option<&'a str>>, original_name: &Path) -> String {
+    match scene_name.into() {
         Some(scene_name) => format!("{scene_name} ({})'", original_name.display()),
         None => format!("'{}'", original_name.display()),
     }
@@ -310,7 +310,7 @@ fn prune_types(file: &mut SerializedFile) -> FxHashMap<i32, i32> {
 
 fn deduplicate_objects<'a>(
     original_name: &Path,
-    scene_name: Option<&str>,
+    scene_name: &str,
     paths: &'a [String],
 ) -> IndexSet<&'a str> {
     let mut deduplicated = IndexSet::new();
@@ -318,7 +318,7 @@ fn deduplicate_objects<'a>(
         if !deduplicated.insert(item.as_str()) {
             warn!(
                 "Duplicate object: '{item}' in {}",
-                scene_name_display(scene_name, original_name)
+                scene_name_display(Some(scene_name), original_name)
             );
         }
     }
@@ -348,9 +348,8 @@ pub fn pack_to_scene_bundle(
 
     let container = scenes
         .iter()
-        .filter_map(|scene| scene.scene_name.as_deref())
-        .map(|scene_name| {
-            let path = get_scene_bundle_scene_name(bundle_name, scene_name);
+        .map(|scene| {
+            let path = get_scene_bundle_scene_name(bundle_name, &scene.scene_name);
             (path, AssetInfo::default())
         })
         .collect();
@@ -359,10 +358,7 @@ pub fn pack_to_scene_bundle(
     let mut builder = BundleFileBuilder::unityfs(7, unity_version);
 
     for scene in scenes {
-        let scene_name = scene
-            .scene_name
-            .as_deref()
-            .expect("non-scene file found for scene bundle");
+        let scene_name = &scene.scene_name;
 
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
@@ -524,12 +520,8 @@ pub fn pack_to_asset_bundle(
                     go.m_PathID = *replacement;
                 }
 
-                let scene_name = scene
-                    .scene_name
-                    .as_deref()
-                    .expect("right now every asset comes from a scene");
                 let info = AssetInfo::new(go.untyped());
-                let path = get_asset_bundle_object_asset_name(scene_name, scene_path);
+                let path = get_asset_bundle_object_asset_name(&scene.scene_name, scene_path);
 
                 container.insert(path, info);
             }
@@ -542,7 +534,7 @@ pub fn pack_to_asset_bundle(
         .into_par_iter()
         .map(|(mut scene, remap)| {
             merge_serialized::remap_objects(
-                scene.scene_name.as_deref(),
+                &scene.scene_name,
                 scene.original_name,
                 &builder.serialized,
                 scene.serialized_data.as_ref(),
@@ -647,7 +639,7 @@ pub fn pack_to_shallow_asset_bundle(
         env,
         &repack_settings,
         |filename, scene_name, object_paths, file, data| {
-            let object_paths = deduplicate_objects(filename, Some(scene_name), object_paths);
+            let object_paths = deduplicate_objects(filename, scene_name, object_paths);
 
             objects_before.fetch_add(file.objects().len(), Ordering::Relaxed);
             size_before.fetch_add(data.as_ref().len(), Ordering::Relaxed);
