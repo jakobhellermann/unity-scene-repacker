@@ -111,7 +111,7 @@ fn collect_what_to_repack<T: Send + Sync>(
     let read = |filename: &Path, scene_name| -> Result<_> {
         let data = env.resolver.read(filename).with_context(|| {
             format!(
-                "{} not exist in bundle",
+                "{} does not exist in game files",
                 scene_name_display(scene_name, filename)
             )
         })?;
@@ -343,50 +343,35 @@ pub fn pack_to_scene_bundle(
     compression: CompressionType,
 ) -> Result<Stats> {
     let mut stats = Stats::default();
-
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
-    let container = scenes
-        .iter()
-        .map(|scene| {
-            let path = get_scene_bundle_scene_name(bundle_name, &scene.scene_name);
-            (path, AssetInfo::default())
-        })
-        .collect();
-    let mut container = Some(container);
+    let mut asset_bundle = AssetBundle::scene_base(bundle_name);
+    for scene in &*scenes {
+        let scene_name = &scene.scene_name;
+        let scene_hash = get_scene_bundle_filename(bundle_name, scene_name);
+        let path = get_scene_bundle_scene_name(bundle_name, scene_name);
+        asset_bundle.add_scene(&path, &scene_hash);
+    }
+
+    let mut asset_bundle = Some(asset_bundle);
 
     let mut builder = BundleFileBuilder::unityfs(7, unity_version);
-
     for scene in scenes {
-        let scene_name = &scene.scene_name;
-
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
-        sharedassets.add_object(&PreloadData {
-            m_Name: "".into(),
-            m_Assets: vec![PPtr {
-                m_FileID: 1.into(),
-                m_PathID: 10001,
-            }],
-            ..Default::default()
-        })?;
-        if let Some(container) = container.take() {
-            sharedassets.add_object(&AssetBundle {
-                m_Name: bundle_name.to_owned(),
-                m_Container: container,
-                m_MainAsset: AssetInfo::default(),
-                m_RuntimeCompatibility: 1,
-                m_IsStreamedSceneAssetBundle: true,
-                m_PathFlags: 7,
-                ..Default::default()
-            })?;
+
+        sharedassets.add_object_at(1, &PreloadData::default())?;
+
+        if let Some(asset_bundle) = asset_bundle.take() {
+            sharedassets.add_object_at(2, &asset_bundle)?;
         }
 
         let mut out = Cursor::new(Vec::new());
         sharedassets.write(&mut out)?;
 
+        let scene_hash = get_scene_bundle_filename(bundle_name, &scene.scene_name);
         builder.add_file(
-            &format!("BuildPlayer-{bundle_name}_{scene_name}.sharedAssets",),
+            &format!("{scene_hash}.sharedAssets",),
             Cursor::new(out.into_inner()),
         )?;
 
@@ -435,10 +420,7 @@ pub fn pack_to_scene_bundle(
 
             out
         };
-        builder.add_file(
-            &format!("BuildPlayer-{bundle_name}_{scene_name}"),
-            Cursor::new(trimmed),
-        )?;
+        builder.add_file(&scene_hash, Cursor::new(trimmed))?;
     }
 
     builder.write(writer, compression)?;
@@ -463,21 +445,21 @@ pub fn pack_to_asset_bundle(
 ) -> Result<Stats> {
     let unity_version = env.unity_version()?;
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
+    let mut stats = Stats::default();
 
     let mut builder =
         SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, enable_typetree);
     builder.next_path_id = 2;
 
-    let mut container = IndexMap::new();
-
+    let mut asset_bundle = AssetBundle::asset_base(bundle_name);
     for (filename, path_id, class_name, object_name) in extra_objects {
         // TODO cached
         let file_id = builder.add_external_uncached(FileIdentifier::try_from(filename)?);
         let info = AssetInfo::new(PPtr::new(file_id, path_id));
-        container.insert(get_extra_object_asset_name(&class_name, &object_name), info);
+        asset_bundle
+            .m_Container
+            .insert(get_extra_object_asset_name(&class_name, &object_name), info);
     }
-
-    let mut stats = Stats::default();
 
     let intermediate = scenes
         .into_iter()
@@ -500,8 +482,14 @@ pub fn pack_to_asset_bundle(
             if builder.serialized.m_EnableTypeTree {
                 for ty in &mut builder.serialized.m_Types {
                     if ty.m_Type.is_none() {
-                        if ty.m_ClassID == ClassId::MonoBehaviour  {
-                            log::warn!("Asset bundle is to be serialized with type tree information, but the repack sources don't contain them. Type trees for monobehaviours will not contain information about the serialized fields.");
+                        if ty.m_ClassID == ClassId::MonoBehaviour {
+                            log::warn!(
+                                "Asset bundle is to be serialized with type tree information, "
+                            );
+                            log::warn!("but the repack sources don't contain any.");
+                            log::warn!(
+                                "Monobehaviours typetrees will not contain serialized fields."
+                            );
                         }
                         ty.m_Type = Some(
                             env.tpk
@@ -523,7 +511,7 @@ pub fn pack_to_asset_bundle(
                 let info = AssetInfo::new(go.untyped());
                 let path = get_asset_bundle_object_asset_name(&scene.scene_name, scene_path);
 
-                container.insert(path, info);
+                asset_bundle.m_Container.insert(path, info);
             }
 
             Ok((scene, remap))
@@ -556,20 +544,7 @@ pub fn pack_to_asset_bundle(
         Ok(())
     })?;
 
-    builder.add_object_at(
-        1,
-        &AssetBundle {
-            m_Name: bundle_name.to_owned(),
-            m_PreloadTable: Vec::new(),
-            m_Container: container,
-            m_MainAsset: AssetInfo::default(),
-            m_RuntimeCompatibility: 1,
-            m_AssetBundleName: bundle_name.to_owned(),
-            m_IsStreamedSceneAssetBundle: false,
-            m_PathFlags: 7,
-            ..Default::default()
-        },
-    )?;
+    builder.add_object_at(1, &asset_bundle)?;
 
     let mut out = Vec::new();
     builder.write(&mut Cursor::new(&mut out))?;
@@ -604,6 +579,15 @@ fn prepare_monobehaviour_types<'a>(
 
             let assembly_name = script.assembly_name();
             let full_name = script.full_name();
+
+            let ty = &file.m_Types[mb_info.info.m_TypeID as usize];
+            if let Some(ty) = &ty.m_Type {
+                // TODO: check if there is actually more than default information present
+                let ty =
+                    env.typetree_generator
+                        .insert_cache(&assembly_name, &full_name, ty.clone());
+                return Ok(Some((path_id, ty)));
+            }
 
             let ty = env
                 .typetree_generator
@@ -692,13 +676,14 @@ fn create_shallow_assetbundle(
     let mut builder =
         SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
 
-    let mut container = IndexMap::default();
+    let mut ab = AssetBundle::asset_base(bundle_name);
 
     for (filename, path_id, class_name, object_name) in extra_objects {
         // TODO cached
         let file_id = builder.add_external_uncached(FileIdentifier::try_from(filename)?);
         let info = AssetInfo::new(PPtr::new(file_id, path_id));
-        container.insert(get_extra_object_asset_name(&class_name, &object_name), info);
+        ab.m_Container
+            .insert(get_extra_object_asset_name(&class_name, &object_name), info);
     }
 
     for ((scene_name, original_name), objects) in objects {
@@ -708,19 +693,10 @@ fn create_shallow_assetbundle(
         for (scene_path, path_id) in objects {
             let path = get_asset_bundle_object_asset_name(&scene_name, &scene_path);
             let info = AssetInfo::new(PPtr::new(file_index, path_id));
-            container.insert(path, info);
+            ab.m_Container.insert(path, info);
         }
     }
 
-    let ab = AssetBundle {
-        m_Name: bundle_name.to_owned(),
-        m_Container: container,
-        m_MainAsset: AssetInfo::default(),
-        m_RuntimeCompatibility: 1,
-        m_IsStreamedSceneAssetBundle: false,
-        m_PathFlags: 7,
-        ..Default::default()
-    };
     builder.add_object_at(1, &ab)?;
 
     let mut builder_out = Vec::new();
@@ -732,6 +708,10 @@ fn create_shallow_assetbundle(
     bundle.write(writer, compression)?;
 
     Ok(())
+}
+
+fn get_scene_bundle_filename(bundle_name: &str, scene_name: &str) -> String {
+    format!("BuildPlayer-{bundle_name}_{scene_name}")
 }
 
 fn get_scene_bundle_scene_name(bundle_name: &str, scene_name: &str) -> String {
