@@ -1,7 +1,3 @@
-# ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols-Speedrunpatch/NineSols_Data"
-ninesols := "/home/jakob/.local/share/Steam/steamapps/common/Nine Sols/NineSols_Data"
-
-
 h:
     cargo run -- -h
 help:
@@ -18,21 +14,18 @@ hollowknight *args:
 
 ninesols *args:
     cargo run --release -- \
-        --game-dir "{{ ninesols }}" \
+        --steam-game "nine sols" \
         --mode asset \
         --objects objects/ns-monsters.json \
-        --output /tmp/testing/new.bundle \
+        --output out/ninesols.bundle \
         --bundle-name test \
         --compression none {{ args }}
 
 ninesols-fx *args:
     cargo run --release -- \
-        --game-dir "{{ ninesols }}" \
+        --steam-game "nine sols" \
         --mode asset \
         --extra-objects objects/ns-by-type.json \
-        --output /tmp/testing/new.bundle \
+        --output out/ninesols-by-type.bundle \
         --bundle-name bundle \
         --compression none {{ args }}
-
-bindgen:
-    bindgen typetree-generator-api/bindings.h -o typetree-generator-api/src/generated.rs --dynamic-loading TypeTreeGeneratorAPI --dynamic-link-require-all
