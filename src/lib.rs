@@ -53,6 +53,7 @@ pub struct RepackScene<'a> {
     pub replacements: FxHashMap<PathId, Vec<u8>>,
 
     pub monobehaviour_types: FxHashMap<i64, &'a TypeTreeNode>,
+    pub preloads: Option<PreloadInfo>,
 }
 
 // Filename, PathId, Classname, Objectname
@@ -67,7 +68,7 @@ pub fn repack_scenes<'a>(
     let (scenes, extra_objects) = collect_what_to_repack(
         env,
         &repack_settings,
-        |filename, scene_name, object_paths, file, data| {
+        |filename, scene_name, object_paths, file, data, preloads| {
             let settings = RepackSceneSettings {
                 object_paths,
                 disable_roots,
@@ -80,6 +81,7 @@ pub fn repack_scenes<'a>(
                 settings,
                 file,
                 data,
+                preloads,
             )
         },
     )?;
@@ -105,7 +107,9 @@ fn collect_what_to_repack<T: Send + Sync>(
     env: &Environment,
     repack_settings: &RepackSettings,
     // |filename, scene_name, object_paths, file, data|
-    f: impl Fn(&Path, &str, &[String], SerializedFile, Data) -> Result<T> + Send + Sync,
+    f: impl Fn(&Path, &str, &[String], SerializedFile, Data, Option<PreloadInfo>) -> Result<T>
+    + Send
+    + Sync,
 ) -> Result<(Vec<T>, Vec<ExtraObject>)> {
     let build_settings = env.build_settings()?;
     let has_extra_objects = !repack_settings.extra_objects.is_empty();
@@ -151,7 +155,7 @@ fn collect_what_to_repack<T: Send + Sync>(
                     let scene_name = scene_lookup[scene_index];
 
                     if let Some(object_paths) = repack_settings.scene_objects.get(scene_name) {
-                        let x = f(&filename, scene_name, object_paths, file_raw, data)?;
+                        let x = f(&filename, scene_name, object_paths, file_raw, data, None)?;
                         return Ok((extra_objects, Some(x)));
                     }
                 }
@@ -196,13 +200,59 @@ fn collect_what_to_repack<T: Send + Sync>(
             .par_iter()
             .map(|(scene_name, filename, object_paths)| -> Result<_> {
                 let (data, file) = read(filename, None)?;
-                f(filename, scene_name, object_paths, file, data)
+                f(&filename, scene_name, object_paths, file, data, None)
             })
             .collect::<Result<Vec<_>>>()?;
         (Vec::new(), scenes)
     };
 
     Ok((scenes, extra_objects))
+}
+
+pub struct PreloadInfo {
+    // these two are from the `PreloadData` object in the scene .sharedAssets
+    preload_assets_relative: Vec<PPtr>, // m_Assets from PreloadData. !! file id is relative to externals !!
+    preload_dependencies: Vec<String>,  // m_Dependencies from PreloadData
+    // the externals of the .sharedAssets (which are usually the same as the main file (in a different order), but not always
+    externals: Vec<String>,
+}
+impl PreloadInfo {
+    /// Remap the file ids of to match the serialized file.
+    /// Creates new externals if necessary.
+    #[must_use]
+    fn to_pptrs_in<P: TypeTreeProvider>(
+        &mut self,
+        file: &mut SerializedFileBuilder<P>,
+    ) -> Vec<PPtr> {
+        let mut cache = FxHashMap::default();
+
+        let mut preload_assets = Vec::new();
+
+        for &preload_rel in &self.preload_assets_relative {
+            assert!(preload_rel.is_external());
+            let file_id = *cache.entry(preload_rel.m_FileID).or_insert_with(|| {
+                let shared_file_external =
+                    &self.externals[preload_rel.m_FileID.get_externals_index().unwrap()];
+                file.get_or_insert_external(shared_file_external)
+            });
+            preload_assets.push(PPtr::new(file_id, preload_rel.m_PathID));
+        }
+
+        preload_assets
+    }
+
+    fn into_preload_data_in<P: TypeTreeProvider>(
+        &mut self,
+        file: &mut SerializedFileBuilder<P>,
+    ) -> PreloadData {
+        let preload_assets = self.to_pptrs_in(file);
+        PreloadData {
+            m_Name: String::new(),
+            m_Assets: preload_assets,
+            m_Dependencies: std::mem::take(&mut self.preload_dependencies),
+            m_ExplicitDataLayout: true,
+        }
+    }
 }
 
 struct RepackSceneSettings<'a> {
@@ -218,6 +268,7 @@ fn repack_scene<'a>(
     settings: RepackSceneSettings,
     file: SerializedFile,
     serialized_data: Data,
+    preloads: Option<PreloadInfo>,
 ) -> Result<RepackScene<'a>> {
     let reader = &mut Cursor::new(serialized_data.as_ref());
 
@@ -247,6 +298,7 @@ fn repack_scene<'a>(
         roots: result.roots,
         replacements,
         monobehaviour_types,
+        preloads,
     })
 }
 
@@ -346,6 +398,12 @@ pub fn pack_to_scene_bundle(
         let scene_hash = get_scene_bundle_filename(bundle_name, scene_name);
         let path = get_scene_bundle_scene_name(bundle_name, scene_name);
         asset_bundle.add_scene(&path, &scene_hash);
+
+        if let Some(preloads) = &scene.preloads {
+            asset_bundle
+                .m_Dependencies
+                .extend_from_slice(&preloads.preload_dependencies);
+        }
     }
 
     let mut asset_bundle = Some(asset_bundle);
@@ -355,7 +413,16 @@ pub fn pack_to_scene_bundle(
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
 
-        sharedassets.add_object_at(1, &PreloadData::default())?;
+        if scene.preloads.is_some() {
+            sharedassets.copy_externals(&scene.serialized);
+        }
+
+        let preloads = scene
+            .preloads
+            .as_mut()
+            .map(|preloads| preloads.into_preload_data_in(&mut sharedassets))
+            .unwrap_or_default();
+        sharedassets.add_object_at(1, &preloads)?;
 
         if let Some(asset_bundle) = asset_bundle.take() {
             sharedassets.add_object_at(2, &asset_bundle)?;
@@ -496,6 +563,15 @@ pub fn pack_to_asset_bundle(
                 }
             }
 
+            let preloads_range = scene.preloads.as_mut().map(|preloads| {
+                let preload_assets = preloads.to_pptrs_in(&mut builder);
+                let preloads_range = asset_bundle.add_preloads(preload_assets);
+                asset_bundle
+                    .m_Dependencies
+                    .extend_from_slice(&preloads.preload_dependencies);
+                preloads_range
+            });
+
             for (scene_path, transform) in scene.roots.iter() {
                 let mut go = transform.m_GameObject;
                 assert!(go.is_local());
@@ -503,7 +579,8 @@ pub fn pack_to_asset_bundle(
                     go.m_PathID = *replacement;
                 }
 
-                let info = AssetInfo::new(go.untyped());
+                let preloads_range = preloads_range.clone().unwrap_or(0..0);
+                let info = AssetInfo::with_preloads(preloads_range, go.untyped());
                 let path = get_asset_bundle_object_asset_name(&scene.scene_name, scene_path);
 
                 asset_bundle.m_Container.insert(path, info);
@@ -616,7 +693,11 @@ pub fn pack_to_shallow_asset_bundle(
     let (scene_objects, extra_objects) = collect_what_to_repack(
         env,
         &repack_settings,
-        |filename, scene_name, object_paths, file, data| {
+        |filename, scene_name, object_paths, file, data, preloads| {
+            if preloads.is_some() {
+                warn!("Preloads aren't implemented for shallow assetbundles currently.");
+            }
+
             let object_paths = deduplicate_objects(filename, scene_name, object_paths);
 
             objects_before.fetch_add(file.objects().len(), Ordering::Relaxed);
