@@ -735,7 +735,7 @@ fn create_shallow_assetbundle(
 }
 
 fn get_scene_bundle_scene_name(bundle_name: &str, scene_name: &str) -> String {
-    format!("unity-scene-repacker/{bundle_name}_{scene_name}.unity")
+    format!("Assets/unity-scene-repacker/{bundle_name}_{scene_name}.unity")
 }
 fn get_asset_bundle_object_asset_name(scene_name: &str, scene_path: &str) -> String {
     format!("{scene_name}/{scene_path}.prefab").to_lowercase()

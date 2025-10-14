@@ -54,7 +54,7 @@ const string bundleName = "mybundle";
 var bundle = AssetBundle.LoadFromFile(path);
 
 // load single scene
-SceneManager.LoadScene($"unity-scene-repacker/{bundleName}/Fungus1_12.unity")
+SceneManager.LoadScene($"Assets/unity-scene-repacker/{bundleName}/Fungus1_12.unity")
 
 // load add scenes
 foreach (string scenePath in bundle.GetAllScenePaths()) {
