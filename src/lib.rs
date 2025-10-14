@@ -193,8 +193,8 @@ fn collect_what_to_repack<T: Send + Sync>(
         let scenes = scene_files
             .par_iter()
             .map(|(scene_name, filename, object_paths)| -> Result<_> {
-                let (data, file) = read(&filename, None)?;
-                f(&filename, scene_name, object_paths, file, data)
+                let (data, file) = read(filename, None)?;
+                f(filename, scene_name, object_paths, file, data)
             })
             .collect::<Result<Vec<_>>>()?;
         (Vec::new(), scenes)
