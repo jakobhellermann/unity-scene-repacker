@@ -1,7 +1,17 @@
 h:
     cargo run -- -h
+
 help:
     cargo run -- --help
+
+silksong *args:
+    cargo run --release -- \
+        --steam-game 'Silksong' \
+        --mode asset \
+        --addressables-scene-objects objects/silksong.jsonc \
+        --output out/silksong.bundle {{ args }} \
+        --bundle-name bundle \
+        --compression none {{ args }}
 
 hollowknight *args:
     cargo run --release -- \

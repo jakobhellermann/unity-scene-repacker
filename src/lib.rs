@@ -6,23 +6,23 @@ use rabex_env::Environment;
 use rabex_env::env::Data;
 pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
-use rabex_env::resolver::EnvResolver as _;
+use rabex_env::resolver::EnvResolver;
 use rabex_env::scene_lookup::SceneLookup;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
 pub use {rabex, typetree_generator_api};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use rabex::UnityVersion;
-use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
+use rabex::files::bundlefile::{BundleFileBuilder, BundleFileReader, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
 use rabex::objects::pptr::{PPtr, PathId};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
-use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator as _, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::collections::BTreeSet;
@@ -34,10 +34,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
     pub extra_objects: IndexMap<String, IndexSet<String>>,
+    pub addressables_scene_objects: IndexMap<String, Vec<String>>,
 }
 impl RepackSettings {
     pub fn is_empty(&self) -> bool {
-        self.scene_objects.is_empty() && self.extra_objects.is_empty()
+        self.scene_objects.is_empty()
+            && self.extra_objects.is_empty()
+            && self.addressables_scene_objects.is_empty()
     }
 }
 
@@ -133,8 +136,41 @@ fn collect_what_to_repack<T: Send + Sync>(
         Ok((data, file))
     };
 
+    let mut addressables_scenes = Vec::new();
+    if !repack_settings.addressables_scene_objects.is_empty() {
+        let addressables = env
+            .addressables()?
+            .context("Game does not use Addressables")?;
+        let build_folder = addressables.settings.build_folder();
+
+        for (bundle_path, object_paths) in &repack_settings.addressables_scene_objects {
+            let bundle = env.load_addressables_bundle(bundle_path)?;
+
+            let (name, mut file, data, preloads) =
+                extract_assetbundle_main_and_preloads(&bundle, &env.tpk)
+                    .with_context(|| format!("{bundle_path} does not look like a scene bundle"))?;
+            file.m_UnityVersion
+                .get_or_insert(env.unity_version()?.clone());
+            let full_path = build_folder.join(bundle_path);
+
+            if !env.game_files.base_dir().join(&full_path).exists() {
+                bail!("Addressables scene bundle at '{bundle_path}' does not exist")
+            }
+
+            let result = f(
+                &full_path,
+                &name,
+                object_paths,
+                file,
+                Data::InMemory(data),
+                Some(preloads),
+            )?;
+            addressables_scenes.push(result);
+        }
+    }
+
     // if we have extra monobehaviour to collect, we have to look at every possible file
-    let (extra_objects, scenes) = if has_extra_objects {
+    let (extra_objects, mut scenes) = if has_extra_objects {
         let scene_lookup: Vec<_> = build_settings.scene_names().collect();
 
         env.game_files
@@ -206,6 +242,8 @@ fn collect_what_to_repack<T: Send + Sync>(
         (Vec::new(), scenes)
     };
 
+    scenes.extend(addressables_scenes);
+
     Ok((scenes, extra_objects))
 }
 
@@ -255,6 +293,51 @@ impl PreloadInfo {
     }
 }
 
+fn extract_assetbundle_main_and_preloads<'a, P, T>(
+    bundle: &BundleFileReader<Cursor<T>>,
+    tpk: &P,
+) -> Result<(String, SerializedFile, Vec<u8>, PreloadInfo)>
+where
+    P: TypeTreeProvider,
+    T: AsRef<[u8]>,
+{
+    let (name, main, data) = rabex_env::env::bundle_main_serializedfile(&bundle)?;
+
+    let shared_data = bundle
+        .read_at(&format!("{name}.sharedAssets"))?
+        .with_context(|| format!("expected {}.sharedAssets in bundle", name))?;
+    let shared = SerializedFile::from_reader(&mut Cursor::new(&shared_data))?;
+    if shared.objects().len() != 2 {
+        warn!(
+            "expected exactly 2 objects in scene asset bundle, got {}",
+            shared.objects().len()
+        );
+    }
+    let preload_data = shared
+        .find_object_of::<PreloadData>(tpk)
+        .context("expected PreloadData in scene assetbundle")?
+        .read(&mut Cursor::new(shared_data.as_slice()))?;
+
+    #[cfg(debug_assertions)]
+    {
+        let asset_bundle = shared
+            .find_object_of::<AssetBundle>(tpk)
+            .context("expected AssetBundle in scene assetbundle")?
+            .read(&mut Cursor::new(shared_data.as_slice()))?;
+
+        assert_eq!(preload_data.m_Dependencies, asset_bundle.m_Dependencies);
+        assert_eq!(preload_data.m_Dependencies, asset_bundle.m_Dependencies);
+    }
+
+    let preload_info = PreloadInfo {
+        preload_assets_relative: preload_data.m_Assets,
+        preload_dependencies: preload_data.m_Dependencies,
+        externals: shared.m_Externals.into_iter().map(|x| x.pathName).collect(),
+    };
+
+    Ok((name, main, data, preload_info))
+}
+
 struct RepackSceneSettings<'a> {
     object_paths: &'a [String],
     disable_roots: bool,
@@ -283,7 +366,12 @@ fn repack_scene<'a>(
         &mut replacements,
         settings.disable_roots,
     )
-    .with_context(|| scene_name_display(scene_name, original_name))?;
+    .with_context(|| {
+        format!(
+            "Could not prune scene {}",
+            scene_name_display(scene_name, original_name)
+        )
+    })?;
 
     let monobehaviour_types = prepare_scripts
         .then(|| prepare_monobehaviour_types(env, &file, reader))
@@ -365,7 +453,7 @@ fn deduplicate_objects<'a>(
         if !deduplicated.insert(item.as_str()) {
             warn!(
                 "Duplicate object: '{item}' in {}",
-                scene_name_display(Some(scene_name), original_name)
+                scene_name_display(scene_name, original_name)
             );
         }
     }
@@ -653,7 +741,7 @@ fn prepare_monobehaviour_types<'a>(
 
             let ty = &file.m_Types[mb_info.info.m_TypeID as usize];
             if let Some(ty) = &ty.m_Type {
-                // TODO: check if there is actually more than default information present
+                // TODO: check if there is actuually more than default information present
                 let ty =
                     env.typetree_generator
                         .insert_cache(&assembly_name, &full_name, ty.clone());
@@ -695,7 +783,7 @@ pub fn pack_to_shallow_asset_bundle(
         &repack_settings,
         |filename, scene_name, object_paths, file, data, preloads| {
             if preloads.is_some() {
-                warn!("Preloads aren't implemented for shallow assetbundles currently.");
+                todo!()
             }
 
             let object_paths = deduplicate_objects(filename, scene_name, object_paths);
@@ -751,14 +839,13 @@ fn create_shallow_assetbundle(
     let mut builder =
         SerializedFileBuilder::new(unity_version, &env.tpk, &common_offset_map, false);
 
-    let mut ab = AssetBundle::asset_base(bundle_name);
+    let mut container = IndexMap::default();
 
     for (filename, path_id, class_name, object_name) in extra_objects {
         // TODO cached
         let file_id = builder.add_external_uncached(FileIdentifier::try_from(filename)?);
         let info = AssetInfo::new(PPtr::new(file_id, path_id));
-        ab.m_Container
-            .insert(get_extra_object_asset_name(&class_name, &object_name), info);
+        container.insert(get_extra_object_asset_name(&class_name, &object_name), info);
     }
 
     for ((scene_name, original_name), objects) in objects {
@@ -768,10 +855,19 @@ fn create_shallow_assetbundle(
         for (scene_path, path_id) in objects {
             let path = get_asset_bundle_object_asset_name(&scene_name, &scene_path);
             let info = AssetInfo::new(PPtr::new(file_index, path_id));
-            ab.m_Container.insert(path, info);
+            container.insert(path, info);
         }
     }
 
+    let ab = AssetBundle {
+        m_Name: bundle_name.to_owned(),
+        m_Container: container,
+        m_MainAsset: AssetInfo::default(),
+        m_RuntimeCompatibility: 1,
+        m_IsStreamedSceneAssetBundle: false,
+        m_PathFlags: 7,
+        ..Default::default()
+    };
     builder.add_object_at(1, &ab)?;
 
     let mut builder_out = Vec::new();

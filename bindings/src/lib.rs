@@ -116,6 +116,7 @@ fn export_inner(
     let repack_settings = RepackSettings {
         scene_objects,
         extra_objects: IndexMap::new(),
+        addressables_scene_objects: IndexMap::default(),
     };
 
     let disable = true;

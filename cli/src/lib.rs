@@ -79,6 +79,29 @@ struct RepackArgs {
     /// ```
     #[arg(long)]
     extra_objects: Option<PathBuf>,
+
+    /// Path to JSON file, containing a map of paths to addressables to monobehaviour names.
+    /// Useful for scriptable objects etc., which do not exist in the transform hierarchy.
+    /// ```json
+    /// {
+    ///   "FXDealerMaterialTag": ["[FXDealer] 0_YeeAttack _PostureDecrease"]
+    /// }
+    /// ```
+    /// Path to JSON file, containing a map addressable path to a list of gameobject paths to include
+    /// The path must be relative to `StreamingAssets/aa/Platform` and point to a scene asset bundle.
+    /// ```json
+    /// {
+    ///   "Fungus1_12": [
+    ///     "simple_grass",
+    ///     "green_grass_2",
+    ///   ],
+    ///   "White_Palace_01": [
+    ///     "WhiteBench",
+    ///   ]
+    /// }
+    /// ```
+    #[arg(long)]
+    addressables_scene_objects: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
@@ -204,6 +227,21 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         })
         .transpose()?
         .unwrap_or_default();
+    let addressables_scene_objects = args
+        .repack
+        .addressables_scene_objects
+        .as_ref()
+        .map(|path| -> Result<IndexMap<String, Vec<String>>> {
+            let preloads = std::fs::read_to_string(path).with_context(|| {
+                format!(
+                    "couldn't find addressables scene objects json '{}'",
+                    path.display()
+                )
+            })?;
+            json5::from_str(&preloads).context("error parsing the addressables scene objects json")
+        })
+        .transpose()?
+        .unwrap_or_default();
 
     if !scene_objects.is_empty() {
         let obj_count = scene_objects
@@ -225,9 +263,21 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
             if obj_count == 1 { "" } else { "s" }
         );
     }
+    if !addressables_scene_objects.is_empty() {
+        let obj_count = addressables_scene_objects
+            .iter()
+            .map(|(_, objects)| objects.len())
+            .sum::<usize>();
+        info!(
+            "Repacking {obj_count} objects in {} addressables scenes",
+            addressables_scene_objects.len()
+        );
+    }
+
     let repack_settings = RepackSettings {
         scene_objects,
         extra_objects,
+        addressables_scene_objects,
     };
 
     if repack_settings.is_empty() {
