@@ -27,7 +27,7 @@ fn main() -> Result<()> {
 
             let mut transitions = Vec::new();
 
-            for mb in file.objects_of::<MonoBehaviour>()? {
+            for mb in file.objects_of::<MonoBehaviour>() {
                 let Some(script) = mb.mono_script()? else {
                     continue;
                 };

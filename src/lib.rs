@@ -2,11 +2,13 @@ mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 
 use rabex::objects::ClassId;
+use rabex_env::Environment;
+use rabex_env::env::Data;
 pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::resolver::EnvResolver as _;
 use rabex_env::scene_lookup::SceneLookup;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
-use rabex_env::{Data, EnvResolver as _, Environment};
 pub use {rabex, typetree_generator_api};
 
 use anyhow::{Context, Result};
@@ -109,7 +111,7 @@ fn collect_what_to_repack<T: Send + Sync>(
     let has_extra_objects = !repack_settings.extra_objects.is_empty();
 
     let read = |filename: &Path, scene_name| -> Result<_> {
-        let data = env.resolver.read(filename).with_context(|| {
+        let data = env.game_files.read_path(filename).with_context(|| {
             format!(
                 "{} does not exist in game files",
                 scene_name_display(scene_name, filename)
@@ -131,7 +133,7 @@ fn collect_what_to_repack<T: Send + Sync>(
     let (extra_objects, scenes) = if has_extra_objects {
         let scene_lookup: Vec<_> = build_settings.scene_names().collect();
 
-        env.resolver
+        env.game_files
             .serialized_files()?
             .into_par_iter()
             .map(|filename| -> Result<_> {
@@ -234,13 +236,6 @@ fn repack_scene<'a>(
 
     let monobehaviour_types = prepare_scripts
         .then(|| prepare_monobehaviour_types(env, &file, reader))
-        .transpose()
-        .with_context(|| {
-            format!(
-                "Could not generate type trees in {}",
-                scene_name_display(scene_name, original_name)
-            )
-        })?
         .unwrap_or_default();
 
     Ok(RepackScene {
@@ -263,7 +258,7 @@ fn find_extra_objects(
 ) -> Result<Vec<(PathBuf, PathId, String, String)>, anyhow::Error> {
     let mut roots = Vec::new();
 
-    for mb_obj in file.objects_of::<MonoBehaviour>()? {
+    for mb_obj in file.objects_of::<MonoBehaviour>() {
         let Some(script) = mb_obj.mono_script()? else {
             continue;
         };
@@ -563,9 +558,8 @@ fn prepare_monobehaviour_types<'a>(
     env: &'a Environment,
     file: &SerializedFile,
     reader: &mut (impl Read + Seek),
-) -> Result<FxHashMap<PathId, &'a TypeTreeNode>> {
-    Ok(file
-        .objects_of::<MonoBehaviour>(&env.tpk)?
+) -> FxHashMap<PathId, &'a TypeTreeNode> {
+    file.objects_of::<MonoBehaviour>(&env.tpk)
         .map(|mb_info| -> Result<_> {
             let path_id = mb_info.info.m_PathID;
 
@@ -606,7 +600,7 @@ fn prepare_monobehaviour_types<'a>(
                 None
             }
         })
-        .collect::<FxHashMap<_, _>>())
+        .collect::<FxHashMap<_, _>>()
 }
 
 pub fn pack_to_shallow_asset_bundle(

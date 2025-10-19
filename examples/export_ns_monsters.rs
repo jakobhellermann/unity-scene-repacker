@@ -5,9 +5,10 @@ use anyhow::{Context, Result};
 use rabex::objects::TypedPPtr;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::resolver::EnvResolver as _;
 use rabex_env::unity::types::{GameObject, MonoBehaviour};
-use rabex_env::{EnvResolver, Environment};
 use unity_scene_repacker::GameFiles;
 use unity_scene_repacker::typetree_generator_api::GeneratorBackend;
 
@@ -32,13 +33,13 @@ fn main() -> Result<()> {
 
     let mut monsters: BTreeMap<String, Vec<(String, String)>> = BTreeMap::new();
 
-    for level_index in env.resolver.level_files()? {
+    for level_index in env.game_files.level_files()? {
         let scene = scenes[level_index];
 
         let (file, data) = env.load_leaf(format!("level{level_index}"))?;
         let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-        for mb_obj in file.objects_of::<MonoBehaviour>()? {
+        for mb_obj in file.objects_of::<MonoBehaviour>() {
             let Some(script) = mb_obj.mono_script()? else {
                 continue;
             };

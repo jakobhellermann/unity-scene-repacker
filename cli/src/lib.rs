@@ -254,7 +254,7 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
         match generator {
             Ok(generator) => {
                 generator
-                    .load_all_dll_in_dir(env.resolver.game_dir.join("Managed"))
+                    .load_all_dll_in_dir(env.game_files.game_dir.join("Managed"))
                     .context("Cannot load game DLLs")?;
                 let monobehaviour_node = env
                     .tpk

@@ -48,9 +48,5 @@ rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
 
 # [patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
 # rabex = { path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor" }
-
-[patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
-rabex = { path = "../RustyAssetBundleEXtractor" }
-
-[patch."https://github.com/jakobhellermann/rabex-env"]
-rabex-env = { path = "../rabex-env" }
+# [patch."https://github.com/jakobhellermann/rabex-env"]
+# rabex-env = { path = "../rabex-env" }

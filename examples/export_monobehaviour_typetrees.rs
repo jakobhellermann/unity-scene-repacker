@@ -6,9 +6,10 @@ use anyhow::{Context, Result};
 use byteorder::{LE, WriteBytesExt};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::resolver::EnvResolver as _;
 use rabex_env::unity::types::MonoBehaviour;
-use rabex_env::{EnvResolver, Environment};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::GameFiles;
@@ -114,7 +115,7 @@ fn generate_monobehaviour_types(
 }
 
 fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeSet<String>>> {
-    env.resolver
+    env.game_files
         .all_files()?
         .into_par_iter()
         .map(|file| -> Result<_> {
@@ -125,7 +126,7 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
                 let (file, data) = env.load_leaf(file)?;
                 let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-                for mb in file.objects_of::<MonoBehaviour>()? {
+                for mb in file.objects_of::<MonoBehaviour>() {
                     let Some(script) = mb.mono_script()? else {
                         continue;
                     };

@@ -3,9 +3,10 @@ use std::collections::BTreeMap;
 use anyhow::{Context, Result};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
+use rabex_env::resolver::EnvResolver as _;
 use rabex_env::unity::types::MonoBehaviour;
-use rabex_env::{EnvResolver, Environment};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use typetree_generator_api::GeneratorBackend;
 
@@ -17,7 +18,7 @@ fn main() -> Result<()> {
     env.load_typetree_generator(GeneratorBackend::default())?;
 
     let all = env
-        .resolver
+        .game_files
         .serialized_files()?
         .into_par_iter()
         .map(|path| -> Result<_> {
@@ -25,7 +26,7 @@ fn main() -> Result<()> {
             let (file, data) = env.load_leaf(path)?;
             let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
-            for mb in file.objects_of::<MonoBehaviour>()? {
+            for mb in file.objects_of::<MonoBehaviour>() {
                 let Some(script) = mb.mono_script()? else {
                     continue;
                 };
