@@ -99,9 +99,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "cc"
-version = "1.2.41"
+version = "1.2.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac9fe6cdbb24b6ade63616c0a0688e45bb56732262c158df3c0c4bea4ca47cb7"
+checksum = "739eb0f94557554b3ca9a86d2d37bebd49c5e6d0c1d2bda35ba5bdac830befc2"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -293,11 +293,11 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "home"
-version = "0.5.11"
+version = "0.5.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
+checksum = "cc627f471c528ff0c4a49e1d5e60450c8f6461dd6d10ba9dcd3a61d3dff7728d"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -559,9 +559,9 @@ checksum = "f84267b20a16ea918e43c6a88433c2d54fa145c92a811b5b047ccbe153674483"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.102"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e0f6df8eaa422d97d72edcd152e1451618fed47fabbdbd5a8864167b1d4aff7"
+checksum = "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8"
 dependencies = [
  "unicode-ident",
 ]
@@ -651,7 +651,7 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor?branch=all#7fbcb1b451da056eb2bc9212affb6a3c13534be9"
+source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor#20c1fa1ab89f5bf545ea46276e284c35e025a862"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -669,7 +669,7 @@ dependencies = [
 [[package]]
 name = "rabex-env"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/rabex-env#37313bd3bb2271d38da416dff2806a7c69a2c52e"
+source = "git+https://github.com/jakobhellermann/rabex-env#c3cb658dc699314552d9c76ee2be6d2cf3be5420"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -863,7 +863,7 @@ checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
 [[package]]
 name = "typetree-generator-api"
 version = "1.0.0"
-source = "git+https://github.com/jakobhellermann/typetree-generator-api-bindings#d3770cb8b90dcd5ce4c4b6ccba83d5aacba27633"
+source = "git+https://github.com/jakobhellermann/typetree-generator-api-bindings#227d6bdc9526b311b44ad65fdb887737fdcd8d4c"
 dependencies = [
  "libloading",
  "rabex",
