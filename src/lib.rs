@@ -10,7 +10,6 @@ use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::EnvResolver as _;
 use rabex_env::scene_lookup::SceneLookup;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
-pub use typetree_generator_api;
 
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};

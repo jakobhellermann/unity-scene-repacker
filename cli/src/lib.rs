@@ -12,18 +12,14 @@ use clap_complete::ArgValueCompleter;
 use indexmap::{IndexMap, IndexSet};
 use paris::{error, info, success, warn};
 use rabex::files::bundlefile::CompressionType;
-use rabex::objects::ClassId;
 use rabex::tpk::TpkTypeTreeBlob;
-use rabex::typetree::TypeTreeProvider as _;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::Environment;
-use rabex_env::typetree_generator_cache::TypeTreeGeneratorCache;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
 use std::io::BufWriter;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Instant;
-use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::{GameFiles, RepackSettings, Stats};
 
 use crate::utils::friendly_size;
@@ -115,11 +111,6 @@ pub enum Mode {
     /// The bundle is completely empty, and only references the original game level files.
     AssetShallow,
 }
-impl Mode {
-    fn needs_typetree_generator(&self) -> bool {
-        matches!(self, Mode::Asset)
-    }
-}
 
 #[derive(Debug, Clone, clap::ValueEnum)]
 pub enum Compression {
@@ -135,7 +126,7 @@ pub enum Compression {
 #[global_allocator]
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
-pub fn main(args: Vec<OsString>, libs_dir: Option<&Path>) {
+pub fn main(args: Vec<OsString>) {
     if clap_complete::CompleteEnv::with_factory(Arguments::command)
         .try_complete(&args, std::env::current_dir().ok().as_deref())
         .unwrap_or_else(|e| e.exit())
@@ -145,13 +136,13 @@ pub fn main(args: Vec<OsString>, libs_dir: Option<&Path>) {
 
     logger::install();
 
-    if let Err(e) = run(args, libs_dir) {
+    if let Err(e) = run(args) {
         error!("{:?}", e);
         std::process::exit(1);
     }
 }
 
-fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
+fn run(args: Vec<OsString>) -> Result<()> {
     let args = Arguments::parse_from(args);
 
     let game_dir = match args.game.game_dir {
@@ -238,37 +229,8 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
 
     let game_files = GameFiles::probe(&game_dir)?;
-    let mut env = Environment::new(game_files, tpk);
+    let env = Environment::new(game_files, tpk);
     let unity_version = env.unity_version()?.clone();
-
-    if args.output.mode.needs_typetree_generator() {
-        let generator = match libs_dir {
-            Some(lib_path) => {
-                TypeTreeGenerator::new_lib_in(lib_path, &unity_version, GeneratorBackend::default())
-            }
-            None => {
-                TypeTreeGenerator::new_lib_next_to_exe(&unity_version, GeneratorBackend::default())
-            }
-        };
-
-        match generator {
-            Ok(generator) => {
-                generator
-                    .load_all_dll_in_dir(env.game_files.game_dir.join("Managed"))
-                    .context("Cannot load game DLLs")?;
-                let monobehaviour_node = env
-                    .tpk
-                    .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
-                    .unwrap()
-                    .into_owned();
-                env.typetree_generator =
-                    TypeTreeGeneratorCache::new(env.unity_version()?.clone(), monobehaviour_node);
-            }
-            Err(e) => {
-                log::warn!("Failed to load typetree generator: {e}");
-            }
-        };
-    };
 
     let name = match &args.output.bundle_name {
         Some(name) => name,
