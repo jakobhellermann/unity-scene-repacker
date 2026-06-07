@@ -32,10 +32,13 @@ fn main() -> Result<()> {
 
     let backend: GeneratorBackend = GeneratorBackend::default();
     let generator = TypeTreeGenerator::new_lib_next_to_exe(env.unity_version()?, backend)?;
-    generator.load_all_dll_in_dir(game_dir.join("Managed"))?;
+    generator
+        .load_all_dll_in_dir(env.game_files.game_dir.join("Managed"))
+        .context("Could not load dlls into typetree generator")?;
 
-    let used = collect_used_script_types(env)?;
-    let mb_typetrees = generate_monobehaviour_types(used, generator)?;
+    let used = collect_used_script_types(env).context("Could not collect used script types")?;
+    let mb_typetrees =
+        generate_monobehaviour_types(used, generator).context("Could not generate typetrees")?;
 
     /*
      * n_assemblies x
