@@ -463,7 +463,15 @@ pub fn pack_to_asset_bundle(
             let data = scene.serialized_data.as_ref();
 
             assert_eq!(serialized.m_bigIDEnabled, None);
-            assert!(serialized.m_RefTypes.as_ref().is_some_and(|x| x.is_empty()));
+            if let Some(ref_types) = &serialized.m_RefTypes
+                && !ref_types.is_empty()
+            {
+                warn!(
+                    "Found {} m_RefTypes in scene {}, this is untested.",
+                    ref_types.len(),
+                    scene.scene_name
+                );
+            }
 
             stats.objects_before += serialized.objects().len();
             stats.size_before += data.len();

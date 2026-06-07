@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use log::warn;
 use rabex::files::SerializedFile;
 use rabex::files::serializedfile::ObjectInfo;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
@@ -23,10 +24,14 @@ pub fn add_scene_meta_to_builder(
     builder: &mut SerializedFileBuilder<impl TypeTreeProvider>,
     file: &mut SerializedFile,
 ) -> Result<RemapSerializedIndices> {
-    assert!(
-        file.m_RefTypes.as_ref().is_none_or(|x| x.is_empty()),
-        "TODO: merge reftypes"
-    );
+    if let Some(ref_types) = &file.m_RefTypes
+        && !ref_types.is_empty()
+    {
+        warn!(
+            "Found {} m_RefTypes in scene, this is untested.",
+            ref_types.len(),
+        );
+    }
 
     let mut remap_path_id = FxHashMap::default();
     for obj in file.objects() {
