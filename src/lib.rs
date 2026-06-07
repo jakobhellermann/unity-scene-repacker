@@ -184,9 +184,17 @@ fn collect_what_to_repack<T: Send + Sync>(
             .scene_objects
             .iter()
             .map(|(scene_name, object_paths)| {
-                let scene_index = *scene_lookup
-                    .get(scene_name)
-                    .with_context(|| format!("Scene '{scene_name}' was not found in game files"))?;
+                let scene_index = *scene_lookup.get(scene_name).with_context(|| {
+                    let scene_names = scene_lookup
+                        .keys()
+                        .map(String::as_str)
+                        .collect::<Vec<_>>()
+                        .join("\n-  ");
+                    format!(
+                        "Scene '{scene_name}' was not found in game files.\nFound\n- {}",
+                        scene_names
+                    )
+                })?;
                 let filename = format!("level{scene_index}");
                 Ok((scene_name, PathBuf::from(filename), object_paths.as_slice()))
             })
