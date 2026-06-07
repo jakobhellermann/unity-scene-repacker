@@ -13,7 +13,7 @@ use typetree_generator_api::reconstruct_typetree_node;
  *    n_flat_nodes x:
  *      len name
  *      len type
- *      u8  index
+ *      u8  level
  *      i32 flags
  */
 pub fn read(export: &[u8]) -> Result<FrozenMap<(String, String), Box<TypeTreeNode>>> {
@@ -42,9 +42,9 @@ pub fn read(export: &[u8]) -> Result<FrozenMap<(String, String), Box<TypeTreeNod
             for _ in 0..n_flat_nodes {
                 let name = read_str(&mut reader)?;
                 let ty = read_str(&mut reader)?;
-                let index = reader.read_u8()?;
-                let full_name = reader.read_i32::<LE>()?;
-                flat_nodes.push((name, ty, index, full_name));
+                let level = reader.read_u8()?;
+                let flags = reader.read_i32::<LE>()?;
+                flat_nodes.push((name, ty, level, flags));
             }
 
             let node = reconstruct_typetree_node(&flat_nodes);

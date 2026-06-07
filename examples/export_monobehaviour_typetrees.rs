@@ -6,12 +6,13 @@ use anyhow::{Context, Result};
 use byteorder::{LE, WriteBytesExt};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
-use rabex_env::resolver::EnvResolver as _;
+use rabex_env::resolver::EnvResolver;
+use rabex_env::typetree_generator_cache::AssemblyTypeTreeGenerator;
 use rabex_env::unity::types::MonoBehaviour;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::GameFiles;
 
 fn main() -> Result<()> {
@@ -25,20 +26,23 @@ fn main() -> Result<()> {
     let game_dir = Path::new(&game_dir);
     let out_path = args
         .next()
-        .context("expected output file as second argument")?;
+        .context("expected path to output file as second argument")?;
 
     let game_files = GameFiles::probe(game_dir)?;
     let env = Environment::new(game_files, tpk);
+    let generator = env.typetree_generator.backend(&env)?;
 
-    let backend: GeneratorBackend = GeneratorBackend::default();
-    let generator = TypeTreeGenerator::new_lib_next_to_exe(env.unity_version()?, backend)?;
-    generator
-        .load_all_dll_in_dir(env.game_files.game_dir.join("Managed"))
-        .context("Could not load dlls into typetree generator")?;
+    let managed_dir = env.game_files.game_dir.join("Managed");
+    for entry in std::fs::read_dir(&managed_dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_file() && entry.path().extension().is_some_and(|x| x == "dll") {
+            generator.load_assembly(entry.file_name().to_str().expect("non-utf8 dll name"))?;
+        }
+    }
 
-    let used = collect_used_script_types(env).context("Could not collect used script types")?;
+    let used = collect_used_script_types(&env).context("Could not collect used script types")?;
     let mb_typetrees =
-        generate_monobehaviour_types(used, generator).context("Could not generate typetrees")?;
+        generate_monobehaviour_types(used, &generator).context("Could not generate typetrees")?;
 
     /*
      * n_assemblies x
@@ -48,7 +52,7 @@ fn main() -> Result<()> {
      *    n_flat_nodes x:
      *      len name
      *      len type
-     *      u8  index
+     *      u8  level
      *      i32 flags
      */
     let mut export = Vec::new();
@@ -80,11 +84,11 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn generate_monobehaviour_types(
+fn generate_monobehaviour_types<R: EnvResolver, P: TypeTreeProvider>(
     used: BTreeMap<String, BTreeSet<String>>,
-    generator: TypeTreeGenerator,
-) -> Result<BTreeMap<String, BTreeMap<String, Vec<(String, String, u8, i32)>>>, anyhow::Error> {
-    let definitions = generator.get_monobehaviour_definitions()?;
+    generator: &AssemblyTypeTreeGenerator<'_, R, P>,
+) -> Result<BTreeMap<String, BTreeMap<String, Vec<(String, String, u8, i32)>>>> {
+    let definitions = generator.monobehaviour_definitions()?;
 
     let mut output: BTreeMap<String, BTreeMap<String, Vec<_>>> = BTreeMap::default();
     for (assembly, used_paths) in used {
@@ -102,22 +106,35 @@ fn generate_monobehaviour_types(
             }
 
             println!("  Path: {}", path);
-            let generate_typetree_json = generator.generate_typetree_json(&assembly, &path)?;
-            let json = serde_json::from_str::<Vec<TypetreeNodeDump>>(&generate_typetree_json)?;
-
-            x.insert(
-                path,
-                json.into_iter()
-                    .map(|x| (x.m_Type, x.m_Name, x.m_Level, x.m_MetaFlag))
-                    .collect(),
-            );
+            let Some(tree) = generator.generate(&assembly, &path)? else {
+                eprintln!("{path} in {assembly}: generate returned None");
+                continue;
+            };
+            x.insert(path, flatten_typetree(&tree));
         }
         output.insert(assembly, x);
     }
     Ok(output)
 }
 
-fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeSet<String>>> {
+fn flatten_typetree(root: &TypeTreeNode) -> Vec<(String, String, u8, i32)> {
+    fn walk(node: &TypeTreeNode, out: &mut Vec<(String, String, u8, i32)>) {
+        out.push((
+            node.m_Type.clone(),
+            node.m_Name.clone(),
+            node.m_Level,
+            node.m_MetaFlag.unwrap_or(0),
+        ));
+        for child in &node.children {
+            walk(child, out);
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, &mut out);
+    out
+}
+
+fn collect_used_script_types(env: &Environment) -> Result<BTreeMap<String, BTreeSet<String>>> {
     env.game_files
         .all_files()?
         .into_par_iter()
@@ -125,7 +142,6 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
             let mut used = Vec::new();
             let name = file.file_name().unwrap().to_str().unwrap();
             if name.starts_with("level") {
-                // PERF: this can be optimized for the BundleFileReader resolver
                 let (file, data) = env.load_serialized_uncached(file)?;
                 let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
@@ -158,13 +174,4 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
             }
             Ok(map1)
         })
-}
-
-#[derive(serde_derive::Deserialize, Debug)]
-#[allow(non_snake_case)]
-struct TypetreeNodeDump {
-    m_Type: String,
-    m_Name: String,
-    m_Level: u8,
-    m_MetaFlag: i32,
 }

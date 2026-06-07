@@ -41,8 +41,8 @@ type_complexity = "allow"
 [workspace.dependencies]
 typetree-generator-api = { git = "https://github.com/jakobhellermann/typetree-generator-api-bindings" }
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", default-features = false, features = [
-    "embed-tpk",
-    # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
+  "embed-tpk",
+  # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
 ] }
 rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
 

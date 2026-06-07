@@ -820,7 +820,7 @@ dependencies = [
 [[package]]
 name = "rabex-env"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/rabex-env#40875d232122219e6bcd09548272df17686ab63a"
+source = "git+https://github.com/jakobhellermann/rabex-env#a42e175a76ea24a2021edeb4d628f44ed54b4c22"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -1193,7 +1193,7 @@ dependencies = [
 [[package]]
 name = "unity-typetree-gen"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/unity-typetree-gen#aba60294cbacd59b959410091e4b4eac80523794"
+source = "git+https://github.com/jakobhellermann/unity-typetree-gen#86cddcfd922e1e46ab341322cd0ea31e14d12567"
 dependencies = [
  "dotnetdll",
  "rabex",
