@@ -8,14 +8,12 @@ use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::EnvResolver as _;
 use rabex_env::unity::types::MonoBehaviour;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use typetree_generator_api::GeneratorBackend;
 
 fn main() -> Result<()> {
     let game_dir = std::env::args().nth(1).context("missing path to game")?;
 
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
-    let mut env = Environment::new_in(game_dir, tpk)?;
-    env.load_typetree_generator(GeneratorBackend::default())?;
+    let env = Environment::new_in(game_dir, tpk)?;
 
     let all = env
         .game_files
@@ -23,7 +21,7 @@ fn main() -> Result<()> {
         .into_par_iter()
         .map(|path| -> Result<_> {
             let mut map = BTreeMap::default();
-            let (file, data) = env.load_leaf(path)?;
+            let (file, data) = env.load_serialized_uncached(path)?;
             let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
             for mb in file.objects_of::<MonoBehaviour>() {

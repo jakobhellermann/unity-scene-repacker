@@ -261,7 +261,8 @@ fn run(args: Vec<OsString>, libs_dir: Option<&Path>) -> Result<()> {
                     .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
                     .unwrap()
                     .into_owned();
-                env.typetree_generator = TypeTreeGeneratorCache::new(generator, monobehaviour_node);
+                env.typetree_generator =
+                    TypeTreeGeneratorCache::new(env.unity_version()?.clone(), monobehaviour_node);
             }
             Err(e) => {
                 log::warn!("Failed to load typetree generator: {e}");

@@ -7,14 +7,12 @@ use rabex_env::unity::types::MonoBehaviour;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde_derive::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use typetree_generator_api::GeneratorBackend;
 
 fn main() -> Result<()> {
     let game_dir = std::env::args().nth(1).context("missing path to game")?;
 
     let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
-    let mut env = Environment::new_in(game_dir, tpk)?;
-    env.load_typetree_generator(GeneratorBackend::default())?;
+    let env = Environment::new_in(game_dir, tpk)?;
 
     let scenes = env.build_settings()?.scene_name_lookup();
 
@@ -22,7 +20,7 @@ fn main() -> Result<()> {
         .par_iter()
         .map(|(scene_name, scene_idx)| -> Result<_> {
             let mut map = BTreeMap::default();
-            let (file, data) = env.load_leaf(format!("level{scene_idx}"))?;
+            let (file, data) = env.load_serialized_uncached(format!("level{scene_idx}"))?;
             let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
             let mut transitions = Vec::new();

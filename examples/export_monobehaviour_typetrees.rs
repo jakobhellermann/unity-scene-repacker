@@ -123,7 +123,7 @@ fn collect_used_script_types(env: Environment) -> Result<BTreeMap<String, BTreeS
             let name = file.file_name().unwrap().to_str().unwrap();
             if name.starts_with("level") {
                 // PERF: this can be optimized for the BundleFileReader resolver
-                let (file, data) = env.load_leaf(file)?;
+                let (file, data) = env.load_serialized_uncached(file)?;
                 let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
                 for mb in file.objects_of::<MonoBehaviour>() {

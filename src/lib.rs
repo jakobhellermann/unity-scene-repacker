@@ -1,6 +1,7 @@
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 
+pub use rabex;
 use rabex::objects::ClassId;
 use rabex_env::Environment;
 use rabex_env::env::Data;
@@ -9,7 +10,7 @@ use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::EnvResolver as _;
 use rabex_env::scene_lookup::SceneLookup;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
-pub use {rabex, typetree_generator_api};
+pub use typetree_generator_api;
 
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
@@ -592,11 +593,11 @@ fn prepare_monobehaviour_types<'a>(
             }
 
             let ty = env
-                .typetree_generator
-                .generate(&assembly_name, &full_name)
+                .generate_typetree(&assembly_name, &full_name)
                 .with_context(|| {
                     format!("Reading script {assembly_name} {full_name} at object {path_id}",)
                 })?;
+            let Some(ty) = ty else { return Ok(None) };
 
             Ok(Some((path_id, ty)))
         })

@@ -10,7 +10,6 @@ use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::EnvResolver as _;
 use rabex_env::unity::types::{GameObject, MonoBehaviour};
 use serde_derive::{Deserialize, Serialize};
-use typetree_generator_api::GeneratorBackend;
 use unity_scene_repacker::GameFiles;
 
 fn main() -> Result<()> {
@@ -26,13 +25,12 @@ fn main() -> Result<()> {
     let game_dir = Path::new(&game_dir);
 
     let game_files = GameFiles::probe(game_dir)?;
-    let mut env = Environment::new(game_files, tpk);
-    env.load_typetree_generator(GeneratorBackend::default())?;
+    let env = Environment::new(game_files, tpk);
 
     let mut scene_fsms: BTreeMap<String, Vec<GameFsmInfo>> = BTreeMap::new();
 
     for file_path in env.game_files.serialized_files()? {
-        let (file, data) = env.load_leaf(&file_path)?;
+        let (file, data) = env.load_serialized_uncached(&file_path)?;
         let file = SerializedFileHandle::new(&env, &file, data.as_ref());
 
         for mb_obj in file.objects_of::<MonoBehaviour>() {

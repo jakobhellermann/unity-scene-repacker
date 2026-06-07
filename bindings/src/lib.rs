@@ -12,7 +12,6 @@ use rabex_env::typetree_generator_cache::TypeTreeGeneratorCache;
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
-use unity_scene_repacker::typetree_generator_api::{GeneratorBackend, TypeTreeGenerator};
 use unity_scene_repacker::{
     GameFiles, MonobehaviourTypetreeMode, RepackSettings, Stats, monobehaviour_typetree_export,
 };
@@ -140,19 +139,11 @@ fn export_inner(
 
         env.typetree_generator = match monobehaviour_typetree_mode {
             MonobehaviourTypetreeMode::GenerateRuntime => {
-                let generator = TypeTreeGenerator::new_lib_next_to_exe(
-                    &unity_version,
-                    GeneratorBackend::default(),
-                )?;
-                generator
-                    .load_all_dll_in_dir(game_dir.join("Managed"))
-                    .context("Cannot load game DLLs")?;
-                TypeTreeGeneratorCache::new(generator, monobehaviour_node)
+                TypeTreeGeneratorCache::new(env.unity_version()?.clone(), monobehaviour_node)
             }
-            MonobehaviourTypetreeMode::Export(export) => TypeTreeGeneratorCache::prefilled(
-                monobehaviour_typetree_export::read(export)?,
-                monobehaviour_node,
-            ),
+            MonobehaviourTypetreeMode::Export(export) => {
+                TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_export::read(export)?)
+            }
         };
     }
 
