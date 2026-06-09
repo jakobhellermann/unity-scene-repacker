@@ -41,16 +41,18 @@ type_complexity = "allow"
 [workspace.dependencies]
 typetree-generator-api = { git = "https://github.com/jakobhellermann/typetree-generator-api-bindings" }
 rabex = { git = "https://github.com/jakobhellermann/RustyAssetBundleEXtractor", default-features = false, features = [
-  "embed-tpk",
-  # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
+	"embed-tpk",
+	# "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
 ] }
 rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
 
-# [patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
-# rabex = { path = "/home/jakob/dev/unity/RustyAssetBundleEXtractor" }
+[patch."https://github.com/jakobhellermann/RustyAssetBundleEXtractor"]
+rabex = { path = "../RustyAssetBundleEXtractor" }
+[patch."https://github.com/jakobhellermann/typetree-generator-api-bindings"]
+typetree-generator-api = { path = "../typetree-generator-api-bindings" }
+[patch."https://github.com/jakobhellermann/unity-typetree-gen"]
+unity-typetree-gen = { path = "../unity-typetree-gen" }
 # [patch."https://github.com/jakobhellermann/rabex-env"]
 # rabex-env = { path = "../rabex-env" }
-# [patch."https://github.com/jakobhellermann/unity-typetree-gen"]
-# unity-typetree-gen = { path = "../unity-typetree-gen" }
 [patch.crates-io] # get the fix from https://github.com/jakobhellermann/dotnetdll/commit/56b4eeefa7c818e0808093a96a25755c97fe77ea
 dotnetdll = { git = "https://github.com/jakobhellermann/dotnetdll", branch = "wip" }

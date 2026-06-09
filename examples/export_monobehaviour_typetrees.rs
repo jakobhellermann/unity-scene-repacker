@@ -118,19 +118,19 @@ fn generate_monobehaviour_types<R: EnvResolver, P: TypeTreeProvider>(
 }
 
 fn flatten_typetree(root: &TypeTreeNode) -> Vec<(String, String, u8, i32)> {
-    fn walk(node: &TypeTreeNode, out: &mut Vec<(String, String, u8, i32)>) {
+    fn walk(node: &TypeTreeNode, level: u8, out: &mut Vec<(String, String, u8, i32)>) {
         out.push((
             node.m_Type.clone(),
             node.m_Name.clone(),
-            node.m_Level,
+            level,
             node.m_MetaFlag.unwrap_or(0),
         ));
         for child in &node.children {
-            walk(child, out);
+            walk(child, level + 1, out);
         }
     }
     let mut out = Vec::new();
-    walk(root, &mut out);
+    walk(root, 0, &mut out);
     out
 }
 

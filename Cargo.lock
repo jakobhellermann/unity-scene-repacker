@@ -292,7 +292,7 @@ dependencies = [
 [[package]]
 name = "dotnetdll"
 version = "0.1.3"
-source = "git+https://github.com/jakobhellermann/dotnetdll?branch=wip#56b4eeefa7c818e0808093a96a25755c97fe77ea"
+source = "git+https://github.com/jakobhellermann/dotnetdll?branch=wip#fdf483517f4134bdedf1f077e658147f885db8ef"
 dependencies = [
  "bitfield",
  "bitvec",
@@ -310,7 +310,7 @@ dependencies = [
 [[package]]
 name = "dotnetdll-macros"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/dotnetdll?branch=wip#56b4eeefa7c818e0808093a96a25755c97fe77ea"
+source = "git+https://github.com/jakobhellermann/dotnetdll?branch=wip#fdf483517f4134bdedf1f077e658147f885db8ef"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -800,7 +800,6 @@ dependencies = [
 [[package]]
 name = "rabex"
 version = "0.0.3"
-source = "git+https://github.com/jakobhellermann/RustyAssetBundleEXtractor#0333df164aa034d13cd78647949b831961695214"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -818,7 +817,7 @@ dependencies = [
 [[package]]
 name = "rabex-env"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/rabex-env#a42e175a76ea24a2021edeb4d628f44ed54b4c22"
+source = "git+https://github.com/jakobhellermann/rabex-env#79c4e177ecc148c1329b2a6f4ca6d6329a0d1ec2"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -1119,7 +1118,6 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 [[package]]
 name = "typetree-generator-api"
 version = "1.0.0"
-source = "git+https://github.com/jakobhellermann/typetree-generator-api-bindings#d392f2890cde4c13b69c5ee319fe245aa46e59d5"
 dependencies = [
  "libloading",
  "rabex",
@@ -1191,7 +1189,6 @@ dependencies = [
 [[package]]
 name = "unity-typetree-gen"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/unity-typetree-gen#86cddcfd922e1e46ab341322cd0ea31e14d12567"
 dependencies = [
  "dotnetdll",
  "rabex",
