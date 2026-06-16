@@ -15,12 +15,13 @@ use rabex::files::bundlefile::CompressionType;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::Environment;
+use rabex_env::resolver::GameFiles;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
 use std::io::BufWriter;
 use std::path::PathBuf;
 use std::time::Instant;
-use unity_scene_repacker::{GameFiles, RepackSettings, Stats};
+use unity_scene_repacker::{RepackSettings, Stats};
 
 use crate::utils::friendly_size;
 

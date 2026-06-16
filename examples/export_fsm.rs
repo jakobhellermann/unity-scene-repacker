@@ -7,10 +7,9 @@ use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
-use rabex_env::resolver::EnvResolver as _;
+use rabex_env::resolver::{EnvResolver as _, GameFiles};
 use rabex_env::unity::types::{GameObject, MonoBehaviour};
 use serde_derive::{Deserialize, Serialize};
-use unity_scene_repacker::GameFiles;
 
 fn main() -> Result<()> {
     let include_mbs = ["PlayMakerFSM"];

@@ -9,11 +9,10 @@ use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rabex_env::Environment;
 use rabex_env::handle::SerializedFileHandle;
-use rabex_env::resolver::EnvResolver;
+use rabex_env::resolver::{EnvResolver, GameFiles};
 use rabex_env::typetree_generator_cache::AssemblyTypeTreeGenerator;
 use rabex_env::unity::types::MonoBehaviour;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use unity_scene_repacker::GameFiles;
 
 fn main() -> Result<()> {
     let tpk = TpkTypeTreeBlob::embedded();

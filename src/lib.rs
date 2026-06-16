@@ -5,9 +5,8 @@ pub use rabex;
 use rabex::objects::ClassId;
 use rabex_env::Environment;
 use rabex_env::env::Data;
-pub use rabex_env::game_files::GameFiles;
 use rabex_env::handle::SerializedFileHandle;
-use rabex_env::resolver::EnvResolver as _;
+use rabex_env::resolver::{EnvResolver as _, GameFiles};
 use rabex_env::scene_lookup::SceneLookup;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
 
@@ -232,7 +231,7 @@ fn repack_scene<'a>(
     let scene_paths = deduplicate_objects(original_name, scene_name, settings.object_paths);
 
     let mut replacements = FxHashMap::default();
-    let result = rabex_env::prune::prune_scene(
+    let result = rabex_env::reachable::prune::prune_scene(
         env,
         &file,
         reader,
