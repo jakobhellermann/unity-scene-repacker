@@ -4,6 +4,7 @@ pub mod monobehaviour_typetree_export;
 pub use rabex;
 use rabex::objects::ClassId;
 use rabex_env::Environment;
+use rabex_env::addressables::binary_catalog::resource_providers;
 use rabex_env::env::Data;
 use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::{EnvResolver as _, GameFiles};
@@ -99,6 +100,50 @@ pub fn repack_scenes<'a>(
     Ok((scenes, extra_objects))
 }
 
+const SCENE_INSTANCE_CLASS: &str = "UnityEngine.ResourceManagement.ResourceProviders.SceneInstance";
+
+/// Find the addressable assetbundle (relative to the addressables build folder) containing scene `scene_name`, by
+/// scanning the catalog for its SceneInstance location and following its AssetBundle dependency. Returns None if the
+/// game has no addressables or `scene_name` isn't an addressable scene. (Mirrors rabex-cli's `open_scene` Bundle arm.)
+fn find_addressable_scene_bundle(env: &Environment, scene_name: &str) -> Result<Option<PathBuf>> {
+    let Some(addressables) = env.addressables()? else {
+        return Ok(None);
+    };
+    let build_folder = addressables.build_folder();
+    for mut catalog in addressables.catalogs(&env.game_files)? {
+        let catalog = catalog.read()?;
+        for loc in catalog.locations() {
+            if loc.provider_id.as_str() != resource_providers::BUNDLED_ASSET
+                || loc.type_.m_ClassName.as_str() != SCENE_INSTANCE_CLASS
+            {
+                continue;
+            }
+            let Some(name) = Path::new(loc.primary_key.as_str())
+                .file_stem()
+                .and_then(|s| s.to_str())
+            else {
+                continue;
+            };
+            if name != scene_name {
+                continue;
+            }
+            if let Some(dep) = loc
+                .dependencies
+                .iter()
+                .find(|dep| dep.provider_id.as_str() == resource_providers::ASSET_BUNDLE)
+            {
+                let path = addressables.evaluate_string(&dep.internal_id);
+                let relative = Path::new(&path)
+                    .strip_prefix(&build_folder)
+                    .unwrap_or(Path::new(&path))
+                    .to_owned();
+                return Ok(Some(relative));
+            }
+        }
+    }
+    Ok(None)
+}
+
 // TODO: this is a mess, refactor it away
 fn collect_what_to_repack<T: Send + Sync>(
     env: &Environment,
@@ -179,31 +224,49 @@ fn collect_what_to_repack<T: Send + Sync>(
     } else {
         let scene_lookup = build_settings.scene_name_lookup();
 
-        let scene_files = repack_settings
+        // Resolve each requested scene to its source: a built-in levelN file, or — for addressables games like
+        // Silksong — an addressable scene bundle found via the catalog.
+        enum Source {
+            Level(PathBuf),
+            Bundle(PathBuf),
+        }
+        let resolved = repack_settings
             .scene_objects
             .iter()
-            .map(|(scene_name, object_paths)| {
-                let scene_index = *scene_lookup.get(scene_name).with_context(|| {
+            .map(|(scene_name, object_paths)| -> Result<_> {
+                let source = if let Some(&index) = scene_lookup.get(scene_name) {
+                    Source::Level(PathBuf::from(format!("level{index}")))
+                } else if let Some(bundle) = find_addressable_scene_bundle(env, scene_name)? {
+                    Source::Bundle(bundle)
+                } else {
                     let scene_names = scene_lookup
                         .keys()
                         .map(String::as_str)
                         .collect::<Vec<_>>()
                         .join("\n-  ");
-                    format!(
-                        "Scene '{scene_name}' was not found in game files.\nFound\n- {}",
-                        scene_names
-                    )
-                })?;
-                let filename = format!("level{scene_index}");
-                Ok((scene_name, PathBuf::from(filename), object_paths.as_slice()))
+                    anyhow::bail!(
+                        "Scene '{scene_name}' not found in build settings or addressables.\nBuilt-in scenes:\n- {scene_names}"
+                    );
+                };
+                Ok((scene_name.as_str(), source, object_paths.as_slice()))
             })
             .collect::<Result<Vec<_>>>()?;
 
-        let scenes = scene_files
+        let scenes = resolved
             .par_iter()
-            .map(|(scene_name, filename, object_paths)| -> Result<_> {
-                let (data, file) = read(filename, None)?;
-                f(filename, scene_name, object_paths, file, data)
+            .map(|(scene_name, source, object_paths)| -> Result<_> {
+                let (filename, file, data): (PathBuf, SerializedFile, Data) = match source {
+                    Source::Level(path) => {
+                        let (data, file) = read(path, None)?;
+                        (path.clone(), file, data)
+                    }
+                    Source::Bundle(path) => {
+                        let (_archive, file, bytes) =
+                            env.load_addressables_bundle_content_leaf(path)?;
+                        (path.clone(), file, Data::InMemory(bytes))
+                    }
+                };
+                f(&filename, scene_name, object_paths, file, data)
             })
             .collect::<Result<Vec<_>>>()?;
         (Vec::new(), scenes)
