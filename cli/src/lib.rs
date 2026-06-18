@@ -88,6 +88,11 @@ struct OutputArgs {
     #[arg(long, default_value = "false")]
     disable: bool,
 
+    /// Control mode: keep the ENTIRE scene (skip the reachability prune). Combine with --disable to load a full
+    /// scene with everything inactive. Useful to isolate whether pruning breaks MonoScript binding.
+    #[arg(long, default_value = "false")]
+    no_prune: bool,
+
     /// Compression level to apply
     #[arg(long, default_value = "lzma")]
     compression: Compression,
@@ -288,6 +293,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
         repack_settings,
         matches!(args.output.mode, Mode::Asset),
         args.output.disable,
+        args.output.no_prune,
     )?;
 
     if let Some(parent) = args.output.output.parent() {

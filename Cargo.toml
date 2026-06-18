@@ -46,7 +46,8 @@ rabex = { version = "0.2", default-features = false, features = [
 ] }
 rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
 
-# [patch."https://github.com/jakobhellermann/rabex-env"]
+[patch."https://github.com/jakobhellermann/rabex-env"]
+rabex-env = { path = "../rabex-env" }
 
 [patch.crates-io] # get the fix from https://github.com/jakobhellermann/dotnetdll/commit/56b4eeefa7c818e0808093a96a25755c97fe77ea
 # dotnetdll = { git = "https://github.com/jakobhellermann/dotnetdll", branch = "wip" }

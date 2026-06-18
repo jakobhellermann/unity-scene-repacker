@@ -164,6 +164,7 @@ fn export_inner(
         repack_settings,
         disable,
         matches!(mode, Mode::AssetBundle),
+        false,
     )?;
 
     let enable_typetree = false; // TODO: make this configurable / infer if necessary

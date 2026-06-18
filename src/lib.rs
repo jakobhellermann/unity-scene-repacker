@@ -63,6 +63,7 @@ pub fn repack_scenes<'a>(
     repack_settings: RepackSettings,
     prepare_scripts: bool,
     disable_roots: bool,
+    no_prune: bool,
 ) -> Result<(Vec<RepackScene<'a>>, Vec<ExtraObject>)> {
     let (scenes, extra_objects) = collect_what_to_repack(
         env,
@@ -71,6 +72,7 @@ pub fn repack_scenes<'a>(
             let settings = RepackSceneSettings {
                 object_paths,
                 disable_roots,
+                no_prune,
             };
             repack_scene(
                 env,
@@ -278,6 +280,7 @@ fn collect_what_to_repack<T: Send + Sync>(
 struct RepackSceneSettings<'a> {
     object_paths: &'a [String],
     disable_roots: bool,
+    no_prune: bool,
 }
 
 fn repack_scene<'a>(
@@ -294,15 +297,28 @@ fn repack_scene<'a>(
     let scene_paths = deduplicate_objects(original_name, scene_name, settings.object_paths);
 
     let mut replacements = FxHashMap::default();
-    let result = rabex_env::reachable::prune::prune_scene(
-        env,
-        &file,
-        reader,
-        scene_paths.iter().copied(),
-        &mut replacements,
-        settings.disable_roots,
-    )
-    .with_context(|| scene_name_display(scene_name, original_name))?;
+    let result = if settings.no_prune {
+        // Control mode: keep the ENTIRE scene (no reachability prune), but disable every GameObject so nothing
+        // executes on load. Isolates whether the prune step is what breaks MonoScript binding for some types.
+        if settings.disable_roots {
+            rabex_env::reachable::prune::disable_all_gameobjects(env, &file, reader, &mut replacements)
+                .with_context(|| scene_name_display(scene_name, original_name))?;
+        }
+        rabex_env::reachable::prune::PruneSceneResult {
+            reachable: file.objects().map(|o| o.m_PathID).collect(),
+            roots: Vec::new(),
+        }
+    } else {
+        rabex_env::reachable::prune::prune_scene(
+            env,
+            &file,
+            reader,
+            scene_paths.iter().copied(),
+            &mut replacements,
+            settings.disable_roots,
+        )
+        .with_context(|| scene_name_display(scene_name, original_name))?
+    };
 
     let monobehaviour_types = prepare_scripts
         .then(|| prepare_monobehaviour_types(env, &file, reader))
