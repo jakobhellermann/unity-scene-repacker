@@ -19,7 +19,7 @@ use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
-use rabex::objects::pptr::{PPtr, PathId};
+use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -441,7 +441,36 @@ pub fn pack_to_scene_bundle(
         let mut sharedassets =
             SerializedFileBuilder::new(unity_version, tpk, &common_offset_map, true);
 
-        sharedassets.add_object_at(1, &PreloadData::default())?;
+        // Populate PreloadData.m_Assets with the scene's MonoScript PPtrs. Scene bundles register MonoScript->type
+        // links by preloading these; an empty PreloadData makes MonoBehaviours of types not registered by another
+        // bundle bind as "missing script". Collect each kept MonoBehaviour's m_Script (built-MB layout: m_FileID i32
+        // @ offset 16, m_PathID i64 @ 20) and re-express it as a PPtr into this sharedAssets file's externals.
+        let mut preload = PreloadData::default();
+        {
+            let data = scene.serialized_data.as_ref();
+            let mut seen = FxHashSet::default();
+            let mut refs: Vec<(String, PathId)> = Vec::new();
+            for obj in scene.serialized.objects() {
+                if obj.m_ClassID != ClassId::MonoBehaviour || !scene.keep_objects.contains(&obj.m_PathID) {
+                    continue;
+                }
+                let (off, size) = (obj.m_Offset as usize, obj.m_Size as usize);
+                if size < 28 { continue; }
+                let fid = i32::from_le_bytes([data[off + 16], data[off + 17], data[off + 18], data[off + 19]]);
+                if fid == 0 { continue; }
+                let pid = i64::from_le_bytes(data[off + 20..off + 28].try_into().unwrap());
+                if let Some(ext) = scene.serialized.m_Externals.get((fid - 1) as usize)
+                    && seen.insert((ext.pathName.clone(), pid))
+                {
+                    refs.push((ext.pathName.clone(), pid));
+                }
+            }
+            for (name, pid) in refs {
+                let file_id = sharedassets.add_external_uncached(FileIdentifier::new(name));
+                preload.m_Assets.push(PPtr::new(file_id, pid));
+            }
+        }
+        sharedassets.add_object_at(1, &preload)?;
 
         if let Some(asset_bundle) = asset_bundle.take() {
             sharedassets.add_object_at(2, &asset_bundle)?;
@@ -632,6 +661,33 @@ pub fn pack_to_asset_bundle(
         }
         Ok(())
     })?;
+
+    // Build a preload table. Unity registers MonoScript->type links by preloading the monoscripts when the bundle
+    // loads; an EMPTY preload table makes MonoBehaviours of types not registered by another bundle bind as "missing
+    // script". List every MonoBehaviour's m_Script PPtr (in a built MB: m_FileID i32 @ offset 16, m_PathID i64 @ 20)
+    // plus all local objects, and point every container entry at the whole table.
+    {
+        let mut seen = FxHashSet::default();
+        let mut preload: Vec<PPtr> = Vec::new();
+        for (&pid, _) in builder.objects.iter() {
+            preload.push(PPtr::new(FileId::LOCAL, pid));
+        }
+        for (_, (info, data)) in builder.objects.iter() {
+            if info.m_ClassID == ClassId::MonoBehaviour && data.len() >= 28 {
+                let fid = i32::from_le_bytes([data[16], data[17], data[18], data[19]]);
+                let pid = i64::from_le_bytes(data[20..28].try_into().unwrap());
+                if fid != 0 && seen.insert((fid, pid)) {
+                    preload.push(PPtr::new(FileId::new(fid), pid));
+                }
+            }
+        }
+        let total = preload.len() as i32;
+        asset_bundle.m_PreloadTable = preload;
+        for info in asset_bundle.m_Container.values_mut() {
+            info.preloadIndex = 0;
+            info.preloadSize = total;
+        }
+    }
 
     builder.add_object_at(1, &asset_bundle)?;
 
