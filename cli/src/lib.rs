@@ -297,7 +297,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
 
-    let enable_typetree = false; // TODO make this configurable / infer if necessary
+    // Embed typetrees so the bundle is self-describing. Required for CROSS-VERSION loading (e.g. repacking a Silksong
+    // 6000.0.50 scene to load in HK 6000.0.61): without embedded typetrees the host falls back to its own typetrees +
+    // a strict serialized-file version check and rejects the bundle ("Invalid serialized file version"). TODO: flag.
+    let enable_typetree = true;
 
     let new_size = match args.output.mode {
         Mode::Scene => {
