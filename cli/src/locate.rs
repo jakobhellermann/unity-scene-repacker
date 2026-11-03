@@ -5,7 +5,11 @@ use anyhow::{Context, Result};
 use paris::info;
 
 fn search_transform(input: &str) -> String {
-    input.to_ascii_lowercase().replace(char::is_whitespace, "")
+    input
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 pub fn locate_steam_game(game: &str) -> Result<PathBuf> {
