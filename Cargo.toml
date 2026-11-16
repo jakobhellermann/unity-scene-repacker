@@ -47,8 +47,8 @@ rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
 
 # [patch."https://github.com/jakobhellermann/rabex-env"]
 
-[patch.crates-io] # get the fix from https://github.com/jakobhellermann/dotnetdll/commit/56b4eeefa7c818e0808093a96a25755c97fe77ea
-# dotnetdll = { git = "https://github.com/jakobhellermann/dotnetdll", branch = "wip" }
+[patch.crates-io] # don't panic on a NATIVE_TYPE_ARRAY issue (HK 1.5 assemblies)
+dotnetdll = { git = "https://github.com/jakobhellermann/dotnetdll", branch = "wip" }
 # unity-typetree-gen = { path = "../unity-typetree-gen" }
 # rabex-env = { path = "../rabex-env" }
 
