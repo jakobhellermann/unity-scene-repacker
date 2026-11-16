@@ -77,6 +77,7 @@ pub struct RemappedObject {
     pub info: ObjectInfo,
     pub data: Cow<'static, [u8]>,
     pub references: Vec<PathId>,
+    pub externals: Vec<FileId>,
 }
 
 pub fn remap_objects(
@@ -111,6 +112,7 @@ pub fn remap_objects(
         obj.m_PathID = *remap.path_id.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
 
         let mut references = Vec::new();
+        let mut externals = Vec::new();
         map_pptrs_inplace(
             object_data.to_mut().as_mut_slice(),
             tt,
@@ -134,6 +136,7 @@ pub fn remap_objects(
                     return Ok(PPtr::local(path_id));
                 }
                 let file_id = *remap.file_id.get(&pptr.m_FileID).unwrap_or(&pptr.m_FileID);
+                externals.push(file_id);
                 Ok(PPtr::new(file_id, pptr.m_PathID))
             },
         )
@@ -149,6 +152,7 @@ pub fn remap_objects(
             info: obj,
             data: Cow::Owned(object_data.into_owned()),
             references,
+            externals,
         })
     })
 }

@@ -19,7 +19,7 @@ use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::files::{SerializedFile, serializedfile};
-use rabex::objects::pptr::{PPtr, PathId};
+use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -526,10 +526,12 @@ pub fn pack_to_asset_bundle(
         .collect::<Vec<Vec<Result<_>>>>();
 
     let mut references = FxHashMap::default();
+    let mut used_externals = FxHashSet::default();
     objects.into_iter().try_for_each(|objects| -> Result<_> {
         for obj in objects {
             let obj = obj?;
             references.insert(obj.info.m_PathID, obj.references);
+            used_externals.extend(obj.externals);
             builder
                 .objects
                 .insert(obj.info.m_PathID, (obj.info, obj.data));
@@ -538,6 +540,26 @@ pub fn pack_to_asset_bundle(
     })?;
 
     fill_preload_table(&mut asset_bundle, &references);
+
+    used_externals.extend(
+        builder
+            .serialized
+            .m_ScriptTypes
+            .iter()
+            .flatten()
+            .map(|script| script.m_LocalSerializedFileIndex),
+    );
+    used_externals.extend(
+        asset_bundle
+            .m_Container
+            .values()
+            .map(|info| info.asset.m_FileID),
+    );
+    for (i, external) in builder.serialized.m_Externals.iter_mut().enumerate() {
+        if !used_externals.contains(&FileId::from_externals_index(i)) {
+            *external = FileIdentifier::default();
+        }
+    }
     builder.add_object_at(1, &asset_bundle)?;
 
     if enable_typetree {
