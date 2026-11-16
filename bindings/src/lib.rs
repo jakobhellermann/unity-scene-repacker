@@ -3,19 +3,15 @@ use std::ffi::{CStr, CString, c_char, c_int};
 use std::io::Cursor;
 use std::path::Path;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, bail, ensure};
 use indexmap::IndexMap;
-use rabex::objects::ClassId;
-use rabex::typetree::TypeTreeProvider as _;
 use rabex_env::Environment;
 use rabex_env::resolver::GameFiles;
-use rabex_env::typetree_generator_cache::TypeTreeGeneratorCache;
+use unity_scene_repacker::dependency_addressables::Dependencies;
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
-use unity_scene_repacker::{
-    MonobehaviourTypetreeMode, RepackSettings, Stats, monobehaviour_typetree_export,
-};
+use unity_scene_repacker::{RepackSettings, Stats, dependency_addressables};
 
 #[repr(C)]
 pub struct CStats {
@@ -28,51 +24,287 @@ enum Mode {
     AssetBundle = 1,
     AssetBundleShallow = 2,
 }
-impl Mode {
-    fn needs_typetree_generator(&self) -> bool {
-        matches!(self, Mode::AssetBundle)
+
+/// A game to repack objects from.
+pub struct Game {
+    env: Environment,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_open(
+    game_dir: *const c_char,
+    error: *mut *const c_char,
+) -> *mut Game {
+    let result = (|| -> Result<Game> {
+        let game_dir = unsafe { CStr::from_ptr(game_dir) }.to_str()?;
+        let game_files = GameFiles::probe(Path::new(game_dir))?;
+        let env = Environment::new(game_files, TypeTreeCache::new(TpkTypeTreeBlob::embedded()));
+        Ok(Game { env })
+    })();
+    match result {
+        Ok(game) => Box::into_raw(Box::new(game)),
+        Err(e) => {
+            unsafe { *error = error_string(e) };
+            std::ptr::null_mut()
+        }
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn export(
+pub unsafe extern "C" fn game_free(game: *mut Game) {
+    drop(unsafe { Box::from_raw(game) });
+}
+
+/// Options of [`repack`]. Flags that don't apply to `mode` must be false.
+#[repr(C)]
+pub struct RepackOptions {
+    /// 0 = scene bundle, 1 = asset bundle, 2 = shallow asset bundle
+    pub mode: u8,
+    /// 0 = none, 2 = lz4
+    pub compression: u8,
+    /// scene and asset bundle
+    pub disable_roots: bool,
+    /// asset bundle
+    pub write_typetrees: bool,
+    /// asset bundle: reference the game files the bundle depends on as `deps/<file>.bundle`
+    /// (see `dependency_file_bundle`), and return an Addressables catalog for it
+    pub emit_catalog: bool,
+}
+
+/// Repacks the objects of `objects_json` (JSON5, scene name to gameobject paths) into a bundle.
+///
+/// With `emit_catalog`, `catalog_data` receives the catalog and `dependencies` the
+/// newline-separated game files the catalog references, otherwise they are set to null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn repack(
+    game: *const Game,
     name: *const c_char,
-    game_dir: *const c_char,
-    preload_json: *const c_char,
+    objects_json: *const c_char,
+    options: *const RepackOptions,
     error: *mut *const c_char,
+    stats: *mut CStats,
     bundle_size: *mut c_int,
     bundle_data: *mut *mut u8,
-    stats_ret: *mut CStats,
-    mb_typetree_export: *const u8,
-    mb_typetree_len: c_int,
-    mode: u8,
+    catalog_size: *mut c_int,
+    catalog_data: *mut *mut u8,
+    dependencies: *mut *const c_char,
 ) {
     unsafe {
-        let name = CStr::from_ptr(name);
-        let game_dir = CStr::from_ptr(game_dir);
-        let preload_json = CStr::from_ptr(preload_json);
-
-        let mb_typetree_export = (!mb_typetree_export.is_null())
-            .then(|| std::slice::from_raw_parts(mb_typetree_export, mb_typetree_len as usize));
-
-        let result = export_inner(name, game_dir, preload_json, mode, mb_typetree_export);
+        let game = &*game;
+        let options = &*options;
+        let result = (|| -> Result<_> {
+            let name = CStr::from_ptr(name).to_str()?;
+            let objects_json = CStr::from_ptr(objects_json).to_str()?;
+            repack_inner(&game.env, name, objects_json, options)
+        })();
+        *catalog_size = 0;
+        *catalog_data = std::ptr::null_mut();
+        *dependencies = std::ptr::null();
         match result {
-            Ok((stats, data)) => {
-                *bundle_size = data.len() as c_int;
-                *bundle_data = Box::into_raw(data.into_boxed_slice()).cast();
-                *stats_ret = CStats {
-                    objects_before: stats.objects_before as c_int,
-                    objects_after: stats.objects_after as c_int,
+            Ok(result) => {
+                *stats = CStats {
+                    objects_before: result.stats.objects_before as c_int,
+                    objects_after: result.stats.objects_after as c_int,
+                };
+                write_array(result.bundle, bundle_size, bundle_data);
+                if let Some((catalog, files)) = result.catalog {
+                    write_array(catalog, catalog_size, catalog_data);
+                    *dependencies = CString::new(files.join("\n"))
+                        .expect("game file paths contain no nul bytes")
+                        .into_raw();
                 }
             }
             Err(e) => {
-                let error_string = CString::new(e.to_string()).unwrap_or_else(|_| c"".to_owned());
-                *error = CString::into_raw(error_string);
-                *bundle_size = 0;
-                *bundle_data = std::ptr::null_mut();
+                *error = error_string(e);
+                write_null(bundle_size, bundle_data);
             }
         }
     }
+}
+
+struct RepackResult {
+    stats: Stats,
+    bundle: Vec<u8>,
+    /// The catalog and the game files it references
+    catalog: Option<(Vec<u8>, Vec<String>)>,
+}
+
+fn repack_inner(
+    env: &Environment,
+    name: &str,
+    objects_json: &str,
+    options: &RepackOptions,
+) -> Result<RepackResult> {
+    let mode = match options.mode {
+        0 => Mode::SceneBundle,
+        1 => Mode::AssetBundle,
+        2 => Mode::AssetBundleShallow,
+        mode => bail!("Expected 0=SceneBundle, 1=AssetBundle or 2=AssetBundleShallow, got {mode}"),
+    };
+    let compression = compression_type(options.compression)?;
+    if !matches!(mode, Mode::AssetBundle) {
+        ensure!(
+            !options.write_typetrees,
+            "write_typetrees is only supported for asset bundles"
+        );
+        ensure!(
+            !options.emit_catalog,
+            "emit_catalog is only supported for asset bundles"
+        );
+    }
+    if matches!(mode, Mode::AssetBundleShallow) {
+        ensure!(
+            !options.disable_roots,
+            "disable_roots is not supported for shallow asset bundles"
+        );
+    }
+
+    let scene_objects: IndexMap<String, Vec<String>> =
+        json5::from_str(objects_json).context("error parsing the objects json")?;
+    let repack_settings = RepackSettings {
+        scene_objects,
+        extra_objects: IndexMap::new(),
+        strict: true,
+    };
+
+    let mut bundle = Cursor::new(Vec::new());
+    let tpk_blob = TpkTypeTreeBlob::embedded();
+
+    if let Mode::AssetBundleShallow = mode {
+        let stats = unity_scene_repacker::pack_to_shallow_asset_bundle(
+            env,
+            &mut bundle,
+            name,
+            repack_settings,
+            compression,
+        )?;
+        return Ok(RepackResult {
+            stats,
+            bundle: bundle.into_inner(),
+            catalog: None,
+        });
+    }
+
+    let is_asset_bundle = matches!(mode, Mode::AssetBundle);
+    let (mut repack_scenes, extra_objects) = unity_scene_repacker::repack_scenes(
+        env,
+        repack_settings,
+        is_asset_bundle,
+        options.disable_roots,
+    )?;
+
+    if !is_asset_bundle {
+        let stats = unity_scene_repacker::pack_to_scene_bundle(
+            &mut bundle,
+            name,
+            &tpk_blob,
+            &env.tpk,
+            env.unity_version()?,
+            repack_scenes.as_mut_slice(),
+            compression,
+        )?;
+        return Ok(RepackResult {
+            stats,
+            bundle: bundle.into_inner(),
+            catalog: None,
+        });
+    }
+
+    let dependencies = options
+        .emit_catalog
+        .then(|| Dependencies::new(env, &repack_scenes))
+        .transpose()?;
+    let stats = unity_scene_repacker::pack_to_asset_bundle(
+        env,
+        &mut bundle,
+        name,
+        &tpk_blob,
+        repack_scenes,
+        extra_objects,
+        compression,
+        options.write_typetrees || options.emit_catalog,
+        dependencies.as_ref(),
+    )?;
+
+    let catalog = dependencies
+        .map(|dependencies| -> Result<_> {
+            let catalog = dependencies.catalog(env, &format!("{name}.bundle"), name)?;
+            let files = dependencies
+                .files()
+                .into_iter()
+                .map(str::to_owned)
+                .collect();
+            Ok((catalog.to_binary()?, files))
+        })
+        .transpose()?;
+
+    Ok(RepackResult {
+        stats,
+        bundle: bundle.into_inner(),
+        catalog,
+    })
+}
+
+/// Builds the bundle `deps/<file>.bundle` referenced by repacked bundles and catalogs.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dependency_file_bundle(
+    game: *const Game,
+    file: *const c_char,
+    compression: u8,
+    error: *mut *const c_char,
+    bundle_size: *mut c_int,
+    bundle_data: *mut *mut u8,
+) {
+    unsafe {
+        let game = &*game;
+        let result = (|| -> Result<_> {
+            let file = CStr::from_ptr(file).to_str()?;
+            let compression = compression_type(compression)?;
+            dependency_addressables::bundle_game_file(&game.env, file, compression)
+                .with_context(|| format!("bundling {file}"))
+        })();
+        match result {
+            Ok(bundle) => write_array(bundle, bundle_size, bundle_data),
+            Err(e) => {
+                *error = error_string(e);
+                write_null(bundle_size, bundle_data);
+            }
+        }
+    }
+}
+
+/// Only the compressions rabex is built with here, using the same numbering as `CompressionType`
+fn compression_type(compression: u8) -> Result<CompressionType> {
+    Ok(match compression {
+        0 => CompressionType::None,
+        2 => CompressionType::Lz4,
+        _ => bail!("Expected compression 0=None or 2=Lz4, got {compression}"),
+    })
+}
+
+/// Hands `data` to the caller, to be freed with `free_array`.
+unsafe fn write_array(data: Vec<u8>, size: *mut c_int, ptr: *mut *mut u8) {
+    unsafe {
+        *size = data.len() as c_int;
+        *ptr = Box::into_raw(data.into_boxed_slice()).cast();
+    }
+}
+
+unsafe fn write_null(size: *mut c_int, ptr: *mut *mut u8) {
+    unsafe {
+        *size = 0;
+        *ptr = std::ptr::null_mut();
+    }
+}
+
+fn error_string(e: anyhow::Error) -> *const c_char {
+    let message = format!("{e:?}").replace('\0', "\\0");
+    CString::into_raw(CString::new(message).expect("nul bytes were escaped"))
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn format_version() -> u32 {
+    unity_scene_repacker::FORMAT_VERSION
 }
 
 #[unsafe(no_mangle)]
@@ -88,111 +320,7 @@ pub extern "C" fn free_array(len: c_int, data: *mut u8) {
     };
 }
 
-fn export_inner(
-    name: &CStr,
-    game_dir: &CStr,
-    scene_objects_json: &CStr,
-    mode: u8,
-    mb_typetree_export: Option<&[u8]>,
-) -> Result<(Stats, Vec<u8>)> {
-    let name = name.to_str()?;
-    let game_dir = Path::new(game_dir.to_str()?);
-    let scene_objects = scene_objects_json.to_str()?;
-    let mode = match mode {
-        0 => Mode::SceneBundle,
-        1 => Mode::AssetBundle,
-        2 => Mode::AssetBundleShallow,
-        _ => bail!("Expected 0=SceneBundle, 1=AssetBundle or 2=AssetBundleShallow, got {mode}"),
-    };
-
-    let tpk_raw = TpkTypeTreeBlob::embedded();
-    let tpk = TypeTreeCache::new(TpkTypeTreeBlob::embedded());
-
-    let compression = CompressionType::None;
-
-    let scene_objects: IndexMap<String, Vec<String>> =
-        serde_json::from_str(scene_objects).context("error parsing the objects json")?;
-
-    let repack_settings = RepackSettings {
-        scene_objects,
-        extra_objects: IndexMap::new(),
-        strict: true,
-    };
-
-    let disable = true;
-
-    let mut out = Cursor::new(Vec::new());
-
-    let game_files = GameFiles::probe(game_dir)?;
-    let mut env = Environment::new(game_files, tpk);
-    let unity_version = env.unity_version()?.clone();
-
-    if mode.needs_typetree_generator() {
-        let monobehaviour_typetree_mode = match mb_typetree_export {
-            Some(data) => MonobehaviourTypetreeMode::Export(data),
-            None => MonobehaviourTypetreeMode::GenerateRuntime,
-        };
-
-        let monobehaviour_node = env
-            .tpk
-            .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
-            .unwrap()
-            .into_owned();
-
-        env.typetree_generator = match monobehaviour_typetree_mode {
-            MonobehaviourTypetreeMode::GenerateRuntime => {
-                TypeTreeGeneratorCache::new(env.unity_version()?.clone(), monobehaviour_node)
-            }
-            MonobehaviourTypetreeMode::Export(export) => {
-                TypeTreeGeneratorCache::prefilled(monobehaviour_typetree_export::read(export)?)
-            }
-        };
-    }
-
-    if let Mode::AssetBundleShallow = mode {
-        let stats = unity_scene_repacker::pack_to_shallow_asset_bundle(
-            &env,
-            &mut out,
-            name,
-            repack_settings,
-            compression,
-        )?;
-        return Ok((stats, out.into_inner()));
-    }
-
-    let (mut repack_scenes, extra_objects) = unity_scene_repacker::repack_scenes(
-        &env,
-        repack_settings,
-        matches!(mode, Mode::AssetBundle),
-        disable,
-    )?;
-
-    let enable_typetree = false; // TODO: make this configurable / infer if necessary
-
-    let stats = match mode {
-        Mode::SceneBundle => unity_scene_repacker::pack_to_scene_bundle(
-            &mut out,
-            name,
-            &tpk_raw,
-            &env.tpk,
-            &unity_version,
-            repack_scenes.as_mut_slice(),
-            compression,
-        )
-        .context("trying to repack bundle")?,
-        Mode::AssetBundle => unity_scene_repacker::pack_to_asset_bundle(
-            &env,
-            &mut out,
-            name,
-            &tpk_raw,
-            repack_scenes,
-            extra_objects,
-            compression,
-            enable_typetree,
-            None,
-        )?,
-        Mode::AssetBundleShallow => unreachable!(),
-    };
-
-    Ok((stats, out.into_inner()))
-}
+const _: () = {
+    const fn assert_sync<T: Sync>() {}
+    assert_sync::<Game>()
+};

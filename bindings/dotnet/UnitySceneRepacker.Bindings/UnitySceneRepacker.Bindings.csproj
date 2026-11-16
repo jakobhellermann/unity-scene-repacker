@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- must not clash with the native unityscenerepacker.dll on case-insensitive file systems -->
+    <AssemblyName>UnitySceneRepacker.Bindings</AssemblyName>
+    <RootNamespace>UnitySceneRepacker</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <PackageId>unityscenerepacker</PackageId>
+    <Authors>Jakob Hellermann</Authors>
+    <Description>Bindings for unity-scene-repacker</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/jakobhellermann/unity-scene-repacker</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jakobhellermann/unity-scene-repacker</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>unity assetbundle bindings rust</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- directory containing the bindings-<rid> folders of the native builds, bindings-osx being a universal binary -->
+    <NativeDir>$(MSBuildThisFileDirectory)../../../out</NativeDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../README.md" Pack="true" PackagePath="/" />
+    <None Include="../unityscenerepacker.targets" Pack="true" PackagePath="buildTransitive/" />
+
+    <None Include="$(NativeDir)/bindings-linux-x64/libunityscenerepacker.so" Pack="true" PackagePath="runtimes/linux-x64/native/" Visible="false" />
+    <None Include="$(NativeDir)/bindings-win-x64/unityscenerepacker.dll" Pack="true" PackagePath="runtimes/win-x64/native/" Visible="false" />
+    <None Include="$(NativeDir)/bindings-osx/libunityscenerepacker.dylib" Pack="true" PackagePath="runtimes/osx/native/" Visible="false" />
+  </ItemGroup>
+
+</Project>
