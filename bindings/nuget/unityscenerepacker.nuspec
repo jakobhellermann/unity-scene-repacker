@@ -2,7 +2,7 @@
 <package>
   <metadata>
     <id>unityscenerepacker</id>
-    <version>3.1.0</version>
+    <version>3.1.1</version>
     <license type="expression">MIT</license>
     <authors>Jakob Hellermann</authors>
     <projectUrl>https://github.com/jakobhellermann/unity-scene-repacker</projectUrl>

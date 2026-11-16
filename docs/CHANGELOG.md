@@ -1,7 +1,11 @@
 # Changelog
 
+## Version 3.1.1
+- fix `--steam-game` path handling on macOS
+- fix crash generating MonoBehaviour typetrees on some assemblies
+
 ## Version 3.1.0
-- default to `lz4` compression level by default, which compresses faster and load a lot faster 
+- switch to `lz4` compression level by default, which compresses faster and load a lot faster 
 - add `rabex check-scripts out/hk-in-silksong.bundle --steam-game 'Hollow Knight' --target-steam-game Silksong` subcommand for checking script compatibility
 
 ## Version 3.0.0
