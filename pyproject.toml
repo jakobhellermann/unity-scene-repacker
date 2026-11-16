@@ -1,18 +1,17 @@
 [project]
 name = "unity-scene-repacker"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 classifiers = ["Programming Language :: Rust", "Topic :: Games/Entertainment"]
 dynamic = ["version"]
 
 [build-system]
-requires = ["maturin>=1.8,<2.0"]
+requires = ["maturin>=1.9.4,<2.0"]
 build-backend = "maturin"
 
 [tool.maturin]
 bindings = "pyo3"
 manifest-path = "cli/Cargo.toml"
 module-name = "unity_scene_repacker"
-data = "data"
 features = ["python-module"]
 
 [project.scripts]

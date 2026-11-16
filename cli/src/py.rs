@@ -1,16 +1,8 @@
-use std::path::PathBuf;
-
 use pyo3::prelude::*;
 
 #[pyfunction]
-fn entrypoint(py: Python) -> PyResult<()> {
-    let platlib = py
-        .import("sysconfig")?
-        .getattr("get_path")?
-        .call1(("platlib",))?
-        .extract::<PathBuf>()?;
-    let libs = platlib.join("unity_scene_repacker.libs");
-    crate::main(std::env::args_os().skip(1).collect(), Some(&libs));
+fn entrypoint() -> PyResult<()> {
+    crate::main(std::env::args_os().skip(1).collect());
 
     Ok(())
 }

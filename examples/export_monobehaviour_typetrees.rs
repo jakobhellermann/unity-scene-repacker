@@ -66,11 +66,11 @@ fn main() -> Result<()> {
             export.write_all(ty_name.as_bytes())?;
 
             export.write_u32::<LE>(ty_data.len() as u32)?;
-            for &(ref name, ref ty, level, flags) in ty_data {
-                export.write_u32::<LE>(name.len() as u32)?;
-                export.write_all(name.as_bytes())?;
+            for &(ref ty, ref name, level, flags) in ty_data {
                 export.write_u32::<LE>(ty.len() as u32)?;
                 export.write_all(ty.as_bytes())?;
+                export.write_u32::<LE>(name.len() as u32)?;
+                export.write_all(name.as_bytes())?;
                 export.write_u8(level)?;
                 export.write_i32::<LE>(flags)?;
             }
