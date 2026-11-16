@@ -104,6 +104,8 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     needs: build
+    permissions:
+      id-token: write
 
     steps:
       - uses: actions/checkout@v7
@@ -122,10 +124,13 @@ jobs:
       - name: Pack NuGet package
         run: nuget pack ./bindings/nuget/unityscenerepacker.nuspec
 
+      - name: NuGet login
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
       - name: Push to NuGet
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: nuget push unityscenerepacker.*.nupkg -SkipDuplicate -Source https://api.nuget.org/v3/index.json -ApiKey $NUGET_API_KEY
+        run: dotnet nuget push unityscenerepacker.*.nupkg --skip-duplicate --source https://api.nuget.org/v3/index.json --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
 
   release:
     name: Build & Publish PyPI wheels
@@ -150,8 +155,6 @@ jobs:
       - name: Publish to PyPI
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
         uses: PyO3/maturin-action@v1
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
