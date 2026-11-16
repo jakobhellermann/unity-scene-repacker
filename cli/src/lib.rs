@@ -90,7 +90,7 @@ struct OutputArgs {
     disable: bool,
 
     /// Compression level to apply
-    #[arg(long, default_value = "lzma")]
+    #[arg(long, default_value = "lz4")]
     compression: Compression,
 
     #[arg(long, short = 'o', default_value = "out.unity3d")]
@@ -133,7 +133,8 @@ pub enum Mode {
 pub enum Compression {
     None = 0,
     Lzma = 1,
-    // Lz4 = 2,
+    /// Fast compression, larger output than lz4hc
+    Lz4 = 2,
     /// Best compression at the cost of speed
     Lz4hc = 3,
     // Lzham = 4,
@@ -268,7 +269,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
     let compression = match args.output.compression {
         Compression::None => CompressionType::None,
         Compression::Lzma => CompressionType::Lzma,
-        // Compression::Lz4 => CompressionType::Lz4,
+        Compression::Lz4 => CompressionType::Lz4,
         Compression::Lz4hc => CompressionType::Lz4hc,
         // Compression::Lzham => CompressionType::Lzham,
     };
