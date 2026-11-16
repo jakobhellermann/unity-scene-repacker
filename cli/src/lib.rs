@@ -111,6 +111,7 @@ struct OutputArgs {
     /// an Addressables catalog `<bundle name>.catalog.bin` is written referencing the repacked objects and their dependencies.
     ///
     /// The catalog loads bundles from the Addressables runtime property `{UnitySceneRepacker.<bundle name>}`.
+    /// Implies `--write-typetrees`.
     #[arg(long)]
     emit_dependency_addressables: bool,
 }
@@ -319,7 +320,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
 
-    let enable_typetree = args.output.write_typetrees;
+    let enable_typetree = args.output.write_typetrees || args.output.emit_dependency_addressables;
     let dependencies = match args.output.emit_dependency_addressables {
         true => Some(Dependencies::new(&env, &repack_scenes)?),
         false => None,

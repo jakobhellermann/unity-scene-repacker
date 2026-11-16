@@ -136,6 +136,25 @@ hk-in-silksong/tutorial_01/_enemies/crawler 2.prefab # bundlename/path.prefab pe
 
 Example usage:
 
+```cs
+var load = RepackedCatalog.LoadAsync(catalogPath);
+yield return load;
+using var catalog = load.Result;
+
+foreach (var asset in catalog.Assets) {
+    Log.Info(asset);
+}
+
+var prefab = Addressables.LoadAssetAsync<GameObject>("hk-in-silksong/tutorial_01/_enemies/crawler 2.prefab");
+yield return prefab;
+var hero = HeroController.instance ? HeroController.instance.transform.position : Vector3.zero;
+var go = Object.Instantiate(prefab.Result, hero + Vector3.right * 5, prefab.Result.transform.rotation);
+
+yield return new WaitForSecondsRealtime(5f);
+Object.Destroy(go);
+Addressables.Release(prefab);
+```
+
 <details>
     <summary>RepackedCatalog.cs</summary>
 

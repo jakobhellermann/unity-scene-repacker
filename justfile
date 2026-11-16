@@ -16,7 +16,7 @@ hollowknight-dependencies *args:
     cargo run --release -- \
         --steam-game 'Hollow Knight' \
         --mode asset \
-        --objects objects/hk-minimal.jsonc \
+        --objects objects/hk-in-silksong.jsonc \
         --output out/hk-in-silksong.bundle {{ args }} \
         --compression none \
         --emit-dependency-addressables \
