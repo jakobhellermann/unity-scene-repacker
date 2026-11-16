@@ -98,6 +98,13 @@ struct OutputArgs {
     /// Name to give the assetbundle. Should be unique for your game.
     #[arg(long)]
     bundle_name: Option<String>,
+
+    /// When set, write the resulting bundle with typetree information embedded.
+    ///
+    /// This lets unity load asset bundles for different unity versions, as long as they are similar enough.
+    /// Larger version differences might not work due to format changes to e.g. shaders, materials and animations.
+    #[arg(long)]
+    write_typetrees: bool,
 }
 
 /// What kind of asset bundle to build
@@ -257,6 +264,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
         // Compression::Lzham => CompressionType::Lzham,
     };
 
+    if args.output.write_typetrees && !matches!(args.output.mode, Mode::Asset) {
+        bail!("--write-typetrees is only supported with --mode asset");
+    }
+
     if let Mode::AssetShallow = args.output.mode {
         let mut out = BufWriter::new(
             File::create(&args.output.output).context("Could not write to output file")?,
@@ -297,7 +308,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
             .with_context(|| format!("Could not create output directory '{}'", parent.display()))?;
     }
 
-    let enable_typetree = false; // TODO make this configurable / infer if necessary
+    let enable_typetree = args.output.write_typetrees;
 
     let new_size = match args.output.mode {
         Mode::Scene => {

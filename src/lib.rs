@@ -2,13 +2,14 @@ mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 
 pub use rabex;
-use rabex::objects::ClassId;
 use rabex_env::Environment;
 use rabex_env::env::Data;
 use rabex_env::handle::SerializedFileHandle;
 use rabex_env::resolver::{EnvResolver as _, GameFiles};
 use rabex_env::scene_lookup::SceneLookup;
-use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoBehaviour, PreloadData, Transform};
+use rabex_env::unity::types::{
+    AssetBundle, AssetInfo, MonoBehaviour, MonoScript, PreloadData, Transform,
+};
 
 use anyhow::{Context, Result};
 use indexmap::{IndexMap, IndexSet};
@@ -489,28 +490,6 @@ pub fn pack_to_asset_bundle(
 
             let remap = merge_serialized::add_scene_meta_to_builder(&mut builder, serialized)?;
 
-            if builder.serialized.m_EnableTypeTree {
-                for ty in &mut builder.serialized.m_Types {
-                    if ty.m_Type.is_none() {
-                        if ty.m_ClassID == ClassId::MonoBehaviour {
-                            log::warn!(
-                                "Asset bundle is to be serialized with type tree information, "
-                            );
-                            log::warn!("but the repack sources don't contain any.");
-                            log::warn!(
-                                "Monobehaviours typetrees will not contain serialized fields."
-                            );
-                        }
-                        ty.m_Type = Some(
-                            env.tpk
-                                .get_typetree_node(ty.m_ClassID, unity_version)
-                                .ok_or(serializedfile::Error::NoTypetree(ty.m_ClassID))?
-                                .into_owned(),
-                        );
-                    }
-                }
-            }
-
             for (scene_path, transform) in scene.roots.iter() {
                 let mut go = transform.m_GameObject;
                 assert!(go.is_local());
@@ -555,6 +534,31 @@ pub fn pack_to_asset_bundle(
     })?;
 
     builder.add_object_at(1, &asset_bundle)?;
+
+    if enable_typetree {
+        let externals = builder.serialized.m_Externals.clone();
+        builder.fill_typetrees(unity_version, |script| -> Result<_> {
+            let external = script
+                .m_FileID
+                .get_externals_index()
+                .and_then(|index| externals.get(index))
+                .with_context(|| format!("script {script:?} is not in an external file"))?;
+            let script: MonoScript = env
+                .load_serialized(&external.pathName)?
+                .object_at::<MonoScript>(script.m_PathID)?
+                .read()?;
+            let typetree = env
+                .generate_typetree(&script.assembly_name(), &script.full_name())?
+                .with_context(|| {
+                    format!(
+                        "no type tree for {} ({})",
+                        script.full_name(),
+                        script.assembly_name()
+                    )
+                })?;
+            Ok(typetree.clone())
+        })?;
+    }
 
     let mut out = Vec::new();
     builder.write(&mut Cursor::new(&mut out))?;
