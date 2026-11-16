@@ -1,6 +1,7 @@
 pub mod dependency_addressables;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
+pub mod script_check;
 
 pub use rabex;
 use rabex_env::Environment;

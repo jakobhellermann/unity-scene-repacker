@@ -1,3 +1,4 @@
+mod check_scripts;
 mod completion;
 mod locate;
 mod logger;
@@ -27,8 +28,14 @@ use unity_scene_repacker::{RepackSettings, Stats};
 use crate::utils::friendly_size;
 
 #[derive(Parser, Debug)]
-#[command(version)]
+#[command(
+    version,
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true
+)]
 struct Arguments {
+    #[command(subcommand)]
+    command: Option<Command>,
     #[clap(flatten)]
     game: GameArgs,
     #[clap(flatten)]
@@ -40,13 +47,19 @@ struct Arguments {
 #[derive(Args, Debug)]
 #[group(required = true, multiple = false)]
 #[clap(next_help_heading = "Game options")]
-struct GameArgs {
+pub(crate) struct GameArgs {
     /// Directory where the levels files are, e.g. steam/Hollow_Knight/hollow_knight_Data
     #[arg(long)]
-    game_dir: Option<PathBuf>,
+    pub game_dir: Option<PathBuf>,
     #[arg(long, add = ArgValueCompleter::new(completion::complete_steam_game))]
     /// App ID or search term for the steam game to detect
-    steam_game: Option<String>,
+    pub steam_game: Option<String>,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Command {
+    /// Check whether the scripts used in a repacked bundle exist with the same fields in another game.
+    CheckScripts(check_scripts::CheckScriptsArgs),
 }
 
 #[derive(Args, Debug)]
@@ -163,23 +176,11 @@ pub fn main(args: Vec<OsString>) {
 fn run(args: Vec<OsString>) -> Result<()> {
     let args = Arguments::parse_from(args);
 
-    let game_dir = match args.game.game_dir {
-        Some(game_dir) => {
-            ensure!(
-                game_dir.exists(),
-                "Game directory '{}' does not exist",
-                game_dir.display()
-            );
-            match locate::find_unity_data_dir(&game_dir) {
-                Ok(Some(data_dir)) => data_dir,
-                _ => game_dir,
-            }
-        }
-        None => {
-            let game = args.game.steam_game.unwrap();
-            locate::locate_steam_game(&game)?
-        }
-    };
+    if let Some(Command::CheckScripts(args)) = args.command {
+        return check_scripts::run(args);
+    }
+
+    let game_dir = resolve_game_dir(args.game.game_dir, args.game.steam_game)?;
 
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
@@ -443,4 +444,25 @@ fn write_catalog(
     )?;
 
     Ok(())
+}
+
+pub(crate) fn resolve_game_dir(
+    game_dir: Option<PathBuf>,
+    steam_game: Option<String>,
+) -> Result<PathBuf> {
+    match (game_dir, steam_game) {
+        (Some(game_dir), _) => {
+            ensure!(
+                game_dir.exists(),
+                "Game directory '{}' does not exist",
+                game_dir.display()
+            );
+            Ok(match locate::find_unity_data_dir(&game_dir) {
+                Ok(Some(data_dir)) => data_dir,
+                _ => game_dir,
+            })
+        }
+        (None, Some(game)) => locate::locate_steam_game(&game),
+        (None, None) => bail!("no game specified"),
+    }
 }

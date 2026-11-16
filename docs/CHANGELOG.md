@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## Version 3.1.0
+- default to `lz4` compression level by default, which compresses faster and load a lot faster 
+- add `rabex check-scripts out/hk-in-silksong.bundle --steam-game 'Hollow Knight' --target-steam-game Silksong` subcommand for checking script compatibility
+
+## Version 3.0.0
 - add `--emit-dependency-addressables` to support loading repacked objects as addressables in another game
 - add `--write-typetrees` for asset bundles, to support loading from multiple different unity versions
 - when monobehaviours reference pruned objects, set them to null and log a warning

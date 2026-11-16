@@ -22,6 +22,7 @@ use rabex_env::resolver::EnvResolver as _;
 use rabex_env::streams::MapStreamLocations as _;
 use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoScript};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rustc_hash::FxHashMap;
 
 use crate::{RepackScene, get_asset_bundle_object_asset_name};
 
@@ -41,11 +42,7 @@ pub struct Dependencies {
 
 impl Dependencies {
     pub fn new(env: &Environment, scenes: &[RepackScene]) -> Result<Self> {
-        let prefix = env
-            .app_info()?
-            .name
-            .to_lowercase()
-            .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+        let prefix = game_prefix(env)?;
 
         let scene_lookup = env.build_settings()?.scene_name_lookup();
         let scene_files = scenes
@@ -78,9 +75,8 @@ impl Dependencies {
         Ok(Dependencies { prefix, containers })
     }
 
-    /// The name of the bundle entry holding `file`
     fn cab_name(&self, file: &str) -> String {
-        format!("CAB-{}-{}", self.prefix, file.replace('.', "_"))
+        cab_name(&self.prefix, file)
     }
 
     /// The path other files reference `file` by once bundled.
@@ -276,6 +272,36 @@ impl Dependencies {
 
 fn bundle_key(file: &str) -> String {
     format!("deps/{file}.bundle")
+}
+
+/// The prefix of the bundle entries of `env`'s game files
+fn game_prefix(env: &Environment) -> Result<String> {
+    Ok(env
+        .app_info()?
+        .name
+        .to_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "_"))
+}
+
+/// The name of the bundle entry holding `file`
+fn cab_name(prefix: &str, file: &str) -> String {
+    format!("CAB-{prefix}-{}", file.replace('.', "_"))
+}
+
+/// Maps the bundle names of `env`'s serialized files back to the files.
+pub fn bundled_game_files(env: &Environment) -> Result<FxHashMap<String, ExternalPath>> {
+    let prefix = game_prefix(env)?;
+    env.game_files
+        .serialized_files()?
+        .into_iter()
+        .map(|path| {
+            let path = path
+                .into_os_string()
+                .into_string()
+                .map_err(|path| anyhow::anyhow!("non-utf8 game file {path:?}"))?;
+            Ok((cab_name(&prefix, &path), path))
+        })
+        .collect()
 }
 
 /// Unity expects the `AssetBundle` object at path id 1, which might be already used
