@@ -27,7 +27,7 @@ pub fn read(export: &[u8]) -> Result<FrozenMap<(String, String), Box<TypeTreeNod
         Ok(str)
     }
 
-    let export = lz4_flex::decompress_size_prepended(export)?;
+    let export = lz4_flex::block::decompress_size_prepended(export)?;
     let mut reader = &mut &*export;
     let monobehaviour_type_cache = FrozenMap::default();
 

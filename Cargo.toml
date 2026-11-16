@@ -12,7 +12,7 @@ byteorder = "1.5"
 elsa = "1.11"
 indexmap = { version = "2.9", features = ["serde", "rayon"] }
 log = "0.4"
-lz4_flex = { version = "0.13", default-features = false }
+lz4_flex = { version = "0.14", default-features = false, features = ["alloc"] }
 memmap2 = "0.9"
 rabex.workspace = true
 rabex-env.workspace = true
@@ -40,7 +40,7 @@ type_complexity = "allow"
 
 [workspace.dependencies]
 typetree-generator-api = { git = "https://github.com/jakobhellermann/typetree-generator-api-bindings" }
-rabex = { version = "0.2", default-features = false, features = [
+rabex = { version = "0.3", default-features = false, features = [
   "embed-tpk",
   # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
 ] }
