@@ -1,5 +1,5 @@
-//! Make an asset bundle loadable in another game, by wrapping and referencing dependency files in bundles, and emitting
-//! an addressables catalog.
+//! Make an asset bundle loadable in another game, by referencing its dependency game files as bundles built at
+//! runtime, and emitting an addressables catalog.
 use std::io::Cursor;
 use std::path::Path;
 
@@ -25,8 +25,10 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{RepackScene, get_asset_bundle_object_asset_name};
 
-/// Addressables runtime property required to be set to the dependency dir, as `<prefix>.<bundle name>`
-const PROPERTY_BUNDLE_DIR_PREFIX: &str = "UnitySceneRepacker";
+/// Prefix of the catalog's runtime properties, as `<prefix>.<bundle name>`
+const PROPERTY_PREFIX: &str = "UnitySceneRepacker";
+/// Provider of the game file bundles, built at runtime
+const PROVIDER_GAME_FILE_BUNDLE: &str = "UnitySceneRepacker.GameFileBundleProvider";
 /// Catalog key of the bundles whose MonoScripts must be loaded before an asset is loaded.
 const CATALOG_KEY_MONOSCRIPTS: &str = "monoscripts";
 
@@ -41,11 +43,7 @@ pub struct Dependencies {
 
 impl Dependencies {
     pub fn new(env: &Environment, scenes: &[RepackScene]) -> Result<Self> {
-        let prefix = env
-            .app_info()?
-            .name
-            .to_lowercase()
-            .replace(|c: char| !c.is_ascii_alphanumeric(), "_");
+        let prefix = game_prefix(env)?;
 
         let scene_lookup = env.build_settings()?.scene_name_lookup();
         let scene_files = scenes
@@ -78,32 +76,12 @@ impl Dependencies {
         Ok(Dependencies { prefix, containers })
     }
 
-    /// The name of the bundle entry holding `file`
-    fn cab_name(&self, file: &str) -> String {
-        format!("CAB-{}-{}", self.prefix, file.replace('.', "_"))
-    }
-
-    /// The path other files reference `file` by once bundled.
-    fn bundled_path(&self, file: &str, split: bool) -> String {
-        let cab = self.cab_name(file);
-        match split {
-            false => ArchivePath::same(&cab).to_string(),
-            true => ArchivePath::new(&cab, &format!("{cab}.assets")).to_string(),
-        }
-    }
-
-    pub fn files(&self) -> IndexSet<&str> {
+    fn files(&self) -> IndexSet<&str> {
         self.containers
             .values()
             .flatten()
             .map(String::as_str)
             .collect()
-    }
-
-    /// The external pointing at `path` once bundled.
-    fn bundled(&self, env: &Environment, path: &str) -> Result<FileIdentifier> {
-        let split = needs_split(env.load_serialized(path)?.file);
-        Ok(FileIdentifier::new(self.bundled_path(path, split)))
     }
 
     /// Point the repacked bundle's externals at the bundled dependencies.
@@ -122,33 +100,10 @@ impl Dependencies {
                 "{} is not loaded by any of the scenes",
                 external.pathName
             );
-            *external = self.bundled(env, &external.pathName)?;
+            *external = bundled(env, &self.prefix, &external.pathName)?;
         }
 
         Ok(())
-    }
-
-    /// Write every dependency as `out_dir/deps/<file>.bundle`.
-    pub fn write_bundles(
-        &self,
-        env: &Environment,
-        out_dir: &Path,
-        compression: CompressionType,
-    ) -> Result<()> {
-        std::fs::create_dir_all(out_dir.join("deps"))?;
-
-        let files = self.files();
-        files.par_iter().try_for_each(|file| -> Result<()> {
-            let bundle = self
-                .bundle(env, file)
-                .with_context(|| format!("bundling {file}"))?;
-            bundle.write(
-                std::fs::File::create(out_dir.join(bundle_key(file)))?,
-                compression,
-            )?;
-
-            Ok(())
-        })
     }
 
     pub fn catalog(
@@ -157,7 +112,9 @@ impl Dependencies {
         main_file: &str,
         main_bundle_name: &str,
     ) -> Result<AddressablesCatalog> {
-        let bundle_dir = format!("{{{PROPERTY_BUNDLE_DIR_PREFIX}.{main_bundle_name}}}");
+        let property = format!("{PROPERTY_PREFIX}.{main_bundle_name}");
+        let bundle_dir = format!("{{{property}}}");
+        let game_data_dir = format!("{{{property}.GameDataDir}}");
         let mut catalog = CatalogBuilder::default();
         let main = catalog.add_bundle(
             &format!("{main_bundle_name}.bundle"),
@@ -167,11 +124,10 @@ impl Dependencies {
 
         let mut locations = IndexMap::new();
         for file in self.files() {
-            let key = bundle_key(file);
-            let location = catalog.add_bundle(
-                &key,
-                &format!("{bundle_dir}/{key}"),
-                AssetBundleRequestOptions::new(&self.cab_name(file)),
+            let location = catalog.add_bundle_from_provider(
+                &cab_name(&self.prefix, file),
+                &format!("{game_data_dir}/{file}"),
+                PROVIDER_GAME_FILE_BUNDLE,
             );
             if has_scripts(env.load_serialized(file)?.file) {
                 catalog.add_key(CATALOG_KEY_MONOSCRIPTS, location);
@@ -198,84 +154,111 @@ impl Dependencies {
             .unwrap();
         Ok(catalog.build(stem, &format!("{:032x}", 0)))
     }
+}
 
-    /// Wraps the game file at `path` into a bundle, with its externals and streams pointing into the other bundles
-    fn bundle(&self, env: &Environment, path: &str) -> Result<BundleFileBuilder> {
-        let handle = env.load_serialized(path)?;
-        let split = needs_split(handle.file);
-        let version = handle
-            .file
-            .m_UnityVersion
-            .as_ref()
-            .context("file has no unity version")?;
+/// The uncompressed bundle of the game file at `path`, with its externals and streams pointing into the other bundles.
+pub fn bundle_game_file(env: &Environment, prefix: &str, path: &str) -> Result<Vec<u8>> {
+    let handle = env.load_serialized(path)?;
+    let split = needs_split(handle.file);
+    let version = handle
+        .file
+        .m_UnityVersion
+        .as_ref()
+        .context("file has no unity version")?;
 
-        let common_offset_map = serializedfile::build_common_offset_map(&env.tpk.inner, version);
-        let mut builder = SerializedFileBuilder::from_serialized(
-            version,
+    let common_offset_map = serializedfile::build_common_offset_map(&env.tpk.inner, version);
+    let mut builder = SerializedFileBuilder::from_serialized(
+        version,
+        handle.file,
+        handle.data,
+        &env.tpk,
+        &common_offset_map,
+        handle.file.objects().cloned(),
+    );
+
+    builder.fill_typetrees(version, |script: PPtr| -> Result<_> {
+        let script = env.deref_read(
+            script.typed::<MonoScript>(),
             handle.file,
-            handle.data,
-            &env.tpk,
-            &common_offset_map,
-            handle.file.objects().cloned(),
-        );
+            &mut Cursor::new(handle.data),
+        )?;
+        Ok(env.generate_typetree_for_script(&script)?.clone())
+    })?;
 
-        builder.fill_typetrees(version, |script: PPtr| -> Result<_> {
-            let script = env.deref_read(
-                script.typed::<MonoScript>(),
-                handle.file,
-                &mut Cursor::new(handle.data),
-            )?;
-            Ok(env.generate_typetree_for_script(&script)?.clone())
-        })?;
+    let cab = cab_name(prefix, path);
+    let streams = relocate_streams(&cab, &mut builder)?;
 
-        let cab = self.cab_name(path);
-        let streams = relocate_streams(&cab, &mut builder)?;
-
-        for external in &mut builder.serialized.m_Externals {
-            if external.pathName.is_empty() || is_builtin(&external.pathName) {
-                continue;
-            }
-            *external = self.bundled(env, &external.pathName)?;
+    for external in &mut builder.serialized.m_Externals {
+        if external.pathName.is_empty() || is_builtin(&external.pathName) {
+            continue;
         }
-        drop_ref_types(path, &mut builder);
+        *external = bundled(env, prefix, &external.pathName)?;
+    }
+    drop_ref_types(path, &mut builder);
 
-        let mut asset_bundle = AssetBundle::asset_base(&cab);
-        let mut bundle = BundleFileBuilder::unityfs(7, version);
+    let mut asset_bundle = AssetBundle::asset_base(&cab);
+    let mut bundle = BundleFileBuilder::unityfs(7, version);
 
-        if split {
-            let mut asset_bundle_file =
-                SerializedFileBuilder::new(version, &env.tpk, &common_offset_map, true);
+    if split {
+        let mut asset_bundle_file =
+            SerializedFileBuilder::new(version, &env.tpk, &common_offset_map, true);
 
-            if has_scripts(handle.file) {
-                let data_file = asset_bundle_file.get_or_insert_external_identifier(
-                    &FileIdentifier::new(self.bundled_path(path, true)),
-                );
+        if has_scripts(handle.file) {
+            let data_file = asset_bundle_file.get_or_insert_external_identifier(
+                &FileIdentifier::new(bundled_path(prefix, path, true)),
+            );
 
-                add_script_containers(&mut asset_bundle, &builder, |path_id| {
-                    PPtr::new(data_file, path_id)
-                });
-            }
-
-            asset_bundle_file.add_object_at(1, &asset_bundle)?;
-            bundle.add_file(&cab, Cursor::new(asset_bundle_file.write_vec()?))?;
-            bundle.add_file(&format!("{cab}.assets"), Cursor::new(builder.write_vec()?))?;
-        } else {
-            add_script_containers(&mut asset_bundle, &builder, PPtr::local);
-            builder.objects.remove(&1);
-            builder.add_object_at(1, &asset_bundle)?;
-            bundle.add_file(&cab, Cursor::new(builder.write_vec()?))?;
+            add_script_containers(&mut asset_bundle, &builder, |path_id| {
+                PPtr::new(data_file, path_id)
+            });
         }
 
-        for (entry, stream_file) in streams {
-            let data = env.game_files.read_path(Path::new(&stream_file))?;
-            bundle.add_file_with_flags(&entry, Cursor::new(data.as_ref()), 0)?;
-        }
-        Ok(bundle)
+        asset_bundle_file.add_object_at(1, &asset_bundle)?;
+        bundle.add_file(&cab, Cursor::new(asset_bundle_file.write_vec()?))?;
+        bundle.add_file(&format!("{cab}.assets"), Cursor::new(builder.write_vec()?))?;
+    } else {
+        add_script_containers(&mut asset_bundle, &builder, PPtr::local);
+        builder.objects.remove(&1);
+        builder.add_object_at(1, &asset_bundle)?;
+        bundle.add_file(&cab, Cursor::new(builder.write_vec()?))?;
+    }
+
+    for (entry, stream_file) in streams {
+        let data = env.game_files.read_path(Path::new(&stream_file))?;
+        bundle.add_file_with_flags(&entry, Cursor::new(data.as_ref()), 0)?;
+    }
+    let mut out = Cursor::new(Vec::new());
+    bundle.write(&mut out, CompressionType::None)?;
+    Ok(out.into_inner())
+}
+
+/// The prefix of the bundle entries of `env`'s game files
+pub fn game_prefix(env: &Environment) -> Result<String> {
+    Ok(env
+        .app_info()?
+        .name
+        .to_lowercase()
+        .replace(|c: char| !c.is_ascii_alphanumeric(), "_"))
+}
+
+/// The name of the bundle entry holding `file`
+fn cab_name(prefix: &str, file: &str) -> String {
+    format!("CAB-{prefix}-{}", file.replace('.', "_"))
+}
+
+/// The path other files reference `file` by once bundled.
+fn bundled_path(prefix: &str, file: &str, split: bool) -> String {
+    let cab = cab_name(prefix, file);
+    match split {
+        false => ArchivePath::same(&cab).to_string(),
+        true => ArchivePath::new(&cab, &format!("{cab}.assets")).to_string(),
     }
 }
 
-fn bundle_key(file: &str) -> String {
-    format!("deps/{file}.bundle")
+/// The external pointing at `path` once bundled.
+fn bundled(env: &Environment, prefix: &str, path: &str) -> Result<FileIdentifier> {
+    let split = needs_split(env.load_serialized(path)?.file);
+    Ok(FileIdentifier::new(bundled_path(prefix, path, split)))
 }
 
 /// Unity expects the `AssetBundle` object at path id 1, which might be already used

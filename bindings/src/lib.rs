@@ -14,7 +14,8 @@ use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::{
-    MonobehaviourTypetreeMode, RepackSettings, Stats, monobehaviour_typetree_export,
+    MonobehaviourTypetreeMode, RepackSettings, Stats, dependency_addressables,
+    monobehaviour_typetree_export,
 };
 
 #[repr(C)]
@@ -73,6 +74,80 @@ pub unsafe extern "C" fn export(
             }
         }
     }
+}
+
+/// A game the dependencies of repacked catalogs are bundled from.
+pub struct Game {
+    env: Environment,
+    prefix: String,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_open(
+    data_dir: *const c_char,
+    error: *mut *const c_char,
+) -> *mut Game {
+    match game_open_inner(unsafe { CStr::from_ptr(data_dir) }) {
+        Ok(game) => Box::into_raw(Box::new(game)),
+        Err(e) => {
+            unsafe { *error = error_string(e) };
+            std::ptr::null_mut()
+        }
+    }
+}
+
+fn game_open_inner(data_dir: &CStr) -> Result<Game> {
+    let game_files = GameFiles::probe(Path::new(data_dir.to_str()?))?;
+    let mut env = Environment::new(game_files, TypeTreeCache::new(TpkTypeTreeBlob::embedded()));
+    let unity_version = env.unity_version()?.clone();
+    let monobehaviour_node = env
+        .tpk
+        .get_typetree_node(ClassId::MonoBehaviour, &unity_version)
+        .context("no MonoBehaviour type tree for this unity version")?
+        .into_owned();
+    env.typetree_generator = TypeTreeGeneratorCache::new(unity_version, monobehaviour_node);
+    let prefix = dependency_addressables::game_prefix(&env)?;
+    Ok(Game { env, prefix })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_free(game: *mut Game) {
+    drop(unsafe { Box::from_raw(game) });
+}
+
+/// Builds the bundle of the game file `file`, to be freed with `free_array`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_file_bundle(
+    game: *const Game,
+    file: *const c_char,
+    error: *mut *const c_char,
+    bundle_size: *mut c_int,
+    bundle_data: *mut *mut u8,
+) {
+    unsafe {
+        let game = &*game;
+        let result = CStr::from_ptr(file)
+            .to_str()
+            .map_err(anyhow::Error::from)
+            .and_then(|file| {
+                dependency_addressables::bundle_game_file(&game.env, &game.prefix, file)
+            });
+        match result {
+            Ok(data) => {
+                *bundle_size = data.len() as c_int;
+                *bundle_data = Box::into_raw(data.into_boxed_slice()).cast();
+            }
+            Err(e) => {
+                *error = error_string(e);
+                *bundle_size = 0;
+                *bundle_data = std::ptr::null_mut();
+            }
+        }
+    }
+}
+
+fn error_string(e: anyhow::Error) -> *const c_char {
+    CString::into_raw(CString::new(format!("{e:?}")).unwrap_or_else(|_| c"".to_owned()))
 }
 
 #[unsafe(no_mangle)]

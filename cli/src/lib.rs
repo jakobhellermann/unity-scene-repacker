@@ -107,10 +107,12 @@ struct OutputArgs {
     #[arg(long)]
     write_typetrees: bool,
 
-    /// When enabled, the game files the bundle depends on get copied to `deps/` next to the output, and
-    /// an Addressables catalog `<bundle name>.catalog.bin` is written referencing the repacked objects and their dependencies.
+    /// When enabled, an Addressables catalog `<bundle name>.catalog.bin` is written referencing the repacked objects
+    /// and the game files they depend on.
     ///
-    /// The catalog loads bundles from the Addressables runtime property `{UnitySceneRepacker.<bundle name>}`.
+    /// The catalog loads the bundle from the directory in the Addressables runtime property
+    /// `{UnitySceneRepacker.<bundle name>}`, and the game files from `{UnitySceneRepacker.<bundle name>.GameDataDir}`
+    /// with the resource provider `UnitySceneRepacker.GameFileBundleProvider`.
     /// Implies `--write-typetrees`.
     #[arg(long)]
     emit_dependency_addressables: bool,
@@ -351,40 +353,19 @@ fn run(args: Vec<OsString>) -> Result<()> {
             let mut out = BufWriter::new(
                 File::create(&args.output.output).context("Could not write to output file")?,
             );
-            let out_dir = args.output.output.parent();
-            let (stats, dependency_result) = rayon::join(
-                || -> Result<()> {
-                    let stats = unity_scene_repacker::pack_to_asset_bundle(
-                        &env,
-                        &mut out,
-                        name,
-                        &tpk_blob,
-                        repack_scenes,
-                        extra_objects,
-                        compression,
-                        enable_typetree,
-                        dependencies.as_ref(),
-                    )?;
-                    print_stats(&stats, args.repack.scene_objects.is_some());
-                    Ok(())
-                },
-                || -> Result<()> {
-                    if let Some(dependencies) = &dependencies {
-                        let out_dir = out_dir.context("--output has no parent directory")?;
-                        let start = Instant::now();
-                        dependencies.write_bundles(&env, out_dir, compression)?;
-                        info!(
-                            "Wrote {} dependency bundles in {:.2?}",
-                            dependencies.files().len(),
-                            start.elapsed()
-                        );
-                    }
-                    Ok(())
-                },
-            );
-            stats?;
-            dependency_result?;
+            let stats = unity_scene_repacker::pack_to_asset_bundle(
+                &env,
+                &mut out,
+                name,
+                &tpk_blob,
+                repack_scenes,
+                extra_objects,
+                compression,
+                enable_typetree,
+                dependencies.as_ref(),
+            )?;
             out.flush()?;
+            print_stats(&stats, args.repack.scene_objects.is_some());
 
             if let Some(dependencies) = &dependencies {
                 write_catalog(&env, dependencies, &args.output.output, name)?;
