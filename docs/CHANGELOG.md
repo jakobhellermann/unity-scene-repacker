@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+- add `--emit-dependency-addressables` to support loading repacked objects as addressables in another game
+- add `--write-typetrees` for asset bundles, to support loading from multiple different unity versions
+- when monobehaviours reference pruned objects, set them to null and log a warning
+- fix crashes when dependencies aren't loaded by filling preload tables for asset bundles
+- match games in `--steam-game` ignoring punctuation
+- list available scene names when an unknown scene name is used
+
 ## Version 2.4.0
 - add `--extra-objects` for asset bundles, allowing you to load arbitrary objects by type and name
 
