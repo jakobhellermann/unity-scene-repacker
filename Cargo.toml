@@ -37,6 +37,7 @@ package.description = "Repack unity level files into filtered asset bundles you 
 redundant_pattern_matching = "allow"
 too_many_arguments = "allow"
 type_complexity = "allow"
+obfuscated_if_else = "allow"
 
 [workspace.dependencies]
 typetree-generator-api = { git = "https://github.com/jakobhellermann/typetree-generator-api-bindings" }
