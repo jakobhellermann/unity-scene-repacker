@@ -26,7 +26,7 @@ serde_json = { version = "1.0", features = ["preserve_order"] }
 members = [".", "bindings", "cli"]
 default-members = [".", "bindings", "cli"]
 
-package.version = "3.0.0"
+package.version = "3.1.0"
 package.edition = "2024"
 package.license = "MIT"
 package.repository = "https://github.com/jakobhellermann/unity-scene-repacker"
