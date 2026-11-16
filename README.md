@@ -243,6 +243,11 @@ public sealed class RepackedCatalog : IDisposable {
 
 ```
 Usage: unity-scene-repacker [OPTIONS] <--game-dir <GAME_DIR>|--steam-game <STEAM_GAME>>
+       unity-scene-repacker <COMMAND>
+
+Commands:
+  check-scripts  Check whether the scripts used in a repacked bundle exist with the same fields in another game
+  help           Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help
@@ -261,7 +266,7 @@ Game options:
 Repack options:
       --scene-objects <SCENE_OBJECTS>
           Path to JSON file, containing a map of scene name to a list of gameobject paths to include
-
+          
             {
               "Fungus1_12": [
                 "simple_grass",
@@ -271,24 +276,24 @@ Repack options:
                 "WhiteBench",
               ]
             }
-
+          
 
       --extra-objects <EXTRA_OBJECTS>
           Path to JSON file, containing a map of C# type to monobehaviour names. Useful for scriptable objects etc., which do not exist in the transform hierarchy.
-
+          
             {
               "FXDealerMaterialTag": ["[FXDealer] 0_YeeAttack _PostureDecrease"]
             }
-
+          
 
 Output options:
       --mode <MODE>
-          [default: scene]
-
           Possible values:
           - scene:         A scene asset bundle, containing the original scenes filtered. Load using LoadScene
           - asset:         An asset bundle containing individual assets you can load using LoadAsset. The objects are copied from the original level files
           - asset-shallow: An asset bundle containing individual assets you can load using LoadAsset. The bundle is completely empty, and only references the original game level files
+          
+          [default: scene]
 
       --disable
           When true, all gameobjects in the scene will start out disabled
@@ -296,16 +301,27 @@ Output options:
       --compression <COMPRESSION>
           Compression level to apply
 
-          [default: lzma]
-
           Possible values:
           - none
           - lzma
+          - lz4:   Fast compression, larger output than lz4hc
           - lz4hc: Best compression at the cost of speed
+          
+          [default: lz4]
 
   -o, --output <OUTPUT>
           [default: out.unity3d]
 
       --bundle-name <BUNDLE_NAME>
           Name to give the assetbundle. Should be unique for your game
+
+      --write-typetrees
+          When set, write the resulting bundle with typetree information embedded.
+          
+          This lets unity load asset bundles for different unity versions, as long as they are similar enough. Larger version differences might not work due to format changes to e.g. shaders, materials and animations.
+
+      --emit-dependency-addressables
+          When enabled, the game files the bundle depends on get copied to deps/ next to the output, and an Addressables catalog <bundle name>.catalog.bin is written referencing the repacked objects and their dependencies.
+          
+          The catalog loads bundles from the Addressables runtime property {UnitySceneRepacker.<bundle name>}. Implies --write-typetrees.
 ```
