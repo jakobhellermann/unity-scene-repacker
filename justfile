@@ -10,7 +10,7 @@ hollowknight *args:
         --objects objects/hk-representative.jsonc \
         --output out/all.bundle {{ args }} \
         --bundle-name bundle \
-        --compression none {{ args }}
+        {{ args }}
 
 hollowknight-dependencies *args:
     cargo run --release -- \
@@ -18,7 +18,6 @@ hollowknight-dependencies *args:
         --mode asset \
         --objects objects/hk-in-silksong.jsonc \
         --output out/hk-in-silksong.bundle {{ args }} \
-        --compression none \
         --emit-dependency-addressables \
         {{ args }}
 
@@ -29,7 +28,7 @@ ninesols *args:
         --objects objects/ns-monsters.json \
         --output out/ninesols.bundle \
         --bundle-name test \
-        --compression none {{ args }}
+        {{ args }}
 
 ninesols-fx *args:
     cargo run --release -- \
@@ -38,4 +37,4 @@ ninesols-fx *args:
         --extra-objects objects/ns-by-type.json \
         --output out/ninesols-by-type.bundle \
         --bundle-name bundle \
-        --compression none {{ args }}
+        {{ args }}
