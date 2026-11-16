@@ -574,16 +574,7 @@ pub fn pack_to_asset_bundle(
                 .load_serialized(&external.pathName)?
                 .object_at::<MonoScript>(script.m_PathID)?
                 .read()?;
-            let typetree = env
-                .generate_typetree(&script.assembly_name(), &script.full_name())?
-                .with_context(|| {
-                    format!(
-                        "no type tree for {} ({})",
-                        script.full_name(),
-                        script.assembly_name()
-                    )
-                })?;
-            Ok(typetree.clone())
+            Ok(env.generate_typetree_for_script(&script)?.clone())
         })?;
     }
 
