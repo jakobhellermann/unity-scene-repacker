@@ -1,8 +1,8 @@
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 use paris::info;
+use rabex_env::resolver::GameFiles;
 
 fn search_transform(input: &str) -> String {
     input
@@ -46,25 +46,5 @@ pub fn locate_steam_game(game: &str) -> Result<PathBuf> {
     let name = app.name.as_ref().unwrap_or(&app.install_dir);
     info!("Detected game '{}' at '{}'", name, install_dir.display());
 
-    find_unity_data_dir(&install_dir)?.with_context(|| {
-        format!(
-            "Did not find unity 'game_Data' directory in '{}'. Is {} a unity game?",
-            install_dir.display(),
-            name
-        )
-    })
-}
-
-pub fn find_unity_data_dir(install_dir: &Path) -> Result<Option<PathBuf>> {
-    Ok(std::fs::read_dir(install_dir)?
-        .filter_map(Result::ok)
-        .find(|entry| {
-            entry
-                .path()
-                .file_name()
-                .and_then(OsStr::to_str)
-                .is_some_and(|name| name.ends_with("_Data"))
-                && entry.file_type().is_ok_and(|ty| ty.is_dir())
-        })
-        .map(|entry| entry.path()))
+    GameFiles::probe_dir(&install_dir)
 }

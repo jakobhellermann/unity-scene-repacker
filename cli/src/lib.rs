@@ -7,7 +7,7 @@ mod utils;
 #[cfg(feature = "python-module")]
 mod py;
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use clap::{Args, CommandFactory as _, Parser};
 use clap_complete::ArgValueCompleter;
 use indexmap::{IndexMap, IndexSet};
@@ -451,17 +451,7 @@ pub(crate) fn resolve_game_dir(
     steam_game: Option<String>,
 ) -> Result<PathBuf> {
     match (game_dir, steam_game) {
-        (Some(game_dir), _) => {
-            ensure!(
-                game_dir.exists(),
-                "Game directory '{}' does not exist",
-                game_dir.display()
-            );
-            Ok(match locate::find_unity_data_dir(&game_dir) {
-                Ok(Some(data_dir)) => data_dir,
-                _ => game_dir,
-            })
-        }
+        (Some(game_dir), _) => GameFiles::probe_dir(&game_dir),
         (None, Some(game)) => locate::locate_steam_game(&game),
         (None, None) => bail!("no game specified"),
     }
