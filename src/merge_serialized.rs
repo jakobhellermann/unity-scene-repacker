@@ -3,9 +3,9 @@ use log::warn;
 use rabex::files::SerializedFile;
 use rabex::files::serializedfile::ObjectInfo;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
-use rabex::objects::pptr::{FileId, PathId};
+use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
-use rabex_env::trace_pptr::replace_pptrs_inplace_endianed;
+use rabex_env::trace_pptr::map_pptrs_inplace;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -107,12 +107,28 @@ pub fn remap_objects(
         let orig_path_id = obj.m_PathID;
         obj.m_PathID = *remap.path_id.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
 
-        replace_pptrs_inplace_endianed(
+        map_pptrs_inplace(
             object_data.to_mut().as_mut_slice(),
             tt,
-            &remap.path_id,
-            &remap.file_id,
             file.m_Header.m_Endianess,
+            |_, pptr| {
+                if pptr.is_null() {
+                    return Ok(pptr);
+                }
+                if pptr.is_local() {
+                    let Some(&path_id) = remap.path_id.get(&pptr.m_PathID) else {
+                        warn!(
+                            "{}: object {orig_path_id} references {} outside the repacked objects, setting it to null",
+                            scene_name_display(scene_name, &original_name),
+                            pptr.m_PathID
+                        );
+                        return Ok(PPtr::null());
+                    };
+                    return Ok(PPtr::local(path_id));
+                }
+                let file_id = *remap.file_id.get(&pptr.m_FileID).unwrap_or(&pptr.m_FileID);
+                Ok(PPtr::new(file_id, pptr.m_PathID))
+            },
         )
         .with_context(|| {
             format!(
