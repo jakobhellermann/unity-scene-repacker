@@ -18,9 +18,10 @@ use rabex_env::Environment;
 use rabex_env::resolver::GameFiles;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
-use std::io::BufWriter;
-use std::path::PathBuf;
+use std::io::{BufWriter, Write as _};
+use std::path::{Path, PathBuf};
 use std::time::Instant;
+use unity_scene_repacker::dependency_addressables::Dependencies;
 use unity_scene_repacker::{RepackSettings, Stats};
 
 use crate::utils::friendly_size;
@@ -105,6 +106,13 @@ struct OutputArgs {
     /// Larger version differences might not work due to format changes to e.g. shaders, materials and animations.
     #[arg(long)]
     write_typetrees: bool,
+
+    /// When enabled, the game files the bundle depends on get copied to `deps/` next to the output, and
+    /// an Addressables catalog `<bundle name>.catalog.bin` is written referencing the repacked objects and their dependencies.
+    ///
+    /// The catalog loads bundles from the Addressables runtime property `{UnitySceneRepacker.<bundle name>}`.
+    #[arg(long)]
+    emit_dependency_addressables: bool,
 }
 
 /// What kind of asset bundle to build
@@ -267,6 +275,9 @@ fn run(args: Vec<OsString>) -> Result<()> {
     if args.output.write_typetrees && !matches!(args.output.mode, Mode::Asset) {
         bail!("--write-typetrees is only supported with --mode asset");
     }
+    if args.output.emit_dependency_addressables && !matches!(args.output.mode, Mode::Asset) {
+        bail!("--emit-dependency-addressables is only supported with --mode asset");
+    }
 
     if let Mode::AssetShallow = args.output.mode {
         let mut out = BufWriter::new(
@@ -309,6 +320,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
     }
 
     let enable_typetree = args.output.write_typetrees;
+    let dependencies = match args.output.emit_dependency_addressables {
+        true => Some(Dependencies::new(&env, &repack_scenes)?),
+        false => None,
+    };
 
     let new_size = match args.output.mode {
         Mode::Scene => {
@@ -335,17 +350,44 @@ fn run(args: Vec<OsString>) -> Result<()> {
             let mut out = BufWriter::new(
                 File::create(&args.output.output).context("Could not write to output file")?,
             );
-            let stats = unity_scene_repacker::pack_to_asset_bundle(
-                &env,
-                &mut out,
-                name,
-                &tpk_blob,
-                repack_scenes,
-                extra_objects,
-                compression,
-                enable_typetree,
-            )?;
-            print_stats(&stats, args.repack.scene_objects.is_some());
+            let out_dir = args.output.output.parent();
+            let (stats, dependency_result) = rayon::join(
+                || -> Result<()> {
+                    let stats = unity_scene_repacker::pack_to_asset_bundle(
+                        &env,
+                        &mut out,
+                        name,
+                        &tpk_blob,
+                        repack_scenes,
+                        extra_objects,
+                        compression,
+                        enable_typetree,
+                        dependencies.as_ref(),
+                    )?;
+                    print_stats(&stats, args.repack.scene_objects.is_some());
+                    Ok(())
+                },
+                || -> Result<()> {
+                    if let Some(dependencies) = &dependencies {
+                        let out_dir = out_dir.context("--output has no parent directory")?;
+                        let start = Instant::now();
+                        dependencies.write_bundles(&env, out_dir, compression)?;
+                        info!(
+                            "Wrote {} dependency bundles in {:.2?}",
+                            dependencies.files().len(),
+                            start.elapsed()
+                        );
+                    }
+                    Ok(())
+                },
+            );
+            stats?;
+            dependency_result?;
+            out.flush()?;
+
+            if let Some(dependencies) = &dependencies {
+                write_catalog(&env, dependencies, &args.output.output, name)?;
+            }
 
             out.get_ref().metadata()?.len() as usize
         }
@@ -381,4 +423,22 @@ fn print_stats(stats: &Stats, has_scene_objects: bool) {
         );
         println!();
     }
+}
+
+fn write_catalog(
+    env: &Environment,
+    dependencies: &Dependencies,
+    output: &Path,
+    bundle_name: &str,
+) -> Result<()> {
+    let file_name = output.file_name().context("--output has no file name")?;
+    let file_name = file_name.to_str().context("--output is not valid UTF-8")?;
+    let catalog = dependencies.catalog(env, file_name, bundle_name)?;
+
+    std::fs::write(
+        output.with_file_name(format!("{bundle_name}.catalog.bin")),
+        catalog.to_binary()?,
+    )?;
+
+    Ok(())
 }

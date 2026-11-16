@@ -12,6 +12,16 @@ hollowknight *args:
         --bundle-name bundle \
         --compression none {{ args }}
 
+hollowknight-dependencies *args:
+    cargo run --release -- \
+        --steam-game 'Hollow Knight' \
+        --mode asset \
+        --objects objects/hk-minimal.jsonc \
+        --output out/hk-in-silksong.bundle {{ args }} \
+        --compression none \
+        --emit-dependency-addressables \
+        {{ args }}
+
 ninesols *args:
     cargo run --release -- \
         --steam-game "nine sols" \

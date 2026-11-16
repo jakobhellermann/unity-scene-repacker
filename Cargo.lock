@@ -1244,6 +1244,7 @@ dependencies = [
  "pyo3",
  "rabex",
  "rabex-env",
+ "rayon",
  "steamlocate",
  "unity-scene-repacker",
 ]

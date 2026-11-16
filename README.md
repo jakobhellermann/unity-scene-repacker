@@ -22,7 +22,7 @@ uv tool install unity-scene-repacker
 - Scene bundles contain the original scenes, filtered down to only the requested objects.
 - Asset bundles allow you to selectively load objects without having to load all of them, but are a bit more experimental.
 
-**Scene bundle**:
+### Scene bundle
 
 ```jsonc
 objects.json
@@ -66,7 +66,7 @@ foreach (string scenePath in bundle.GetAllScenePaths()) {
 bundle.Unload();
 ```
 
-**Asset bundle**:
+### Asset bundle
 
 Asset bundles allow you to selectively load objects, without having to load the others into memory.
 However, the implementation is a bit more experimental, so if something doesn't work, try the scene output instead.
@@ -102,6 +102,123 @@ unity-scene-repacker ... --extra-objects objects-by-type.json --mode asset
 ```cs
 var object = bundle.LoadAsset<FXDealerMaterialTag>("ExtraObjects/FXDealerMaterialTag/[FXDealer] 0_YeeAttack _PostureDecrease.prefab");
 ```
+
+### Emit Dependencies for an Asset Bundle
+
+When loading an assetbundle, the dependencies (`sharedassetsXX.assets`, `globalgamemanagers`) of that bundle must be loaded before the asset bundle.
+
+This is a problem when attempting to repack the files from one game and loading it into another.
+
+When you specify `--emit-dependency-addressables`, unity-scene-repacker will pack the required dependencies into bundles in the out directory, and write an 
+[Addressables](https://docs.unity3d.com/Packages/com.unity.addressables@4.2/manual/AddressableAssetsOverview.html) catalog for the repacked objects and their 
+dependencies:
+
+```sh
+unity-scene-repacker ... --output out/hk-in-silksong.bundle --mode asset --emit-dependency-addressables 
+```
+```
+out
+├── deps
+│   ├── globalgamemanagers.assets.bundle
+│   ├── resources.assets.bundle
+│   ├── sharedassets0.assets.bundle
+│   ├── sharedassets1.assets.bundle
+│   └── sharedassets6.assets.bundle
+├── hk-in-silksong.bundle
+└── hk-in-silksong.catalog.bin
+```
+
+```
+# catalog keys
+monoscripts # must be loaded and instantiated before
+hk-in-silksong/tutorial_01/_enemies/crawler 2.prefab # bundlename/path.prefab per repacked object
+```
+
+Example usage:
+
+<details>
+    <summary>RepackedCatalog.cs</summary>
+
+```cs
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using JetBrains.Annotations;
+using UnityEngine.AddressableAssets;
+using UnityEngine.AddressableAssets.Initialization;
+using UnityEngine.AddressableAssets.ResourceLocators;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceProviders;
+using Object = UnityEngine.Object;
+
+namespace UnitySceneRepacker;
+
+[PublicAPI]
+public sealed class RepackedCatalog : IDisposable {
+    private const string MonoScriptsKey = "monoscripts";
+
+    public IResourceLocator Locator { get; }
+    
+    private readonly string bundleName;
+    private readonly AsyncOperationHandle<IList<IAssetBundleResource>> scripts;
+    // Unity only binds a MonoBehaviour to an already loaded MonoScript, and unloads unreferenced ones.
+    private readonly List<Object> monoScripts = [];
+
+    private const string CatalogSuffix = ".catalog.bin";
+
+    /// Load the `{bundle name}.catalog.bin` written by `--emit-dependency-addressables`, next to the bundles.
+    public static AsyncOperationHandle<RepackedCatalog> LoadAsync(string catalogPath) {
+        catalogPath = Path.GetFullPath(catalogPath);
+        var fileName = Path.GetFileName(catalogPath);
+        if (!fileName.EndsWith(CatalogSuffix))
+            throw new ArgumentException($"{catalogPath} is not a {CatalogSuffix} file", nameof(catalogPath));
+        
+        var bundleName = fileName[..^CatalogSuffix.Length];
+        AddressablesRuntimeProperties.SetPropertyValue($"UnitySceneRepacker.{bundleName}", Path.GetDirectoryName(catalogPath));
+        
+        var catalog = Addressables.LoadContentCatalogAsync(catalogPath);
+        return Addressables.ResourceManager.CreateChainOperation(catalog, op => op.Status == AsyncOperationStatus.Succeeded
+            ? FromLocatorAsync(op.Result, bundleName)
+            : Failed($"loading catalog {catalogPath}", op.OperationException));
+    }
+
+    private static AsyncOperationHandle<RepackedCatalog> FromLocatorAsync(IResourceLocator locator, string bundleName) {
+        if (!locator.Locate(MonoScriptsKey, typeof(IAssetBundleResource), out var locations))
+            locations = [];
+        
+        var scripts = Addressables.LoadAssetsAsync<IAssetBundleResource>(locations, null);
+        
+        return Addressables.ResourceManager.CreateChainOperation(scripts, op => op.Status == AsyncOperationStatus.Succeeded
+            ? Addressables.ResourceManager.CreateCompletedOperation(new RepackedCatalog(locator, bundleName, op), string.Empty)
+            : Failed("loading MonoScripts", op.OperationException));
+    }
+
+    private static AsyncOperationHandle<RepackedCatalog> Failed(string what, Exception cause) =>
+        Addressables.ResourceManager.CreateCompletedOperationWithException<RepackedCatalog>(null!, new Exception($"{what} failed", cause));
+
+    private RepackedCatalog(IResourceLocator locator, string bundleName, AsyncOperationHandle<IList<IAssetBundleResource>> scripts) {
+        Locator = locator;
+        this.bundleName = bundleName;
+        this.scripts = scripts;
+        Addressables.ResourceManager.Acquire(scripts);
+        foreach (var bundle in scripts.Result) monoScripts.AddRange(bundle.GetAssetBundle().LoadAllAssets());
+    }
+
+    /// The keys of the repacked GameObjects, loadable in `Addressables.LoadAssetAsync`.
+    public IEnumerable<string> Assets =>
+        Locator.Keys.OfType<string>().Where(key => key.StartsWith(bundleName + "/", StringComparison.Ordinal));
+
+    public void Dispose() {
+        monoScripts.Clear();
+        Addressables.Release(scripts);
+        Addressables.RemoveResourceLocator(Locator);
+    }
+}
+```
+
+</details>
+
 
 ### CLI Reference
 

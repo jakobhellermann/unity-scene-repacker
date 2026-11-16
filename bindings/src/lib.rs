@@ -188,6 +188,7 @@ fn export_inner(
             extra_objects,
             compression,
             enable_typetree,
+            None,
         )?,
         Mode::AssetBundleShallow => unreachable!(),
     };

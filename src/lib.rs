@@ -1,3 +1,4 @@
+pub mod dependency_addressables;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 
@@ -445,8 +446,13 @@ pub fn pack_to_asset_bundle(
     extra_objects: Vec<ExtraObject>,
     compression: CompressionType,
     enable_typetree: bool,
+    dependencies: Option<&dependency_addressables::Dependencies>,
 ) -> Result<Stats> {
     let unity_version = env.unity_version()?;
+    if dependencies.is_some() && !extra_objects.is_empty() {
+        anyhow::bail!("extra objects are not supported when emitting dependency addressables");
+    }
+
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
     let mut stats = Stats::default();
 
@@ -576,6 +582,10 @@ pub fn pack_to_asset_bundle(
                 .read()?;
             Ok(env.generate_typetree_for_script(&script)?.clone())
         })?;
+    }
+
+    if let Some(dependencies) = dependencies {
+        dependencies.redirect_externals(env, &mut builder.serialized.m_Externals)?;
     }
 
     let mut out = Vec::new();
