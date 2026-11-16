@@ -76,6 +76,12 @@ pub fn add_scene_meta_to_builder(
     })
 }
 
+pub struct RemappedObject {
+    pub info: ObjectInfo,
+    pub data: Cow<'static, [u8]>,
+    pub references: Vec<PathId>,
+}
+
 pub fn remap_objects(
     scene_name: &str,
     original_name: PathBuf,
@@ -86,7 +92,7 @@ pub fn remap_objects(
     mut replacements: FxHashMap<PathId, Vec<u8>>,
     mb_types: FxHashMap<PathId, &TypeTreeNode>,
     remap: RemapSerializedIndices,
-) -> impl Iterator<Item = Result<(ObjectInfo, Cow<'static, [u8]>)>> {
+) -> impl Iterator<Item = Result<RemappedObject>> {
     objects.into_iter().map(move |mut obj| -> Result<_> {
         obj.m_TypeID = remap.types[&obj.m_TypeID];
 
@@ -107,11 +113,12 @@ pub fn remap_objects(
         let orig_path_id = obj.m_PathID;
         obj.m_PathID = *remap.path_id.get(&obj.m_PathID).unwrap_or(&obj.m_PathID);
 
+        let mut references = Vec::new();
         map_pptrs_inplace(
             object_data.to_mut().as_mut_slice(),
             tt,
             file.m_Header.m_Endianess,
-            |_, pptr| {
+            |node, pptr| {
                 if pptr.is_null() {
                     return Ok(pptr);
                 }
@@ -124,6 +131,9 @@ pub fn remap_objects(
                         );
                         return Ok(PPtr::null());
                     };
+                    if node.m_Name != "m_Father" {
+                        references.push(path_id);
+                    }
                     return Ok(PPtr::local(path_id));
                 }
                 let file_id = *remap.file_id.get(&pptr.m_FileID).unwrap_or(&pptr.m_FileID);
@@ -138,7 +148,11 @@ pub fn remap_objects(
             )
         })?;
 
-        Ok((obj, Cow::Owned(object_data.into_owned())))
+        Ok(RemappedObject {
+            info: obj,
+            data: Cow::Owned(object_data.into_owned()),
+            references,
+        })
     })
 }
 

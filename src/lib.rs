@@ -25,7 +25,7 @@ use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, VecDeque};
 use std::fmt::Debug;
 use std::io::{Cursor, Read, Seek, Write};
 use std::path::{Path, PathBuf};
@@ -525,14 +525,19 @@ pub fn pack_to_asset_bundle(
         })
         .collect::<Vec<Vec<Result<_>>>>();
 
+    let mut references = FxHashMap::default();
     objects.into_iter().try_for_each(|objects| -> Result<_> {
         for obj in objects {
-            let (obj, data) = obj?;
-            builder.objects.insert(obj.m_PathID, (obj, data));
+            let obj = obj?;
+            references.insert(obj.info.m_PathID, obj.references);
+            builder
+                .objects
+                .insert(obj.info.m_PathID, (obj.info, obj.data));
         }
         Ok(())
     })?;
 
+    fill_preload_table(&mut asset_bundle, &references);
     builder.add_object_at(1, &asset_bundle)?;
 
     if enable_typetree {
@@ -570,6 +575,41 @@ pub fn pack_to_asset_bundle(
     bundle_builder.write(writer, compression)?;
 
     Ok(stats)
+}
+
+fn fill_preload_table(asset_bundle: &mut AssetBundle, references: &FxHashMap<PathId, Vec<PathId>>) {
+    let roots: FxHashSet<PathId> = asset_bundle
+        .m_Container
+        .values()
+        .filter(|info| info.asset.is_local())
+        .map(|info| info.asset.m_PathID)
+        .collect();
+
+    for info in asset_bundle.m_Container.values_mut() {
+        // TODO: do external preloads matter?
+        if !info.asset.is_local() {
+            continue;
+        }
+
+        let root = info.asset.m_PathID;
+        let start = asset_bundle.m_PreloadTable.len();
+
+        let mut seen = FxHashSet::default();
+        let mut queue = VecDeque::from([root]);
+        while let Some(id) = queue.pop_front() {
+            if !seen.insert(id) {
+                continue;
+            }
+
+            asset_bundle.m_PreloadTable.push(PPtr::local(id));
+
+            if !roots.contains(&id) || id == root {
+                queue.extend(references.get(&id).into_iter().flatten());
+            }
+        }
+        info.preloadIndex = start as i32;
+        info.preloadSize = (asset_bundle.m_PreloadTable.len() - start) as i32;
+    }
 }
 
 #[inline(never)]
