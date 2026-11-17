@@ -2,15 +2,39 @@ name: Build & Release
 
 on:
   push:
+    branches:
+      - main
     tags:
-      - "*"
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
+  bindings-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-new: ${{ steps.version.outputs.is-new }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check whether the bindings version is released
+        id: version
+        run: |
+          version=$(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.name == "bindings") | .version')
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          status=0
+          git ls-remote --exit-code --tags origin "refs/tags/bindings-v$version" > /dev/null || status=$?
+          case $status in
+            0) echo "is-new=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "is-new=true" >> "$GITHUB_OUTPUT" ;;
+            *) exit "$status" ;;
+          esac
+
   build:
+    needs: bindings-version
+    if: ${{ github.event_name != 'push' || startsWith(github.ref, 'refs/tags/') || needs.bindings-version.outputs.is-new == 'true' }}
     runs-on: ${{ matrix.runner }}
     strategy:
       matrix:
@@ -89,6 +113,7 @@ jobs:
 
   sdist:
     runs-on: ubuntu-latest
+    if: ${{ startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@v7
       - name: Build sdist
@@ -106,10 +131,14 @@ jobs:
     name: Build & Publish nuget package
     # for lipo
     runs-on: macos-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    needs: build
+    if: ${{ github.ref == 'refs/heads/main' && needs.bindings-version.outputs.is-new == 'true' }}
+    needs: [bindings-version, build]
     permissions:
       id-token: write
+      # to tag the release
+      contents: write
+    env:
+      VERSION: ${{ needs.bindings-version.outputs.version }}
 
     steps:
       - uses: actions/checkout@v7
@@ -132,7 +161,7 @@ jobs:
         run: ls -R out
 
       - name: Pack NuGet package
-        run: dotnet pack bindings/dotnet/UnitySceneRepacker.Bindings -c Release -p:Version=${GITHUB_REF_NAME#v} -o .
+        run: dotnet pack bindings/dotnet/UnitySceneRepacker.Bindings -c Release -p:Version="$VERSION" -o .
 
       - name: NuGet login
         id: nuget-login
@@ -141,6 +170,10 @@ jobs:
           user: ${{ secrets.NUGET_USER }}
       - name: Push to NuGet
         run: dotnet nuget push unityscenerepacker.*.nupkg --skip-duplicate --source https://api.nuget.org/v3/index.json --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+      - name: Tag the release
+        run: |
+          git tag "bindings-v$VERSION"
+          git push origin "bindings-v$VERSION"
 
   release:
     name: Build & Publish PyPI wheels
