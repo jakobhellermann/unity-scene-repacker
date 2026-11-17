@@ -39,6 +39,18 @@ ninesols-fx *args:
         --bundle-name bundle \
         {{ args }}
 
+# stub the Addressables assemblies of a game's <game>_Data/Managed into bindings/dotnet/ci-refs, for netstandard2.0
+ci-refs managed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stubs=$(mktemp -d)
+    refasmer --omit-non-api-members true -O "$stubs" "{{ managed }}/Unity.Addressables.dll" "{{ managed }}/Unity.ResourceManager.dll"
+    mkdir -p bindings/dotnet/ci-refs
+    for dll in Unity.Addressables Unity.ResourceManager; do
+        dotnet run bindings/dotnet/tools/retarget.cs -- "$stubs/$dll.dll" "bindings/dotnet/ci-refs/$dll.dll" "{{ managed }}"
+    done
+    rm -r "$stubs"
+
 # pack the nuget package with the native library for this platform into ~/.nuget/local-feed
 nuget-local:
     #!/usr/bin/env bash

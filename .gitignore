@@ -9,6 +9,7 @@
 *.so
 *.a
 *.dll
+!/bindings/dotnet/ci-refs/*.dll
 *.lib
 *.pdb
 

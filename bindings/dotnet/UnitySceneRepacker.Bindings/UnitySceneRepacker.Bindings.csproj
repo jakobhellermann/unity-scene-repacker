@@ -24,7 +24,20 @@
     <!-- directory containing the bindings-<rid> folders of the native builds, bindings-osx being a universal binary -->
     <NativeDir>$(MSBuildThisFileDirectory)../../../out</NativeDir>
     <NativeRids>linux-x64;win-x64;osx</NativeRids>
+
+    <TargetsForTfmSpecificBuildOutput>$(TargetsForTfmSpecificBuildOutput);IncludeAddressables</TargetsForTfmSpecificBuildOutput>
   </PropertyGroup>
+
+  <Target Name="IncludeAddressables">
+    <MSBuild Projects="../UnitySceneRepacker.Addressables/UnitySceneRepacker.Addressables.csproj" Targets="Restore" Properties="Configuration=$(Configuration);RestoreRecursive=false;MSBuildRestoreSessionId=$([System.Guid]::NewGuid())" />
+    <MSBuild Projects="../UnitySceneRepacker.Addressables/UnitySceneRepacker.Addressables.csproj" Targets="Build" Properties="Configuration=$(Configuration);BuildProjectReferences=false">
+      <Output TaskParameter="TargetOutputs" ItemName="AddressablesAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <BuildOutputInPackage Include="@(AddressablesAssembly)" />
+      <BuildOutputInPackage Include="@(AddressablesAssembly->'%(RootDir)%(Directory)%(Filename).xml')" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />

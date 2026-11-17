@@ -1,4 +1,6 @@
 <Project>
+  <!-- Projects that ship one folder for all platforms, like BepInEx plugins on Mono, which loads native libraries next
+       to the assembly instead of from runtimes/, copy @(UnitySceneRepackerFiles) next to their assembly. -->
   <ItemGroup>
     <UnitySceneRepackerFiles Include="$(MSBuildThisFileDirectory)../lib/netstandard2.0/*.dll" />
     <UnitySceneRepackerFiles Include="$(MSBuildThisFileDirectory)../runtimes/*/native/*" />
