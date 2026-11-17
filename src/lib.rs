@@ -292,7 +292,7 @@ fn find_extra_objects(
 
 fn scene_name_display<'a>(scene_name: impl Into<Option<&'a str>>, original_name: &Path) -> String {
     match scene_name.into() {
-        Some(scene_name) => format!("{scene_name} ({})'", original_name.display()),
+        Some(scene_name) => format!("{scene_name} ({})", original_name.display()),
         None => format!("'{}'", original_name.display()),
     }
 }
