@@ -23,15 +23,16 @@
 
     <!-- directory containing the bindings-<rid> folders of the native builds, bindings-osx being a universal binary -->
     <NativeDir>$(MSBuildThisFileDirectory)../../../out</NativeDir>
+    <NativeRids>linux-x64;win-x64;osx</NativeRids>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../README.md" Pack="true" PackagePath="/" />
     <None Include="../unityscenerepacker.targets" Pack="true" PackagePath="buildTransitive/" />
 
-    <None Include="$(NativeDir)/bindings-linux-x64/libunityscenerepacker.so" Pack="true" PackagePath="runtimes/linux-x64/native/" Visible="false" />
-    <None Include="$(NativeDir)/bindings-win-x64/unityscenerepacker.dll" Pack="true" PackagePath="runtimes/win-x64/native/" Visible="false" />
-    <None Include="$(NativeDir)/bindings-osx/libunityscenerepacker.dylib" Pack="true" PackagePath="runtimes/osx/native/" Visible="false" />
+    <None Condition="$(NativeRids.Contains('linux-x64'))" Include="$(NativeDir)/bindings-linux-x64/libunityscenerepacker.so" Pack="true" PackagePath="runtimes/linux-x64/native/" Visible="false" />
+    <None Condition="$(NativeRids.Contains('win-x64'))" Include="$(NativeDir)/bindings-win-x64/unityscenerepacker.dll" Pack="true" PackagePath="runtimes/win-x64/native/" Visible="false" />
+    <None Condition="$(NativeRids.Contains('osx'))" Include="$(NativeDir)/bindings-osx/libunityscenerepacker.dylib" Pack="true" PackagePath="runtimes/osx/native/" Visible="false" />
   </ItemGroup>
 
 </Project>

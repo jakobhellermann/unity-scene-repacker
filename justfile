@@ -38,3 +38,19 @@ ninesols-fx *args:
         --output out/ninesols-by-type.bundle \
         --bundle-name bundle \
         {{ args }}
+
+# pack the nuget package with the native library for this platform into ~/.nuget/local-feed
+nuget-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --release -p bindings
+    metadata=$(cargo metadata --format-version 1 --no-deps)
+    target=$(jq -r .target_directory <<< "$metadata")
+    version=$(jq -r '.packages[] | select(.name == "bindings") | .version' <<< "$metadata")
+    native=$(mktemp -d)
+    mkdir -p "$native/bindings-linux-x64"
+    cp "$target/release/libunityscenerepacker.so" "$native/bindings-linux-x64/"
+    dotnet pack bindings/dotnet/UnitySceneRepacker.Bindings -c Release -o ~/.nuget/local-feed \
+        -p:NativeDir="$native" -p:NativeRids=linux-x64 \
+        -p:Version="$version-dev.$(date +%Y%m%d%H%M%S)"
+    rm -r "$native"
