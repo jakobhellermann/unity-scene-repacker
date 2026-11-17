@@ -21,6 +21,10 @@ hollowknight-dependencies *args:
         --emit-dependency-addressables \
         {{ args }}
 
+check-scripts:
+    cargo run -- check-scripts \
+        out/hk-in-silksong.bundle --steam-game 'Hollow Knight' --target-steam-game silksong
+
 ninesols *args:
     cargo run --release -- \
         --steam-game "nine sols" \
