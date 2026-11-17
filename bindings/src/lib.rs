@@ -162,8 +162,8 @@ fn export_inner(
     let (mut repack_scenes, extra_objects) = unity_scene_repacker::repack_scenes(
         &env,
         repack_settings,
-        disable,
         matches!(mode, Mode::AssetBundle),
+        disable,
     )?;
 
     let enable_typetree = false; // TODO: make this configurable / infer if necessary
