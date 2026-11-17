@@ -13,7 +13,7 @@ use rabex_env::unity::types::{
     AssetBundle, AssetInfo, MonoBehaviour, MonoScript, PreloadData, Transform,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
 use rabex::UnityVersion;
@@ -36,6 +36,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
     pub extra_objects: IndexMap<String, IndexSet<String>>,
+    /// Fail on scene object paths that don't exist, instead of warning and leaving them out
+    pub strict: bool,
 }
 impl RepackSettings {
     pub fn is_empty(&self) -> bool {
@@ -73,6 +75,7 @@ pub fn repack_scenes<'a>(
             let settings = RepackSceneSettings {
                 object_paths,
                 disable_roots,
+                strict: repack_settings.strict,
             };
             repack_scene(
                 env,
@@ -218,6 +221,7 @@ fn collect_what_to_repack<T: Send + Sync>(
 struct RepackSceneSettings<'a> {
     object_paths: &'a [String],
     disable_roots: bool,
+    strict: bool,
 }
 
 fn repack_scene<'a>(
@@ -243,6 +247,22 @@ fn repack_scene<'a>(
         settings.disable_roots,
     )
     .with_context(|| scene_name_display(scene_name, original_name))?;
+    if !result.missing.is_empty() {
+        let missing = format!(
+            "Could not find {} in {}",
+            result
+                .missing
+                .iter()
+                .map(|path| format!("'{path}'"))
+                .collect::<Vec<_>>()
+                .join(", "),
+            scene_name_display(scene_name, original_name)
+        );
+        match settings.strict {
+            true => bail!(missing),
+            false => warn!("{missing}"),
+        }
+    }
 
     let monobehaviour_types = prepare_scripts
         .then(|| prepare_monobehaviour_types(env, &file, reader))
@@ -711,7 +731,14 @@ pub fn pack_to_shallow_asset_bundle(
             let lookup = SceneLookup::new(&file, reader, &env.tpk)?;
             for path in object_paths {
                 let Some((_, transform)) = lookup.lookup_path(reader, path)? else {
-                    warn!("Could not find path '{path}' in {scene_name}");
+                    let missing = format!(
+                        "Could not find '{path}' in {}",
+                        scene_name_display(scene_name, filename)
+                    );
+                    match repack_settings.strict {
+                        true => bail!(missing),
+                        false => warn!("{missing}"),
+                    }
                     continue;
                 };
                 path_ids.push((path.to_owned(), transform.m_GameObject.m_PathID));

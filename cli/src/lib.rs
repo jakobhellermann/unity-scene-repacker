@@ -238,6 +238,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
     let repack_settings = RepackSettings {
         scene_objects,
         extra_objects,
+        strict: false,
     };
 
     if repack_settings.is_empty() {

@@ -804,7 +804,7 @@ dependencies = [
 [[package]]
 name = "rabex-env"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/rabex-env#cd62f0a8d14f23215ec9fe5784916f2b7800b9f9"
+source = "git+https://github.com/jakobhellermann/rabex-env#40d253075d3d9e92c921e2ca6d0ca9d78c2426e9"
 dependencies = [
  "anyhow",
  "base64",
