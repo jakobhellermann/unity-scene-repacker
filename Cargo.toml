@@ -22,6 +22,14 @@ serde = { version = "1.0", default-features = false }
 serde_derive = "1.0"
 serde_json = { version = "1.0", features = ["preserve_order"] }
 
+[dev-dependencies]
+divan = "0.1.21"
+rabex = { workspace = true, features = ["compression-lz4"] }
+
+[[bench]]
+name = "repack"
+harness = false
+
 [workspace]
 members = [".", "bindings", "cli"]
 default-members = [".", "bindings", "cli"]
@@ -51,6 +59,11 @@ strip = true
 opt-level = "s"
 lto = "fat"
 codegen-units = 1
+
+# release, but profilable
+[profile.bench]
+strip = false
+debug = true
 
 # [patch."https://github.com/jakobhellermann/rabex-env"]
 
