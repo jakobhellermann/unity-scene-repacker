@@ -11,6 +11,7 @@ use unity_scene_repacker::dependency_addressables::Dependencies;
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
+use unity_scene_repacker::rewrite_rules::RewriteRule;
 use unity_scene_repacker::{RepackSettings, Stats, dependency_addressables};
 
 #[repr(C)]
@@ -69,6 +70,8 @@ pub struct RepackOptions {
     /// asset bundle: reference the game files the bundle depends on as `deps/<file>.bundle`
     /// (see `dependency_file_bundle`), and return an Addressables catalog for it
     pub emit_catalog: bool,
+    /// asset bundle: see [`rewrite_rules`]
+    pub rewrite_rules: *const c_char,
 }
 
 /// Repacks the objects of `objects_json` (JSON5, scene name to gameobject paths) into a bundle.
@@ -95,7 +98,8 @@ pub unsafe extern "C" fn repack(
         let result = (|| -> Result<_> {
             let name = CStr::from_ptr(name).to_str()?;
             let objects_json = CStr::from_ptr(objects_json).to_str()?;
-            repack_inner(&game.env, name, objects_json, options)
+            let rewrite_rules = rewrite_rules(options.rewrite_rules)?;
+            repack_inner(&game.env, name, objects_json, options, &rewrite_rules)
         })();
         *catalog_size = 0;
         *catalog_data = std::ptr::null_mut();
@@ -134,6 +138,7 @@ fn repack_inner(
     name: &str,
     objects_json: &str,
     options: &RepackOptions,
+    rewrite_rules: &[RewriteRule],
 ) -> Result<RepackResult> {
     let mode = match options.mode {
         0 => Mode::SceneBundle,
@@ -150,6 +155,10 @@ fn repack_inner(
         ensure!(
             !options.emit_catalog,
             "emit_catalog is only supported for asset bundles"
+        );
+        ensure!(
+            rewrite_rules.is_empty(),
+            "rewrite_rules are only supported for asset bundles"
         );
     }
     if matches!(mode, Mode::AssetBundleShallow) {
@@ -224,7 +233,7 @@ fn repack_inner(
         compression,
         options.write_typetrees || options.emit_catalog,
         dependencies.as_ref(),
-        &[],
+        rewrite_rules,
     )?;
 
     let catalog = dependencies
@@ -252,6 +261,7 @@ pub unsafe extern "C" fn dependency_file_bundle(
     game: *const Game,
     file: *const c_char,
     compression: u8,
+    rewrite_rules: *const c_char,
     error: *mut *const c_char,
     bundle_size: *mut c_int,
     bundle_data: *mut *mut u8,
@@ -261,7 +271,8 @@ pub unsafe extern "C" fn dependency_file_bundle(
         let result = (|| -> Result<_> {
             let file = CStr::from_ptr(file).to_str()?;
             let compression = compression_type(compression)?;
-            dependency_addressables::bundle_game_file(&game.env, file, compression, &[])
+            let rewrite_rules = self::rewrite_rules(rewrite_rules)?;
+            dependency_addressables::bundle_game_file(&game.env, file, compression, &rewrite_rules)
                 .with_context(|| format!("bundling {file}"))
         })();
         match result {
@@ -272,6 +283,16 @@ pub unsafe extern "C" fn dependency_file_bundle(
             }
         }
     }
+}
+
+/// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, written into
+/// the MonoBehaviours of those scripts; null for none.
+unsafe fn rewrite_rules(json: *const c_char) -> Result<Vec<RewriteRule>> {
+    if json.is_null() {
+        return Ok(Vec::new());
+    }
+    let json = unsafe { CStr::from_ptr(json) }.to_str()?;
+    json5::from_str(json).context("error parsing the rewrite rules")
 }
 
 /// Only the compressions rabex is built with here, using the same numbering as `CompressionType`

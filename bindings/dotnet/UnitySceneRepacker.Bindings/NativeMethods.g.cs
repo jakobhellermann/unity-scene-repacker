@@ -37,7 +37,7 @@ namespace UnitySceneRepacker
         ///  Builds the bundle `deps/&lt;file&gt;.bundle` referenced by repacked bundles and catalogs.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "dependency_file_bundle", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void dependency_file_bundle(Game* game, byte* file, byte compression, byte** error, int* bundle_size, byte** bundle_data);
+        internal static extern void dependency_file_bundle(Game* game, byte* file, byte compression, byte* rewrite_rules, byte** error, int* bundle_size, byte** bundle_data);
 
         [DllImport(__DllName, EntryPoint = "format_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern uint format_version();
@@ -93,6 +93,10 @@ namespace UnitySceneRepacker
         ///  (see `dependency_file_bundle`), and return an Addressables catalog for it
         /// </summary>
         [MarshalAs(UnmanagedType.U1)] public bool emit_catalog;
+        /// <summary>
+        ///  asset bundle: see [`rewrite_rules`]
+        /// </summary>
+        public byte* rewrite_rules;
     }
 
 

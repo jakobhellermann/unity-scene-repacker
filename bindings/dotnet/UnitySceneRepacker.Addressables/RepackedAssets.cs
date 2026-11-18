@@ -13,8 +13,15 @@ using Debug = UnityEngine.Debug;
 
 namespace UnitySceneRepacker;
 
-/// Objects of another game, repacked on demand into a catalog in `cacheDir`.
-public sealed class RepackedAssets(string gameDir, string cacheDir, string name) : IDisposable {
+/// Objects of another game, repacked on demand into a catalog in `cacheDir`. Everyone sharing a cache must use the
+/// same <paramref name="rewriteRules"/>, as they share the dependency bundles.
+public sealed class RepackedAssets(
+    string gameDir,
+    string cacheDir,
+    string name,
+    IReadOnlyList<RewriteRule>? rewriteRules = null
+) : IDisposable {
+    private readonly IReadOnlyList<RewriteRule> rewriteRules = rewriteRules ?? [];
     private readonly Dictionary<string, SortedSet<string>> requests = new();
 
     private readonly List<AsyncOperationHandle> loaded = [];
@@ -88,13 +95,17 @@ public sealed class RepackedAssets(string gameDir, string cacheDir, string name)
             json,
             new RepackMode.AssetBundle {
                 EmitCatalog = true,
+                RewriteRules = rewriteRules,
             });
         var repackTime = total.Elapsed;
 
         var dependencies = Stopwatch.StartNew();
         var missing = result.DependencyFiles.Where(file => !File.Exists(DependencyPath(depsDir, file))).ToArray();
         // ReSharper disable once AccessToDisposedClosure
-        Parallel.ForEach(missing, file => WriteAtomic(DependencyPath(depsDir, file), game.BuildDependencyFileBundle(file)));
+        Parallel.ForEach(missing, file => WriteAtomic(
+            DependencyPath(depsDir, file),
+            game.BuildDependencyFileBundle(file, rewriteRules: rewriteRules)
+        ));
         var dependencyTime = dependencies.Elapsed;
 
         WriteAtomic(bundlePath, result.Bundle);
@@ -112,7 +123,7 @@ public sealed class RepackedAssets(string gameDir, string cacheDir, string name)
 
     private bool InvalidateIfStale(string depsDir) {
         var fingerprintPath = Path.Combine(cacheDir, "fingerprint");
-        var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}";
+        var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}\n{RewriteRule.ToJson(rewriteRules)}";
         if (File.Exists(fingerprintPath) && File.ReadAllText(fingerprintPath) == fingerprint) return false;
 
         if (Directory.Exists(depsDir)) Directory.Delete(depsDir, true);

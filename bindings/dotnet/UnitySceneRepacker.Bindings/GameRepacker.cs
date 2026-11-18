@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 
@@ -12,6 +15,44 @@ public enum Compression : byte {
 
 /// <summary>An error reported by unity-scene-repacker.</summary>
 public sealed class RepackException(string message) : Exception(message);
+
+/// <summary>
+/// Write a value value into a field of every MonoBehaviour of a script, e.g.
+/// <c>new RewriteRule("PlayMaker", "PlayMakerFSM", "fsm.preprocessed", false)</c>.
+/// </summary>
+public sealed class RewriteRule {
+    /// <summary>Without <c>.dll</c></summary>
+    public string Assembly { get; }
+
+    /// <summary><c>Namespace.Class</c></summary>
+    public string Script { get; }
+
+    /// <summary>Field names from the MonoBehaviour, separated by dots.</summary>
+    public string Field { get; }
+
+    private readonly string valueJson;
+
+    public RewriteRule(string assembly, string script, string field, bool value)
+        : this(assembly, script, field, value ? "true" : "false") { }
+
+    public RewriteRule(string assembly, string script, string field, long value)
+        : this(assembly, script, field, value.ToString(CultureInfo.InvariantCulture)) { }
+
+    private RewriteRule(string assembly, string script, string field, string valueJson) {
+        Assembly = assembly;
+        Script = script;
+        Field = field;
+        this.valueJson = valueJson;
+    }
+
+    internal static string? ToJson(IReadOnlyList<RewriteRule> rules) {
+        if (rules.Count == 0) return null;
+        return "[" + string.Join(",", rules.Select(rule =>
+            $"{{\"assembly\":{Str(rule.Assembly)},\"script\":{Str(rule.Script)},\"field\":{Str(rule.Field)},\"value\":{rule.valueJson}}}")) + "]";
+
+        static string Str(string s) => "\"" + s.Replace(@"\", @"\\").Replace(@"""", @"\""") + "\"";
+    }
+}
 
 /// <summary>The kind of bundle to repack into, with the options specific to it.</summary>
 public abstract class RepackMode {
@@ -44,6 +85,9 @@ public abstract class RepackMode {
         /// Addressables catalog for it, for use in another game. Implies <see cref="WriteTypetrees"/>.
         /// </summary>
         public bool EmitCatalog { get; set; }
+
+        /// <summary>Also apply these to the dependency bundles, see <see cref="GameRepacker.BuildDependencyFileBundle"/>.</summary>
+        public IReadOnlyList<RewriteRule> RewriteRules { get; set; } = [];
 
         internal override RepackOptions ToOptions(Compression compression) => new() {
             mode = 1,
@@ -108,6 +152,7 @@ public sealed unsafe class GameRepacker : IDisposable {
     public RepackResult Repack(string name, string objectsJson, RepackMode mode, Compression compression = Compression.Lz4) {
         var handle = Handle();
         var options = mode.ToOptions(compression);
+        var rewriteRules = mode is RepackMode.AssetBundle assetBundle ? RewriteRule.ToJson(assetBundle.RewriteRules) : null;
         byte* error = null;
         CStats stats;
         int bundleSize, catalogSize;
@@ -115,7 +160,9 @@ public sealed unsafe class GameRepacker : IDisposable {
         byte* catalogData;
         byte* dependencies;
         fixed (byte* namePtr = Utf8(name))
-        fixed (byte* objectsPtr = Utf8(objectsJson)) {
+        fixed (byte* objectsPtr = Utf8(objectsJson))
+        fixed (byte* rewriteRulesPtr = Utf8OrNull(rewriteRules)) {
+            options.rewrite_rules = rewriteRulesPtr;
             NativeMethods.repack(
                 handle,
                 namePtr,
@@ -143,14 +190,20 @@ public sealed unsafe class GameRepacker : IDisposable {
     /// <summary>Builds the bundle <c>deps/{file}.bundle</c> of a game file, as referenced by <see cref="RepackResult.Catalog"/>.</summary>
     /// <param name="file">The game file, e.g. <c>sharedassets0.assets</c>.</param>
     /// <param name="compression">The compression level of the bundle.</param>
+    /// <param name="rewriteRules">The <see cref="RepackMode.AssetBundle.RewriteRules"/> of the bundles referencing it.</param>
     /// <exception cref="RepackException"/>
-    public byte[] BuildDependencyFileBundle(string file, Compression compression = Compression.Lz4) {
+    public byte[] BuildDependencyFileBundle(
+        string file,
+        Compression compression = Compression.Lz4,
+        IReadOnlyList<RewriteRule>? rewriteRules = null
+    ) {
         var handle = Handle();
         byte* error = null;
         int size;
         byte* data;
-        fixed (byte* filePtr = Utf8(file)) {
-            NativeMethods.dependency_file_bundle(handle, filePtr, (byte)compression, &error, &size, &data);
+        fixed (byte* filePtr = Utf8(file))
+        fixed (byte* rewriteRulesPtr = Utf8OrNull(RewriteRule.ToJson(rewriteRules ?? []))) {
+            NativeMethods.dependency_file_bundle(handle, filePtr, (byte)compression, rewriteRulesPtr, &error, &size, &data);
         }
         ThrowIfError(error);
         return TakeArray(size, data);
@@ -178,6 +231,8 @@ public sealed unsafe class GameRepacker : IDisposable {
     }
 
     private static byte[] Utf8(string value) => Encoding.UTF8.GetBytes(value + "\0");
+
+    private static byte[]? Utf8OrNull(string? value) => value == null ? null : Utf8(value);
 
     private static byte[] TakeArray(int size, byte* data) {
         var array = new byte[size];
