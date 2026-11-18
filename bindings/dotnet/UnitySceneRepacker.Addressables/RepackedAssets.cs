@@ -80,13 +80,13 @@ public sealed class RepackedAssets(
 
     private (string catalogPath, string summary) RepackIntoCache() {
         var depsDir = Path.Combine(cacheDir, "deps");
-        var stale = InvalidateIfStale(depsDir);
+        InvalidateIfStale(depsDir);
 
         var json = ToJson(requests);
         var requestsPath = Path.Combine(cacheDir, name + ".requests.json");
         var bundlePath = Path.Combine(cacheDir, name + ".bundle");
         var catalogPath = Path.Combine(cacheDir, name + ".catalog.bin");
-        if (!stale && File.Exists(requestsPath) && File.ReadAllText(requestsPath) == json && File.Exists(bundlePath) && File.Exists(catalogPath))
+        if (File.Exists(requestsPath) && File.ReadAllText(requestsPath) == json && File.Exists(bundlePath) && File.Exists(catalogPath))
             return (catalogPath, $"{name} is up to date");
 
         var total = Stopwatch.StartNew();
@@ -121,16 +121,14 @@ public sealed class RepackedAssets(
 
     private static string DependencyPath(string depsDir, string file) => Path.Combine(depsDir, file + ".bundle");
 
-    private bool InvalidateIfStale(string depsDir) {
+    private void InvalidateIfStale(string depsDir) {
         var fingerprintPath = Path.Combine(cacheDir, "fingerprint");
         var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}\n{RewriteRule.ToJson(rewriteRules)}";
-        if (File.Exists(fingerprintPath) && File.ReadAllText(fingerprintPath) == fingerprint) return false;
+        if (File.Exists(fingerprintPath) && File.ReadAllText(fingerprintPath) == fingerprint) return;
 
-        if (Directory.Exists(depsDir)) Directory.Delete(depsDir, true);
+        if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, true);
         Directory.CreateDirectory(depsDir);
         WriteAtomic(fingerprintPath, Encoding.UTF8.GetBytes(fingerprint));
-
-        return true;
     }
 
     /// Files are replaced instead of overwritten, so a loaded bundle or an interrupted write never sees partial data.
