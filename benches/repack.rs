@@ -8,6 +8,7 @@ use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::Environment;
 use rabex_env::resolver::GameFiles;
 use unity_scene_repacker::dependency_addressables::bundle_game_file;
+use unity_scene_repacker::rewrite_rules::RewriteRule;
 
 fn main() {
     divan::main();
@@ -26,12 +27,27 @@ const FILES: &[&str] = &[
     "resources.assets",
 ];
 
+static PLAYMAKER_RULES: LazyLock<Vec<RewriteRule>> = LazyLock::new(|| {
+    serde_json::from_str(
+        r#"[
+            { "assembly": "PlayMaker", "script": "PlayMakerFSM", "field": "fsm.preprocessed", "value": false },
+            { "assembly": "PlayMaker", "script": "PlayMakerFSM", "field": "eventHandlerComponentsAdded", "value": false }
+        ]"#,
+    )
+    .unwrap()
+});
+
 #[divan::bench(args = FILES, sample_count = 5, sample_size = 1)]
 fn dependency_bundle_lz4(file: &str) -> Vec<u8> {
-    bundle_game_file(&ENV, file, CompressionType::Lz4).unwrap()
+    bundle_game_file(&ENV, file, CompressionType::Lz4, &[]).unwrap()
+}
+
+#[divan::bench(args = FILES, sample_count = 5, sample_size = 1)]
+fn dependency_bundle_lz4_playmaker_rules(file: &str) -> Vec<u8> {
+    bundle_game_file(&ENV, file, CompressionType::Lz4, &PLAYMAKER_RULES).unwrap()
 }
 
 #[divan::bench(args = FILES, sample_count = 5, sample_size = 1)]
 fn dependency_bundle_uncompressed(file: &str) -> Vec<u8> {
-    bundle_game_file(&ENV, file, CompressionType::None).unwrap()
+    bundle_game_file(&ENV, file, CompressionType::None, &[]).unwrap()
 }

@@ -24,6 +24,7 @@ use rabex_env::unity::types::{AssetBundle, AssetInfo, MonoScript};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use rustc_hash::FxHashMap;
 
+use crate::rewrite_rules::{self, RewriteRule};
 use crate::{RepackScene, get_asset_bundle_object_asset_name};
 
 /// Addressables runtime property required to be set to the dependency dir, as `<prefix>.<bundle name>`
@@ -116,7 +117,7 @@ impl Dependencies {
 
         let files = self.files();
         files.par_iter().try_for_each(|file| -> Result<()> {
-            let bundle = bundle_game_file_builder(env, &self.prefix, file)
+            let bundle = bundle_game_file_builder(env, &self.prefix, file, &[])
                 .with_context(|| format!("bundling {file}"))?;
             bundle.write(
                 std::fs::File::create(out_dir.join(bundle_key(file)))?,
@@ -181,6 +182,7 @@ fn bundle_game_file_builder(
     env: &Environment,
     prefix: &str,
     path: &str,
+    rewrite_rules: &[RewriteRule],
 ) -> Result<BundleFileBuilder> {
     let handle = env.load_serialized(path)?;
     let split = needs_split(handle.file);
@@ -208,6 +210,7 @@ fn bundle_game_file_builder(
         )?;
         Ok(env.generate_typetree_for_script(&script)?.clone())
     })?;
+    rewrite_rules::apply(env, &mut builder, rewrite_rules)?;
 
     let cab = cab_name(prefix, path);
     let streams = relocate_streams(&cab, &mut builder)?;
@@ -259,10 +262,11 @@ pub fn bundle_game_file(
     env: &Environment,
     path: &str,
     compression: CompressionType,
+    rewrite_rules: &[RewriteRule],
 ) -> Result<Vec<u8>> {
     let prefix = game_prefix(env)?;
     let mut out = Cursor::new(Vec::new());
-    bundle_game_file_builder(env, &prefix, path)?.write(&mut out, compression)?;
+    bundle_game_file_builder(env, &prefix, path, rewrite_rules)?.write(&mut out, compression)?;
     Ok(out.into_inner())
 }
 

@@ -367,6 +367,7 @@ fn run(args: Vec<OsString>) -> Result<()> {
                         compression,
                         enable_typetree,
                         dependencies.as_ref(),
+                        &[],
                     )?;
                     print_stats(&stats, args.repack.scene_objects.is_some());
                     Ok(())

@@ -1,6 +1,7 @@
 pub mod dependency_addressables;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
+pub mod rewrite_rules;
 pub mod script_check;
 
 pub use rabex;
@@ -471,6 +472,7 @@ pub fn pack_to_asset_bundle(
     compression: CompressionType,
     enable_typetree: bool,
     dependencies: Option<&dependency_addressables::Dependencies>,
+    rewrite_rules: &[rewrite_rules::RewriteRule],
 ) -> Result<Stats> {
     let unity_version = env.unity_version()?;
     if dependencies.is_some() && !extra_objects.is_empty() {
@@ -592,6 +594,7 @@ pub fn pack_to_asset_bundle(
     }
     builder.add_object_at(1, &asset_bundle)?;
 
+    rewrite_rules::apply(env, &mut builder, rewrite_rules)?;
     if enable_typetree {
         let externals = builder.serialized.m_Externals.clone();
         builder.fill_typetrees(unity_version, |script| -> Result<_> {
@@ -600,7 +603,7 @@ pub fn pack_to_asset_bundle(
                 .get_externals_index()
                 .and_then(|index| externals.get(index))
                 .with_context(|| format!("script {script:?} is not in an external file"))?;
-            let script: MonoScript = env
+            let script = env
                 .load_serialized(&external.pathName)?
                 .object_at::<MonoScript>(script.m_PathID)?
                 .read()?;

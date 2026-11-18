@@ -224,6 +224,7 @@ fn repack_inner(
         compression,
         options.write_typetrees || options.emit_catalog,
         dependencies.as_ref(),
+        &[],
     )?;
 
     let catalog = dependencies
@@ -260,7 +261,7 @@ pub unsafe extern "C" fn dependency_file_bundle(
         let result = (|| -> Result<_> {
             let file = CStr::from_ptr(file).to_str()?;
             let compression = compression_type(compression)?;
-            dependency_addressables::bundle_game_file(&game.env, file, compression)
+            dependency_addressables::bundle_game_file(&game.env, file, compression, &[])
                 .with_context(|| format!("bundling {file}"))
         })();
         match result {
