@@ -129,8 +129,7 @@ jobs:
 
   nuget:
     name: Build & Publish nuget package
-    # for lipo
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     if: ${{ github.ref == 'refs/heads/main' && needs.bindings-version.outputs.is-new == 'true' }}
     needs: [bindings-version, build]
     permissions:
@@ -154,8 +153,9 @@ jobs:
 
       - name: Merge macOS libraries into a universal binary
         run: |
+          sudo apt-get install -y llvm
           mkdir out/bindings-osx
-          lipo -create out/bindings-osx-x64/libunityscenerepacker.dylib out/bindings-osx-arm64/libunityscenerepacker.dylib -output out/bindings-osx/libunityscenerepacker.dylib
+          llvm-lipo -create out/bindings-osx-x64/libunityscenerepacker.dylib out/bindings-osx-arm64/libunityscenerepacker.dylib -output out/bindings-osx/libunityscenerepacker.dylib
 
       - name: List built files
         run: ls -R out
