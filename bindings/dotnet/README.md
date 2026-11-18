@@ -40,7 +40,7 @@ class RepackResult {
 ```csharp
 using var hk = new RepackedAssets("/path/to/Hollow Knight", cacheDir, "hk-in-silksong");
 RepackedAsset crawler = hk.Request("Tutorial_01", "_Enemies/Crawler 2");
-yield return hk.ProcessRequests();  // repacks if the requests changed, builds missing dependencies, loads the catalog
+hk.Prepare();                       // optional: start repacking early, instead of on the first Load
 
 var handle = crawler.Load();        // AsyncOperationHandle<GameObject>
 yield return handle;

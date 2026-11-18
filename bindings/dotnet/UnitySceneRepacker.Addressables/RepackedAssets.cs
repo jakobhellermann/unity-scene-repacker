@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using Debug = UnityEngine.Debug;
 
@@ -28,11 +29,13 @@ public sealed class RepackedAssets(
     private readonly Dictionary<string, SortedSet<string>> requests = new();
 
     private readonly List<AsyncOperationHandle> loaded = [];
-    private RepackedCatalog? catalog;
-    private Exception? processFailure;
+    private AsyncOperationHandle<RepackedCatalog> processing;
 
-    /// A gameobject to include in the next <see cref="ProcessRequests"/>.
+    /// A gameobject to include. Everything has to be requested before the first Load or <see cref="Prepare"/>.
     public RepackedAsset Request(string scene, string path) {
+        if (processing.IsValid())
+            throw new InvalidOperationException($"can't request more from {name} after the first Load or Prepare");
+
         if (!requests.TryGetValue(scene, out var paths))
             requests[scene] = paths = new(StringComparer.Ordinal);
 
@@ -40,47 +43,59 @@ public sealed class RepackedAssets(
         return new(this, $"{name}/{scene}/{path}.prefab".ToLowerInvariant());
     }
 
+    /// Starts repacking in the background, so the first Load doesn't have to wait for it.
+    public void Prepare() {
+        if (processing.IsValid()) return;
+
+        var rm = Addressables.ResourceManager;
+        var repack = rm.StartOperation(new RepackOperation(() => {
+            lock (cacheLock) return RepackIntoCache();
+        }), default);
+        processing = rm.CreateChainOperation(repack,
+            op => op.Status == AsyncOperationStatus.Succeeded
+                ? RepackedCatalog.Load(op.Result)
+                : Failed<RepackedCatalog>($"repacking {name}", op.OperationException));
+    }
+
     internal AsyncOperationHandle<GameObject> Load(string key) {
-        if (catalog == null) {
-            throw processFailure != null
-                ? new InvalidOperationException($"processing {name} failed", processFailure)
-                : new InvalidOperationException($"{name} has not been processed");
-        }
-        var handle = Addressables.LoadAssetAsync<GameObject>(key);
+        Prepare();
+        var handle = Addressables.ResourceManager.CreateChainOperation(processing,
+            op => op.Status == AsyncOperationStatus.Succeeded
+                ? Addressables.LoadAssetAsync<GameObject>(key)
+                : Failed<GameObject>($"processing {name}", op.OperationException));
         loaded.RemoveAll(h => !h.IsValid());
         loaded.Add(handle);
         return handle;
     }
 
-    /// Repacks all requests if they changed, builds the missing dependency bundles and (re)loads the catalog.
-    public IEnumerator ProcessRequests() {
-        loaded.RemoveAll(h => !h.IsValid());
-        if (loaded.Count > 0)
-            throw new InvalidOperationException($"{loaded.Count} assets of {name} are still loaded, release them before processing again");
-        catalog?.Dispose();
-        catalog = null;
-        processFailure = null;
+    private static AsyncOperationHandle<T> Failed<T>(string what, Exception cause) =>
+        Addressables.ResourceManager.CreateCompletedOperationWithException<T>(default!, new Exception($"{what} failed", cause));
 
-        var repack = Task.Run(() => {
-            lock (cacheLock) return RepackIntoCache();
-        });
-        yield return new WaitUntil(() => repack.IsCompleted);
-        if (repack.IsFaulted) {
-            processFailure = repack.Exception!.InnerException!;
-            throw processFailure;
+    private sealed class RepackOperation(Func<(string catalogPath, string summary)> repack)
+        : AsyncOperationBase<string>, IUpdateReceiver {
+        private Task<(string catalogPath, string summary)>? task;
+        private bool completed;
+
+        protected override void Execute() => task = Task.Run(repack);
+
+        protected override bool InvokeWaitForCompletion() {
+            ((IAsyncResult)task!).AsyncWaitHandle.WaitOne();
+            Update(0);
+            return true;
         }
 
-        var (catalogPath, summary) = repack.Result;
-        Debug.Log($"[{nameof(RepackedAssets)}] {summary}");
+        public void Update(float unscaledDeltaTime) {
+            if (completed || !task!.IsCompleted) return;
+            completed = true;
 
-        var load = RepackedCatalog.Load(catalogPath);
-        yield return load;
-
-        if (load.Status != AsyncOperationStatus.Succeeded) {
-            processFailure = new($"loading {catalogPath} failed", load.OperationException);
-            throw processFailure;
+            if (task.IsFaulted) {
+                Complete(null!, false, task.Exception!.InnerException!);
+                return;
+            }
+            var (catalogPath, summary) = task.Result;
+            Debug.Log($"[{nameof(RepackedAssets)}] {summary}");
+            Complete(catalogPath, true, errorMsg: null);
         }
-        catalog = load.Result;
     }
 
     private (string catalogPath, string summary) RepackIntoCache() {
@@ -158,8 +173,16 @@ public sealed class RepackedAssets(
     public void Dispose() {
         foreach (var handle in loaded.Where(h => h.IsValid())) Addressables.Release(handle);
         loaded.Clear();
-        catalog?.Dispose();
-        catalog = null;
+
+        if (!processing.IsValid()) return;
+        if (processing.IsDone) ReleaseProcessing(processing);
+        else processing.Completed += ReleaseProcessing;
+        processing = default;
+
+        static void ReleaseProcessing(AsyncOperationHandle<RepackedCatalog> op) {
+            if (op.Status == AsyncOperationStatus.Succeeded) op.Result.Dispose();
+            Addressables.Release(op);
+        }
     }
 }
 
@@ -173,6 +196,6 @@ public sealed class RepackedAsset {
         this.key = key;
     }
 
-    /// Loads the prefab after <see cref="RepackedAssets.ProcessRequests"/>, to be released with <see cref="Addressables.Release(AsyncOperationHandle)"/>.
+    /// Loads the prefab, to be released with <see cref="Addressables.Release(AsyncOperationHandle)"/>.
     public AsyncOperationHandle<GameObject> Load() => owner.Load(key);
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.Initialization;
 using UnityEngine.AddressableAssets.ResourceLocators;
@@ -57,8 +58,11 @@ public sealed class RepackedCatalog : IDisposable {
         string bundleName,
         AsyncOperationHandle<IList<IAssetBundleResource>> scripts
     ) : AsyncOperationBase<RepackedCatalog> {
+        private List<AssetBundleRequest> requests = [];
+        private bool finished;
+
         protected override void Execute() {
-            var requests = scripts.Result.Select(bundle => bundle.GetAssetBundle().LoadAllAssetsAsync()).ToList();
+            requests = scripts.Result.Select(bundle => bundle.GetAssetBundle().LoadAllAssetsAsync()).ToList();
             if (requests.Count == 0) {
                 Finish();
                 return;
@@ -70,12 +74,20 @@ public sealed class RepackedCatalog : IDisposable {
                     if (--pending == 0) Finish();
                 };
             }
-            return;
+        }
 
-            void Finish() {
-                var monoScripts = requests.SelectMany(request => request.allAssets).ToList();
-                Complete(new RepackedCatalog(locator, bundleName, scripts, monoScripts), true, errorMsg: null);
-            }
+        // reading allAssets blocks until the request is done
+        protected override bool InvokeWaitForCompletion() {
+            Finish();
+            return true;
+        }
+
+        private void Finish() {
+            if (finished) return;
+            finished = true;
+
+            var monoScripts = requests.SelectMany(request => request.allAssets).ToList();
+            Complete(new RepackedCatalog(locator, bundleName, scripts, monoScripts), true, errorMsg: null);
         }
     }
 
