@@ -14,13 +14,16 @@ using Debug = UnityEngine.Debug;
 namespace UnitySceneRepacker;
 
 /// Objects of another game, repacked on demand into a catalog in `cacheDir`. Everyone sharing a cache must use the
-/// same <paramref name="rewriteRules"/>, as they share the dependency bundles.
+/// same game and <paramref name="rewriteRules"/>, as they share the dependency bundles.
 public sealed class RepackedAssets(
     string gameDir,
     string cacheDir,
     string name,
     IReadOnlyList<RewriteRule>? rewriteRules = null
 ) : IDisposable {
+    // repacks sharing a cache write the same dependency bundles
+    private static readonly object cacheLock = new();
+
     private readonly IReadOnlyList<RewriteRule> rewriteRules = rewriteRules ?? [];
     private readonly Dictionary<string, SortedSet<string>> requests = new();
 
@@ -58,7 +61,9 @@ public sealed class RepackedAssets(
         catalog = null;
         processFailure = null;
 
-        var repack = Task.Run(RepackIntoCache);
+        var repack = Task.Run(() => {
+            lock (cacheLock) return RepackIntoCache();
+        });
         yield return new WaitUntil(() => repack.IsCompleted);
         if (repack.IsFaulted) {
             processFailure = repack.Exception!.InnerException!;
