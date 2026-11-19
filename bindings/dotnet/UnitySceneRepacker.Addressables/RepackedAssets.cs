@@ -143,7 +143,7 @@ public sealed class RepackedAssets(
 
     private void InvalidateIfStale(string depsDir) {
         var fingerprintPath = Path.Combine(cacheDir, "fingerprint");
-        var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}\n{RewriteRule.ToJson(rewriteRules)}";
+        var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}\n{GameRepacker.GameFingerprint(gameDir)}\n{RewriteRule.ToJson(rewriteRules)}";
         if (File.Exists(fingerprintPath) && File.ReadAllText(fingerprintPath) == fingerprint) return;
 
         if (Directory.Exists(cacheDir)) Directory.Delete(cacheDir, true);

@@ -217,6 +217,17 @@ public sealed unsafe class GameRepacker : IDisposable {
     /// <summary>Version of the generated bundles and catalogs, changes whenever repacking the same input produces different output.</summary>
     public static uint FormatVersion => NativeMethods.format_version();
 
+    /// <exception cref="RepackException">The game could not be found.</exception>
+    internal static string GameFingerprint(string gameDir) {
+        byte* error = null;
+        byte* fingerprint;
+        fixed (byte* dir = Utf8(gameDir)) {
+            fingerprint = NativeMethods.game_fingerprint(dir, &error);
+        }
+        ThrowIfError(error);
+        return TakeString(fingerprint);
+    }
+
     public void Dispose() {
         Free();
         GC.SuppressFinalize(this);

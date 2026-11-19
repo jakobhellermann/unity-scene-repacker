@@ -39,6 +39,12 @@ namespace UnitySceneRepacker
         [DllImport(__DllName, EntryPoint = "dependency_file_bundle", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern void dependency_file_bundle(Game* game, byte* file, byte compression, byte* rewrite_rules, byte** error, int* bundle_size, byte** bundle_data);
 
+        /// <summary>
+        ///  Size and modification time of `globalgamemanagers`, or `data.unity3d` if the game is packed.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "game_fingerprint", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern byte* game_fingerprint(byte* game_dir, byte** error);
+
         [DllImport(__DllName, EntryPoint = "format_version", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern uint format_version();
 

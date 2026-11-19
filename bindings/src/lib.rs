@@ -324,6 +324,36 @@ fn error_string(e: anyhow::Error) -> *const c_char {
     CString::into_raw(CString::new(message).expect("nul bytes were escaped"))
 }
 
+/// Size and modification time of `globalgamemanagers`, or `data.unity3d` if the game is packed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_fingerprint(
+    game_dir: *const c_char,
+    error: *mut *const c_char,
+) -> *mut c_char {
+    let result = (|| -> Result<String> {
+        let game_dir = unsafe { CStr::from_ptr(game_dir) }.to_str()?;
+        let data_dir = GameFiles::probe_dir(Path::new(game_dir))?;
+        let packed = data_dir.join("data.unity3d");
+        let file = match packed.exists() {
+            true => packed,
+            false => data_dir.join("globalgamemanagers"),
+        };
+        let metadata =
+            std::fs::metadata(&file).with_context(|| format!("reading {}", file.display()))?;
+        let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)?;
+        Ok(format!("{} {}", metadata.len(), modified.as_nanos()))
+    })();
+    match result {
+        Ok(fingerprint) => CString::new(fingerprint)
+            .expect("formatted numbers contain no nul bytes")
+            .into_raw(),
+        Err(e) => {
+            unsafe { *error = error_string(e) };
+            std::ptr::null_mut()
+        }
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn format_version() -> u32 {
     unity_scene_repacker::FORMAT_VERSION
