@@ -21,9 +21,18 @@ hollowknight-dependencies *args:
         --emit-dependency-addressables \
         {{ args }}
 
-check-scripts:
+pale-architect *args:
+    cargo run --release -- \
+        --steam-game 'Hollow Knight' \
+        --mode asset \
+        --objects objects/hk-pale-architect.jsonc \
+        --output out/pale-architect.bundle \
+        --emit-dependency-addressables \
+        {{ args }}
+
+check-scripts bundle="out/hk-in-silksong.bundle":
     cargo run -- check-scripts \
-        out/hk-in-silksong.bundle --steam-game 'Hollow Knight' --target-steam-game silksong
+        {{ bundle }} --steam-game 'Hollow Knight' --target-steam-game silksong
 
 ninesols *args:
     cargo run --release -- \
