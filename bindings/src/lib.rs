@@ -285,8 +285,8 @@ pub unsafe extern "C" fn dependency_file_bundle(
     }
 }
 
-/// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, written into
-/// the MonoBehaviours of those scripts; null for none.
+/// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, to rewrite fields, or
+/// `"remap": { "assembly": ..., "script": ... }` instead of field and value to bind another script.
 unsafe fn rewrite_rules(json: *const c_char) -> Result<Vec<RewriteRule>> {
     if json.is_null() {
         return Ok(Vec::new());

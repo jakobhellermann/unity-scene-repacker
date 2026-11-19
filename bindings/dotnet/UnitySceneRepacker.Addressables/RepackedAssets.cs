@@ -15,17 +15,17 @@ using Debug = UnityEngine.Debug;
 namespace UnitySceneRepacker;
 
 /// Objects of another game, repacked on demand into a catalog in `cacheDir`. Everyone sharing a cache must use the
-/// same game and <paramref name="rewriteRules"/>, as they share the dependency bundles.
+/// same game and <paramref name="rewriteRules"/>, as they share the dependency bundles. <paramref name="rewriteRules"/>
+/// is called once, on the first Load or <see cref="Prepare"/>.
 public sealed class RepackedAssets(
     string gameDir,
     string cacheDir,
     string name,
-    IReadOnlyList<RewriteRule>? rewriteRules = null
+    Func<IReadOnlyList<RewriteRule>>? rewriteRules = null
 ) : IDisposable {
     // repacks sharing a cache write the same dependency bundles
     private static readonly object cacheLock = new();
 
-    private readonly IReadOnlyList<RewriteRule> rewriteRules = rewriteRules ?? [];
     private readonly Dictionary<string, SortedSet<string>> requests = new();
 
     private readonly List<AsyncOperationHandle> loaded = [];
@@ -47,9 +47,10 @@ public sealed class RepackedAssets(
     public void Prepare() {
         if (processing.IsValid()) return;
 
+        var rules = rewriteRules?.Invoke() ?? [];
         var rm = Addressables.ResourceManager;
         var repack = rm.StartOperation(new RepackOperation(() => {
-            lock (cacheLock) return RepackIntoCache();
+            lock (cacheLock) return RepackIntoCache(rules);
         }), default);
         processing = rm.CreateChainOperation(repack,
             op => op.Status == AsyncOperationStatus.Succeeded
@@ -98,9 +99,9 @@ public sealed class RepackedAssets(
         }
     }
 
-    private (string catalogPath, string summary) RepackIntoCache() {
+    private (string catalogPath, string summary) RepackIntoCache(IReadOnlyList<RewriteRule> rewriteRules) {
         var depsDir = Path.Combine(cacheDir, "deps");
-        InvalidateIfStale(depsDir);
+        InvalidateIfStale(depsDir, rewriteRules);
 
         var json = ToJson(requests);
         var requestsPath = Path.Combine(cacheDir, name + ".requests.json");
@@ -141,7 +142,7 @@ public sealed class RepackedAssets(
 
     private static string DependencyPath(string depsDir, string file) => Path.Combine(depsDir, file + ".bundle");
 
-    private void InvalidateIfStale(string depsDir) {
+    private void InvalidateIfStale(string depsDir, IReadOnlyList<RewriteRule> rewriteRules) {
         var fingerprintPath = Path.Combine(cacheDir, "fingerprint");
         var fingerprint = $"{GameRepacker.FormatVersion}\n{Path.GetFullPath(gameDir)}\n{GameRepacker.GameFingerprint(gameDir)}\n{RewriteRule.ToJson(rewriteRules)}";
         if (File.Exists(fingerprintPath) && File.ReadAllText(fingerprintPath) == fingerprint) return;

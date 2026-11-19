@@ -17,41 +17,38 @@ public enum Compression : byte {
 public sealed class RepackException(string message) : Exception(message);
 
 /// <summary>
-/// Write a value value into a field of every MonoBehaviour of a script, e.g.
-/// <c>new RewriteRule("PlayMaker", "PlayMakerFSM", "fsm.preprocessed", false)</c>.
+/// A change to every MonoBehaviour of the script <c>Namespace.Class</c> in <c>assembly</c> (without <c>.dll</c>).
 /// </summary>
 public sealed class RewriteRule {
-    /// <summary>Without <c>.dll</c></summary>
-    public string Assembly { get; }
+    private readonly string json;
 
-    /// <summary><c>Namespace.Class</c></summary>
-    public string Script { get; }
-
-    /// <summary>Field names from the MonoBehaviour, separated by dots.</summary>
-    public string Field { get; }
-
-    private readonly string valueJson;
-
-    public RewriteRule(string assembly, string script, string field, bool value)
-        : this(assembly, script, field, value ? "true" : "false") { }
-
-    public RewriteRule(string assembly, string script, string field, long value)
-        : this(assembly, script, field, value.ToString(CultureInfo.InvariantCulture)) { }
-
-    private RewriteRule(string assembly, string script, string field, string valueJson) {
-        Assembly = assembly;
-        Script = script;
-        Field = field;
-        this.valueJson = valueJson;
+    private RewriteRule(string assembly, string script, string actionJson) {
+        json = $"{{\"assembly\":{Str(assembly)},\"script\":{Str(script)},{actionJson}}}";
     }
+
+    /// <summary>
+    /// Write <paramref name="value"/> into <paramref name="field"/>, as field names separated by dots, e.g.
+    /// <c>RewriteRule.SetField("PlayMaker", "PlayMakerFSM", "fsm.preprocessed", false)</c>.
+    /// </summary>
+    public static RewriteRule SetField(string assembly, string script, string field, bool value) =>
+        new(assembly, script, $"\"field\":{Str(field)},\"value\":{(value ? "true" : "false")}");
+
+    /// <inheritdoc cref="SetField(string, string, string, bool)"/>
+    public static RewriteRule SetField(string assembly, string script, string field, long value) =>
+        new(assembly, script, $"\"field\":{Str(field)},\"value\":{value.ToString(CultureInfo.InvariantCulture)}");
+
+    /// <summary>
+    /// Bind the MonoBehaviours to <paramref name="toScript"/> in <paramref name="toAssembly"/> instead.
+    /// </summary>
+    public static RewriteRule RemapScript(string assembly, string script, string toAssembly, string toScript) =>
+        new(assembly, script, $"\"remap\":{{\"assembly\":{Str(toAssembly)},\"script\":{Str(toScript)}}}");
 
     internal static string? ToJson(IReadOnlyList<RewriteRule> rules) {
         if (rules.Count == 0) return null;
-        return "[" + string.Join(",", rules.Select(rule =>
-            $"{{\"assembly\":{Str(rule.Assembly)},\"script\":{Str(rule.Script)},\"field\":{Str(rule.Field)},\"value\":{rule.valueJson}}}")) + "]";
-
-        static string Str(string s) => "\"" + s.Replace(@"\", @"\\").Replace(@"""", @"\""") + "\"";
+        return "[" + string.Join(",", rules.Select(rule => rule.json)) + "]";
     }
+
+    private static string Str(string s) => "\"" + s.Replace(@"\", @"\\").Replace(@"""", @"\""") + "\"";
 }
 
 /// <summary>The kind of bundle to repack into, with the options specific to it.</summary>
