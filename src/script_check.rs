@@ -104,7 +104,7 @@ fn collect_script_usages(
     let mut bundled_files = None;
     let mut usages = BTreeMap::new();
     for entry in bundle.serialized_files() {
-        let data = bundle.read_at_entry(entry)?;
+        let data = bundle.read_entry(entry)?;
         let file = SerializedFile::from_reader(&mut Cursor::new(&data))
             .with_context(|| format!("reading {} in bundle", entry.path))?;
 
