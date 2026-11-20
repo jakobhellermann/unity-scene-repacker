@@ -140,6 +140,14 @@ public sealed class RepackResult(byte[] bundle, byte[]? sceneBundle, byte[]? cat
     public RepackStats Stats { get; } = stats;
 }
 
+/// <summary>The result of <see cref="GameRepacker.Info"/>.</summary>
+public sealed class GameInfo(string bundleVersion, string unityVersion) {
+    /// <summary>The game's version from its player settings, <c>Application.version</c> at runtime.</summary>
+    public string BundleVersion { get; } = bundleVersion;
+
+    public string UnityVersion { get; } = unityVersion;
+}
+
 /// <summary>Main interface for generating repacks.</summary>
 public sealed unsafe class GameRepacker : IDisposable {
     private Game* game;
@@ -227,6 +235,18 @@ public sealed unsafe class GameRepacker : IDisposable {
         }
         ThrowIfError(error);
         return TakeArray(size, data);
+    }
+
+    /// <exception cref="RepackException"/>
+    public GameInfo Info() {
+        var handle = Handle();
+        byte* error = null;
+        byte* bundleVersion = null;
+        byte* unityVersion = null;
+        NativeMethods.game_info(handle, &bundleVersion, &unityVersion, &error);
+        ThrowIfError(error);
+
+        return new GameInfo(TakeString(bundleVersion), TakeString(unityVersion));
     }
 
     private Game* Handle() {

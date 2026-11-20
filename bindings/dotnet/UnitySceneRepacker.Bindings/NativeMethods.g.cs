@@ -24,6 +24,9 @@ namespace UnitySceneRepacker
         [DllImport(__DllName, EntryPoint = "game_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         internal static extern void game_free(Game* game);
 
+        [DllImport(__DllName, EntryPoint = "game_info", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern void game_info(Game* game, byte** bundle_version, byte** unity_version, byte** error);
+
         /// <summary>
         ///  Repacks the objects of `objects_json` (JSON5, scene name to gameobject paths) into a bundle.
         ///

@@ -1,4 +1,5 @@
 pub mod dependency_addressables;
+pub mod game_info;
 mod merge_serialized;
 pub mod monobehaviour_typetree_export;
 pub mod rewrite_rules;

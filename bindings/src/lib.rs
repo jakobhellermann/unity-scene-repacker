@@ -56,6 +56,30 @@ pub unsafe extern "C" fn game_free(game: *mut Game) {
     drop(unsafe { Box::from_raw(game) });
 }
 
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn game_info(
+    game: *const Game,
+    bundle_version: *mut *mut c_char,
+    unity_version: *mut *mut c_char,
+    error: *mut *const c_char,
+) {
+    let game = unsafe { &*game };
+    let result = (|| -> Result<(CString, CString)> {
+        let info = unity_scene_repacker::game_info::game_info(&game.env)?;
+        Ok((
+            CString::new(info.bundle_version)?,
+            CString::new(info.unity_version)?,
+        ))
+    })();
+    match result {
+        Ok((bundle, unity)) => unsafe {
+            *bundle_version = bundle.into_raw();
+            *unity_version = unity.into_raw();
+        },
+        Err(e) => unsafe { *error = error_string(e) },
+    }
+}
+
 /// Options of [`repack`]. Flags that don't apply to `mode` must be false.
 #[repr(C)]
 pub struct RepackOptions {
