@@ -16,6 +16,7 @@ use rabex::files::bundlefile::CompressionType;
 use rabex::tpk::TpkTypeTreeBlob;
 use rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use rabex_env::Environment;
+use rabex_env::addressables::catalog::AddressablesCatalog;
 use rabex_env::resolver::GameFiles;
 use std::ffi::{OsStr, OsString};
 use std::fs::{DirBuilder, File};
@@ -275,11 +276,11 @@ fn run(args: Vec<OsString>) -> Result<()> {
         // Compression::Lzham => CompressionType::Lzham,
     };
 
-    if args.output.write_typetrees && !matches!(args.output.mode, Mode::Asset) {
-        bail!("--write-typetrees is only supported with --mode asset");
+    if args.output.write_typetrees && matches!(args.output.mode, Mode::AssetShallow) {
+        bail!("--write-typetrees is not supported with --mode asset-shallow");
     }
-    if args.output.emit_dependency_addressables && !matches!(args.output.mode, Mode::Asset) {
-        bail!("--emit-dependency-addressables is only supported with --mode asset");
+    if args.output.emit_dependency_addressables && matches!(args.output.mode, Mode::AssetShallow) {
+        bail!("--emit-dependency-addressables is not supported with --mode asset-shallow");
     }
 
     if let Mode::AssetShallow = args.output.mode {
@@ -342,12 +343,29 @@ fn run(args: Vec<OsString>) -> Result<()> {
                 repack_scenes.as_mut_slice(),
                 compression,
                 enable_typetree,
-                None,
+                dependencies.as_ref(),
                 &[],
             )
             .context("trying to repack bundle")?;
+            out.flush()?;
 
             print_stats(&stats, args.repack.scene_objects.is_some());
+
+            if let Some(dependencies) = &dependencies {
+                let out_dir = args
+                    .output
+                    .output
+                    .parent()
+                    .context("--output has no parent directory")?;
+                dependencies.write_bundles(&env, out_dir, compression)?;
+
+                let main_file = output_file_name(&args.output.output)?;
+                write_catalog(
+                    dependencies.scene_catalog(&env, main_file, name)?,
+                    &args.output.output,
+                    name,
+                )?;
+            }
 
             out.get_ref().metadata()?.len() as usize
         }
@@ -392,7 +410,12 @@ fn run(args: Vec<OsString>) -> Result<()> {
             out.flush()?;
 
             if let Some(dependencies) = &dependencies {
-                write_catalog(&env, dependencies, &args.output.output, name)?;
+                let main_file = output_file_name(&args.output.output)?;
+                write_catalog(
+                    dependencies.catalog(&env, main_file, name)?,
+                    &args.output.output,
+                    name,
+                )?;
             }
 
             out.get_ref().metadata()?.len() as usize
@@ -431,16 +454,12 @@ fn print_stats(stats: &Stats, has_scene_objects: bool) {
     }
 }
 
-fn write_catalog(
-    env: &Environment,
-    dependencies: &Dependencies,
-    output: &Path,
-    bundle_name: &str,
-) -> Result<()> {
+fn output_file_name(output: &Path) -> Result<&str> {
     let file_name = output.file_name().context("--output has no file name")?;
-    let file_name = file_name.to_str().context("--output is not valid UTF-8")?;
-    let catalog = dependencies.catalog(env, file_name, bundle_name)?;
+    file_name.to_str().context("--output is not valid UTF-8")
+}
 
+fn write_catalog(catalog: AddressablesCatalog, output: &Path, bundle_name: &str) -> Result<()> {
     std::fs::write(
         output.with_file_name(format!("{bundle_name}.catalog.bin")),
         catalog.to_binary()?,
