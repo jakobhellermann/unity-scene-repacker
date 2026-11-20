@@ -250,7 +250,6 @@ fn run(args: Vec<OsString>) -> Result<()> {
 
     let game_files = GameFiles::probe(&game_dir)?;
     let env = Environment::new(game_files, tpk);
-    let unity_version = env.unity_version()?.clone();
 
     let name = match &args.output.bundle_name {
         Some(name) => name,
@@ -336,13 +335,15 @@ fn run(args: Vec<OsString>) -> Result<()> {
             );
 
             let stats = unity_scene_repacker::pack_to_scene_bundle(
+                &env,
                 &mut out,
                 name,
                 &tpk_blob,
-                &env.tpk,
-                &unity_version,
                 repack_scenes.as_mut_slice(),
                 compression,
+                enable_typetree,
+                None,
+                &[],
             )
             .context("trying to repack bundle")?;
 

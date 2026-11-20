@@ -204,13 +204,15 @@ fn repack_inner(
 
     if !is_asset_bundle {
         let stats = unity_scene_repacker::pack_to_scene_bundle(
+            env,
             &mut bundle,
             name,
             &tpk_blob,
-            &env.tpk,
-            env.unity_version()?,
             repack_scenes.as_mut_slice(),
             compression,
+            false,
+            None,
+            &[],
         )?;
         return Ok(RepackResult {
             stats,

@@ -17,7 +17,6 @@ use rabex_env::unity::types::{
 use anyhow::{Context, Result, bail};
 use indexmap::{IndexMap, IndexSet};
 use log::warn;
-use rabex::UnityVersion;
 use rabex::files::bundlefile::{BundleFileBuilder, CompressionType};
 use rabex::files::serializedfile::FileIdentifier;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
@@ -363,15 +362,19 @@ pub struct Stats {
 }
 
 pub fn pack_to_scene_bundle(
+    env: &Environment,
     writer: impl Write + Seek,
     bundle_name: &str,
     tpk_blob: &TpkTypeTreeBlob,
-    tpk: &impl TypeTreeProvider,
-    unity_version: &UnityVersion,
     scenes: &mut [RepackScene],
     compression: CompressionType,
+    enable_typetree: bool,
+    dependencies: Option<&dependency_addressables::Dependencies>,
+    rewrite_rules: &[rewrite_rules::RewriteRule],
 ) -> Result<Stats> {
     let mut stats = Stats::default();
+    let unity_version = env.unity_version()?;
+    let tpk = &env.tpk;
     let common_offset_map = serializedfile::build_common_offset_map(tpk_blob, unity_version);
 
     let mut asset_bundle = AssetBundle::scene_base(bundle_name);
@@ -404,52 +407,42 @@ pub fn pack_to_scene_bundle(
             Cursor::new(out.into_inner()),
         )?;
 
-        let trimmed = {
-            let serialized = &mut scene.serialized;
+        let serialized = &mut scene.serialized;
+        let data = scene.serialized_data.as_ref();
 
-            let data = scene.serialized_data.as_ref();
+        stats.objects_before += serialized.objects().len();
+        stats.size_before += data.len();
 
-            stats.objects_before += serialized.objects().len();
-            stats.size_before += data.len();
+        serialized.modify_objects(|objects| {
+            objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID));
+        });
+        stats.objects_after += serialized.objects().len();
 
-            serialized.modify_objects(|objects| {
-                objects.retain(|obj| scene.keep_objects.contains(&obj.m_PathID));
-            });
-            stats.objects_after += serialized.objects().len();
-
-            let type_remap = prune_types(serialized);
-
-            let new_objects = serialized.take_objects();
-            let objects = new_objects.into_iter().map(|mut obj| {
-                let data = match scene.replacements.remove(&obj.m_PathID) {
-                    Some(owned) => Cow::Owned(owned),
-                    None => {
-                        let offset = obj.m_Offset as usize;
-                        let size = obj.m_Size as usize;
-                        Cow::Borrowed(&data[offset..offset + size])
-                    }
-                };
-
+        let type_remap = prune_types(serialized);
+        serialized.modify_objects(|objects| {
+            for obj in objects {
                 obj.m_TypeID = type_remap[&obj.m_TypeID];
+            }
+        });
 
-                (obj, data)
-            });
+        let mut file = SerializedFileBuilder::from_serialized(
+            unity_version,
+            serialized,
+            data,
+            tpk,
+            &common_offset_map,
+            serialized.objects().cloned(),
+        );
+        for (path_id, replacement) in scene.replacements.drain() {
+            if let Some((_, data)) = file.objects.get_mut(&path_id) {
+                *data = Cow::Owned(replacement);
+            }
+        }
+        finish_file(env, &mut file, enable_typetree, dependencies, rewrite_rules)?;
 
-            let mut writer = Cursor::new(Vec::new());
-            serializedfile::write_serialized_with_objects(
-                &mut writer,
-                serialized,
-                &common_offset_map,
-                objects,
-            )?;
-            let out = writer.into_inner();
-
-            stats.objects_after += serialized.objects().len();
-            stats.size_after += out.len();
-
-            out
-        };
-        builder.add_file(&scene_hash, Cursor::new(trimmed))?;
+        let out = file.write_vec()?;
+        stats.size_after += out.len();
+        builder.add_file(&scene_hash, Cursor::new(out))?;
     }
 
     builder.write(writer, compression)?;
@@ -594,10 +587,37 @@ pub fn pack_to_asset_bundle(
     }
     builder.add_object_at(1, &asset_bundle)?;
 
-    rewrite_rules::apply(env, &mut builder, rewrite_rules)?;
+    finish_file(
+        env,
+        &mut builder,
+        enable_typetree,
+        dependencies,
+        rewrite_rules,
+    )?;
+
+    let mut out = Vec::new();
+    builder.write(&mut Cursor::new(&mut out))?;
+    stats.size_after += out.len();
+
+    let mut bundle_builder = BundleFileBuilder::unityfs(7, unity_version);
+    bundle_builder.add_file(&format!("CAB-{bundle_name}"), Cursor::new(out))?;
+
+    bundle_builder.write(writer, compression)?;
+
+    Ok(stats)
+}
+
+fn finish_file<P: TypeTreeProvider>(
+    env: &Environment,
+    builder: &mut SerializedFileBuilder<'_, P>,
+    enable_typetree: bool,
+    dependencies: Option<&dependency_addressables::Dependencies>,
+    rewrite_rules: &[rewrite_rules::RewriteRule],
+) -> Result<()> {
+    rewrite_rules::apply(env, builder, rewrite_rules)?;
     if enable_typetree {
         let externals = builder.serialized.m_Externals.clone();
-        builder.fill_typetrees(unity_version, |script| -> Result<_> {
+        builder.fill_typetrees(env.unity_version()?, |script| -> Result<_> {
             let external = script
                 .m_FileID
                 .get_externals_index()
@@ -610,21 +630,10 @@ pub fn pack_to_asset_bundle(
             Ok(env.generate_typetree_for_script(&script)?.clone())
         })?;
     }
-
     if let Some(dependencies) = dependencies {
         dependencies.redirect_externals(env, &mut builder.serialized.m_Externals)?;
     }
-
-    let mut out = Vec::new();
-    builder.write(&mut Cursor::new(&mut out))?;
-    stats.size_after += out.len();
-
-    let mut bundle_builder = BundleFileBuilder::unityfs(7, unity_version);
-    bundle_builder.add_file(&format!("CAB-{bundle_name}"), Cursor::new(out))?;
-
-    bundle_builder.write(writer, compression)?;
-
-    Ok(stats)
+    Ok(())
 }
 
 fn fill_preload_table(asset_bundle: &mut AssetBundle, references: &FxHashMap<PathId, Vec<PathId>>) {
