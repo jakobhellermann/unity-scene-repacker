@@ -10,6 +10,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceLocations;
 using UnityEngine.ResourceManagement.ResourceProviders;
 using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
@@ -78,6 +79,18 @@ public sealed class RepackedAssets(
 
     internal AsyncOperationHandle<SceneInstance> LoadScene(string key, LoadSceneMode mode) =>
         AfterProcessing(() => Addressables.LoadSceneAsync(key, mode));
+
+    internal IResourceLocation Locate(string key, Type type) {
+        Prepare();
+
+        var catalog = processing.WaitForCompletion();
+        if (processing.Status != AsyncOperationStatus.Succeeded)
+            throw new Exception($"processing {name} failed", processing.OperationException);
+
+        if (!catalog.Locator.Locate(key, type, out var locations))
+            throw new KeyNotFoundException($"{key} is not in the catalog of {name}");
+        return locations[0];
+    }
 
     private AsyncOperationHandle<T> AfterProcessing<T>(Func<AsyncOperationHandle<T>> load) {
         Prepare();
@@ -239,4 +252,7 @@ public sealed class RepackedScene {
 
     /// Loads the scene, to be unloaded with <see cref="Addressables.UnloadSceneAsync(AsyncOperationHandle, bool)"/>.
     public AsyncOperationHandle<SceneInstance> Load(LoadSceneMode mode = LoadSceneMode.Single) => owner.LoadScene(key, mode);
+
+    /// The scene's Addressables location. Blocks until it is repacked.
+    public IResourceLocation Locate() => owner.Locate(key, typeof(SceneInstance));
 }
