@@ -44,41 +44,39 @@ pub struct Dependencies {
 }
 
 impl Dependencies {
-    pub fn new(env: &Environment, scenes: &[RepackScene]) -> Result<Self> {
+    /// The dependencies of the objects in `asset_bundle` and of the scenes in `scene_bundle`
+    pub fn new(
+        env: &Environment,
+        asset_bundle: &[RepackScene],
+        scene_bundle: &[RepackScene],
+    ) -> Result<Self> {
         let prefix = game_prefix(env)?;
 
         let scene_lookup = env.build_settings()?.scene_name_lookup();
-        let scene_files = scenes
-            .par_iter()
-            .map(|scene| -> Result<Vec<ExternalPath>> {
-                let index = *scene_lookup.get(&scene.scene_name).with_context(|| {
-                    format!("no scene {} in the build settings", scene.scene_name)
-                })?;
+        let scene_files = |scene: &RepackScene| -> Result<Vec<ExternalPath>> {
+            let index = *scene_lookup
+                .get(&scene.scene_name)
+                .with_context(|| format!("no scene {} in the build settings", scene.scene_name))?;
 
-                Ok(env
-                    .scene_dependency_files(index)?
-                    .into_iter()
-                    .filter(|file| !is_builtin(file))
-                    .collect())
-            })
-            .collect::<Result<Vec<_>>>()?;
+            Ok(env
+                .scene_dependency_files(index)?
+                .into_iter()
+                .filter(|file| !is_builtin(file))
+                .collect())
+        };
 
-        let containers: IndexMap<String, Vec<ExternalPath>> = scenes
+        let mut containers = IndexMap::new();
+        for scene in asset_bundle {
+            let files = scene_files(scene)?;
+            for (scene_path, _) in &scene.roots {
+                let container = get_asset_bundle_object_asset_name(&scene.scene_name, scene_path);
+                containers.insert(container, files.clone());
+            }
+        }
+        let scenes = scene_bundle
             .iter()
-            .zip(&scene_files)
-            .flat_map(|(scene, files)| {
-                scene.roots.iter().map(move |(scene_path, _)| {
-                    let container =
-                        get_asset_bundle_object_asset_name(&scene.scene_name, scene_path);
-                    (container, files.clone())
-                })
-            })
-            .collect();
-        let scenes = scenes
-            .iter()
-            .map(|scene| scene.scene_name.clone())
-            .zip(scene_files)
-            .collect();
+            .map(|scene| Ok((scene.scene_name.clone(), scene_files(scene)?)))
+            .collect::<Result<_>>()?;
 
         Ok(Dependencies {
             prefix,
@@ -90,6 +88,7 @@ impl Dependencies {
     pub fn files(&self) -> IndexSet<&str> {
         self.containers
             .values()
+            .chain(self.scenes.values())
             .flatten()
             .map(String::as_str)
             .collect()
@@ -139,68 +138,25 @@ impl Dependencies {
         })
     }
 
+    /// The catalog of the bundles next to it, keyed by `<name>/<container>` and `<name>/<scene>`.
     pub fn catalog(
         &self,
         env: &Environment,
-        main_file: &str,
-        main_bundle_name: &str,
+        name: &str,
+        asset_bundle: Option<CatalogBundle>,
+        scene_bundle: Option<CatalogBundle>,
     ) -> Result<AddressablesCatalog> {
-        let mut catalog = CatalogBuilder::default();
-        let (main, locations) = self.add_bundles(env, &mut catalog, main_file, main_bundle_name)?;
-
-        for (container, files) in &self.containers {
-            let dependencies = std::iter::once(main)
-                .chain(files.iter().map(|file| locations[file.as_str()]))
-                .collect();
-            catalog.add_asset(
-                &format!("{main_bundle_name}/{container}"),
-                container,
-                AssemblyClass::new(assemblies::CORE_MODULE, "UnityEngine.GameObject"),
-                dependencies,
-            );
-        }
-
-        build_catalog(catalog, main_file)
-    }
-
-    /// The catalog of a scene bundle, keyed by `<main bundle name>/<scene name>`
-    pub fn scene_catalog(
-        &self,
-        env: &Environment,
-        main_file: &str,
-        main_bundle_name: &str,
-    ) -> Result<AddressablesCatalog> {
-        let mut catalog = CatalogBuilder::default();
-        let (main, locations) = self.add_bundles(env, &mut catalog, main_file, main_bundle_name)?;
-
-        for (scene, files) in &self.scenes {
-            let dependencies = std::iter::once(main)
-                .chain(files.iter().map(|file| locations[file.as_str()]))
-                .collect();
-            catalog.add_scene(
-                &format!("{main_bundle_name}/{scene}"),
-                &get_scene_bundle_scene_name(main_bundle_name, scene),
-                dependencies,
-            );
-        }
-
-        build_catalog(catalog, main_file)
-    }
-
-    /// The locations of the main bundle and of each dependency
-    fn add_bundles(
-        &self,
-        env: &Environment,
-        catalog: &mut CatalogBuilder,
-        main_file: &str,
-        main_bundle_name: &str,
-    ) -> Result<(usize, IndexMap<&str, usize>)> {
-        let bundle_dir = format!("{{{PROPERTY_BUNDLE_DIR_PREFIX}.{main_bundle_name}}}");
-        let main = catalog.add_bundle(
-            &format!("{main_bundle_name}.bundle"),
-            &format!("{bundle_dir}/{main_file}"),
-            AssetBundleRequestOptions::new(main_bundle_name),
+        ensure!(
+            asset_bundle.is_some() || self.containers.is_empty(),
+            "repacked objects without an asset bundle"
         );
+        ensure!(
+            scene_bundle.is_some() || self.scenes.is_empty(),
+            "repacked scenes without a scene bundle"
+        );
+
+        let bundle_dir = format!("{{{PROPERTY_BUNDLE_DIR_PREFIX}.{name}}}");
+        let mut catalog = CatalogBuilder::default();
 
         let mut locations = IndexMap::new();
         for file in self.files() {
@@ -215,7 +171,53 @@ impl Dependencies {
             }
             locations.insert(file, location);
         }
-        Ok((main, locations))
+        let dependencies = |bundle: usize, files: &[ExternalPath]| {
+            std::iter::once(bundle)
+                .chain(files.iter().map(|file| locations[file.as_str()]))
+                .collect()
+        };
+
+        if let Some(bundle) = asset_bundle {
+            let location = bundle.add_to(&mut catalog, &bundle_dir);
+            for (container, files) in &self.containers {
+                catalog.add_asset(
+                    &format!("{name}/{container}"),
+                    container,
+                    AssemblyClass::new(assemblies::CORE_MODULE, "UnityEngine.GameObject"),
+                    dependencies(location, files),
+                );
+            }
+        }
+
+        if let Some(bundle) = scene_bundle {
+            let location = bundle.add_to(&mut catalog, &bundle_dir);
+            for (scene, files) in &self.scenes {
+                catalog.add_scene(
+                    &format!("{name}/{scene}"),
+                    &get_scene_bundle_scene_name(bundle.name, scene),
+                    dependencies(location, files),
+                );
+            }
+        }
+
+        Ok(catalog.build(name, &format!("{:032x}", 0)))
+    }
+}
+
+/// A repacked bundle next to its catalog
+pub struct CatalogBundle<'a> {
+    pub file: &'a str,
+    /// `AssetBundle.m_Name`
+    pub name: &'a str,
+}
+
+impl CatalogBundle<'_> {
+    fn add_to(&self, catalog: &mut CatalogBuilder, bundle_dir: &str) -> usize {
+        catalog.add_bundle(
+            self.file,
+            &format!("{bundle_dir}/{}", self.file),
+            AssetBundleRequestOptions::new(self.name),
+        )
     }
 }
 
@@ -310,15 +312,6 @@ pub fn bundle_game_file(
     let mut out = Cursor::new(Vec::new());
     bundle_game_file_builder(env, &prefix, path, rewrite_rules)?.write(&mut out, compression)?;
     Ok(out.into_inner())
-}
-
-fn build_catalog(catalog: CatalogBuilder, main_file: &str) -> Result<AddressablesCatalog> {
-    let stem = Path::new(main_file)
-        .file_stem()
-        .context("main bundle file has no name")?
-        .to_str()
-        .unwrap();
-    Ok(catalog.build(stem, &format!("{:032x}", 0)))
 }
 
 fn bundle_key(file: &str) -> String {

@@ -108,6 +108,37 @@ pub fn repack_scenes<'a>(
     Ok((scenes, extra_objects))
 }
 
+/// The scene with all of its objects
+pub fn repack_whole_scene<'a>(env: &'a Environment, scene_name: &str) -> Result<RepackScene<'a>> {
+    let index = *env
+        .build_settings()?
+        .scene_name_lookup()
+        .get(scene_name)
+        .with_context(|| format!("Scene '{scene_name}' was not found in game files"))?;
+    let original_name = PathBuf::from(format!("level{index}"));
+
+    let serialized_data = env.game_files.read_path(&original_name)?;
+    let serialized = SerializedFile::from_reader(&mut Cursor::new(serialized_data.as_ref()))
+        .with_context(|| {
+            format!(
+                "Could not parse {}",
+                scene_name_display(scene_name, &original_name)
+            )
+        })?;
+    let keep_objects = serialized.objects().map(|info| info.m_PathID).collect();
+
+    Ok(RepackScene {
+        original_name,
+        scene_name: scene_name.to_owned(),
+        serialized,
+        serialized_data,
+        keep_objects,
+        roots: Vec::new(),
+        replacements: FxHashMap::default(),
+        monobehaviour_types: FxHashMap::default(),
+    })
+}
+
 // TODO: this is a mess, refactor it away
 fn collect_what_to_repack<T: Send + Sync>(
     env: &Environment,

@@ -23,7 +23,7 @@ use std::fs::{DirBuilder, File};
 use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
-use unity_scene_repacker::dependency_addressables::Dependencies;
+use unity_scene_repacker::dependency_addressables::{CatalogBundle, Dependencies};
 use unity_scene_repacker::{RepackSettings, Stats};
 
 use crate::utils::friendly_size;
@@ -325,7 +325,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
 
     let enable_typetree = args.output.write_typetrees || args.output.emit_dependency_addressables;
     let dependencies = match args.output.emit_dependency_addressables {
-        true => Some(Dependencies::new(&env, &repack_scenes)?),
+        true => Some(match args.output.mode {
+            Mode::Scene => Dependencies::new(&env, &[], &repack_scenes)?,
+            _ => Dependencies::new(&env, &repack_scenes, &[])?,
+        }),
         false => None,
     };
 
@@ -359,9 +362,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
                     .context("--output has no parent directory")?;
                 dependencies.write_bundles(&env, out_dir, compression)?;
 
-                let main_file = output_file_name(&args.output.output)?;
+                let file = output_file_name(&args.output.output)?;
+                let bundle = CatalogBundle { file, name };
                 write_catalog(
-                    dependencies.scene_catalog(&env, main_file, name)?,
+                    dependencies.catalog(&env, name, None, Some(bundle))?,
                     &args.output.output,
                     name,
                 )?;
@@ -410,9 +414,10 @@ fn run(args: Vec<OsString>) -> Result<()> {
             out.flush()?;
 
             if let Some(dependencies) = &dependencies {
-                let main_file = output_file_name(&args.output.output)?;
+                let file = output_file_name(&args.output.output)?;
+                let bundle = CatalogBundle { file, name };
                 write_catalog(
-                    dependencies.catalog(&env, main_file, name)?,
+                    dependencies.catalog(&env, name, Some(bundle), None)?,
                     &args.output.output,
                     name,
                 )?;

@@ -48,7 +48,11 @@ public sealed class RewriteRule {
         return "[" + string.Join(",", rules.Select(rule => rule.json)) + "]";
     }
 
-    private static string Str(string s) => "\"" + s.Replace(@"\", @"\\").Replace(@"""", @"\""") + "\"";
+    private static string Str(string s) => Json.Str(s);
+}
+
+internal static class Json {
+    internal static string Str(string s) => "\"" + s.Replace(@"\", @"\\").Replace(@"""", @"\""") + "\"";
 }
 
 /// <summary>The kind of bundle to repack into, with the options specific to it.</summary>
@@ -86,6 +90,12 @@ public abstract class RepackMode {
         /// <summary>Also apply these to the dependency bundles, see <see cref="GameRepacker.BuildDependencyFileBundle"/>.</summary>
         public IReadOnlyList<RewriteRule> RewriteRules { get; set; } = [];
 
+        /// <summary>
+        /// Scenes repacked whole into the scene bundle <c>{name}.scenes</c>, keyed <c>{name}/{scene}</c> in the
+        /// catalog. Requires <see cref="EmitCatalog"/>.
+        /// </summary>
+        public IReadOnlyList<string> Scenes { get; set; } = [];
+
         internal override RepackOptions ToOptions(Compression compression) => new() {
             mode = 1,
             compression = (byte)compression,
@@ -114,9 +124,12 @@ public sealed class RepackStats(int objectsBefore, int objectsAfter) {
 }
 
 /// <summary>The result of <see cref="GameRepacker.Repack"/>.</summary>
-public sealed class RepackResult(byte[] bundle, byte[]? catalog, string[] dependencyFiles, RepackStats stats) {
+public sealed class RepackResult(byte[] bundle, byte[]? sceneBundle, byte[]? catalog, string[] dependencyFiles, RepackStats stats) {
     /// <summary>The resulting asset bundle.</summary>
     public byte[] Bundle { get; } = bundle;
+
+    /// <summary>The bundle of <see cref="RepackMode.AssetBundle.Scenes"/>, if there are any.</summary>
+    public byte[]? SceneBundle { get; } = sceneBundle;
 
     /// <summary>The Addressables catalog, with <see cref="RepackMode.AssetBundle.EmitCatalog"/>.</summary>
     public byte[]? Catalog { get; } = catalog;
@@ -149,17 +162,24 @@ public sealed unsafe class GameRepacker : IDisposable {
     public RepackResult Repack(string name, string objectsJson, RepackMode mode, Compression compression = Compression.Lz4) {
         var handle = Handle();
         var options = mode.ToOptions(compression);
-        var rewriteRules = mode is RepackMode.AssetBundle assetBundle ? RewriteRule.ToJson(assetBundle.RewriteRules) : null;
+        var assetBundle = mode as RepackMode.AssetBundle;
+        var rewriteRules = assetBundle == null ? null : RewriteRule.ToJson(assetBundle.RewriteRules);
+        var scenes = assetBundle == null || assetBundle.Scenes.Count == 0
+            ? null
+            : "[" + string.Join(",", assetBundle.Scenes.Select(Json.Str)) + "]";
         byte* error = null;
         CStats stats;
-        int bundleSize, catalogSize;
+        int bundleSize, sceneBundleSize, catalogSize;
         byte* bundleData;
+        byte* sceneBundleData;
         byte* catalogData;
         byte* dependencies;
         fixed (byte* namePtr = Utf8(name))
         fixed (byte* objectsPtr = Utf8(objectsJson))
-        fixed (byte* rewriteRulesPtr = Utf8OrNull(rewriteRules)) {
+        fixed (byte* rewriteRulesPtr = Utf8OrNull(rewriteRules))
+        fixed (byte* scenesPtr = Utf8OrNull(scenes)) {
             options.rewrite_rules = rewriteRulesPtr;
+            options.scenes = scenesPtr;
             NativeMethods.repack(
                 handle,
                 namePtr,
@@ -169,6 +189,8 @@ public sealed unsafe class GameRepacker : IDisposable {
                 &stats,
                 &bundleSize,
                 &bundleData,
+                &sceneBundleSize,
+                &sceneBundleData,
                 &catalogSize,
                 &catalogData,
                 &dependencies
@@ -177,11 +199,12 @@ public sealed unsafe class GameRepacker : IDisposable {
         ThrowIfError(error);
 
         var bundle = TakeArray(bundleSize, bundleData);
+        var sceneBundle = sceneBundleData == null ? null : TakeArray(sceneBundleSize, sceneBundleData);
         var catalog = catalogData == null ? null : TakeArray(catalogSize, catalogData);
         var dependencyFiles = dependencies == null
             ? []
             : TakeString(dependencies).Split(['\n'], StringSplitOptions.RemoveEmptyEntries);
-        return new RepackResult(bundle, catalog, dependencyFiles, new RepackStats(stats.objects_before, stats.objects_after));
+        return new RepackResult(bundle, sceneBundle, catalog, dependencyFiles, new RepackStats(stats.objects_before, stats.objects_after));
     }
 
     /// <summary>Builds the bundle <c>deps/{file}.bundle</c> of a game file, as referenced by <see cref="RepackResult.Catalog"/>.</summary>

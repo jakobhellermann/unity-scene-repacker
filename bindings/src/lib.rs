@@ -7,7 +7,7 @@ use anyhow::{Context as _, Result, bail, ensure};
 use indexmap::IndexMap;
 use rabex_env::Environment;
 use rabex_env::resolver::GameFiles;
-use unity_scene_repacker::dependency_addressables::Dependencies;
+use unity_scene_repacker::dependency_addressables::{CatalogBundle, Dependencies};
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
@@ -72,12 +72,16 @@ pub struct RepackOptions {
     pub emit_catalog: bool,
     /// asset bundle: see [`rewrite_rules`]
     pub rewrite_rules: *const c_char,
+    /// asset bundle with `emit_catalog`: JSON5 array of scene names, repacked whole into the scene bundle
+    /// `<name>.scenes`; null for none
+    pub scenes: *const c_char,
 }
 
 /// Repacks the objects of `objects_json` (JSON5, scene name to gameobject paths) into a bundle.
 ///
 /// With `emit_catalog`, `catalog_data` receives the catalog and `dependencies` the
 /// newline-separated game files the catalog references, otherwise they are set to null.
+/// `scene_bundle_data` receives the bundle of `RepackOptions::scenes`, or null without scenes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn repack(
     game: *const Game,
@@ -88,6 +92,8 @@ pub unsafe extern "C" fn repack(
     stats: *mut CStats,
     bundle_size: *mut c_int,
     bundle_data: *mut *mut u8,
+    scene_bundle_size: *mut c_int,
+    scene_bundle_data: *mut *mut u8,
     catalog_size: *mut c_int,
     catalog_data: *mut *mut u8,
     dependencies: *mut *const c_char,
@@ -99,11 +105,20 @@ pub unsafe extern "C" fn repack(
             let name = CStr::from_ptr(name).to_str()?;
             let objects_json = CStr::from_ptr(objects_json).to_str()?;
             let rewrite_rules = rewrite_rules(options.rewrite_rules)?;
-            repack_inner(&game.env, name, objects_json, options, &rewrite_rules)
+            let scenes = scenes(options.scenes)?;
+            repack_inner(
+                &game.env,
+                name,
+                objects_json,
+                options,
+                &rewrite_rules,
+                &scenes,
+            )
         })();
         *catalog_size = 0;
         *catalog_data = std::ptr::null_mut();
         *dependencies = std::ptr::null();
+        write_null(scene_bundle_size, scene_bundle_data);
         match result {
             Ok(result) => {
                 *stats = CStats {
@@ -111,6 +126,9 @@ pub unsafe extern "C" fn repack(
                     objects_after: result.stats.objects_after as c_int,
                 };
                 write_array(result.bundle, bundle_size, bundle_data);
+                if let Some(scene_bundle) = result.scene_bundle {
+                    write_array(scene_bundle, scene_bundle_size, scene_bundle_data);
+                }
                 if let Some((catalog, files)) = result.catalog {
                     write_array(catalog, catalog_size, catalog_data);
                     *dependencies = CString::new(files.join("\n"))
@@ -129,6 +147,7 @@ pub unsafe extern "C" fn repack(
 struct RepackResult {
     stats: Stats,
     bundle: Vec<u8>,
+    scene_bundle: Option<Vec<u8>>,
     /// The catalog and the game files it references
     catalog: Option<(Vec<u8>, Vec<String>)>,
 }
@@ -139,6 +158,7 @@ fn repack_inner(
     objects_json: &str,
     options: &RepackOptions,
     rewrite_rules: &[RewriteRule],
+    scenes: &[String],
 ) -> Result<RepackResult> {
     let mode = match options.mode {
         0 => Mode::SceneBundle,
@@ -147,6 +167,10 @@ fn repack_inner(
         mode => bail!("Expected 0=SceneBundle, 1=AssetBundle or 2=AssetBundleShallow, got {mode}"),
     };
     let compression = compression_type(options.compression)?;
+    ensure!(
+        options.emit_catalog || scenes.is_empty(),
+        "scenes are only supported with emit_catalog"
+    );
     if !matches!(mode, Mode::AssetBundle) {
         ensure!(
             !options.write_typetrees,
@@ -190,6 +214,7 @@ fn repack_inner(
         return Ok(RepackResult {
             stats,
             bundle: bundle.into_inner(),
+            scene_bundle: None,
             catalog: None,
         });
     }
@@ -217,15 +242,20 @@ fn repack_inner(
         return Ok(RepackResult {
             stats,
             bundle: bundle.into_inner(),
+            scene_bundle: None,
             catalog: None,
         });
     }
 
+    let mut whole_scenes = scenes
+        .iter()
+        .map(|scene| unity_scene_repacker::repack_whole_scene(env, scene))
+        .collect::<Result<Vec<_>>>()?;
     let dependencies = options
         .emit_catalog
-        .then(|| Dependencies::new(env, &repack_scenes))
+        .then(|| Dependencies::new(env, &repack_scenes, &whole_scenes))
         .transpose()?;
-    let stats = unity_scene_repacker::pack_to_asset_bundle(
+    let mut stats = unity_scene_repacker::pack_to_asset_bundle(
         env,
         &mut bundle,
         name,
@@ -238,9 +268,44 @@ fn repack_inner(
         rewrite_rules,
     )?;
 
+    let scene_bundle_name = format!("{name}.scenes");
+    let scene_bundle = match whole_scenes.is_empty() {
+        true => None,
+        false => {
+            let mut out = Cursor::new(Vec::new());
+            let scene_stats = unity_scene_repacker::pack_to_scene_bundle(
+                env,
+                &mut out,
+                &scene_bundle_name,
+                &tpk_blob,
+                &mut whole_scenes,
+                compression,
+                true,
+                dependencies.as_ref(),
+                rewrite_rules,
+            )?;
+            stats.objects_before += scene_stats.objects_before;
+            stats.objects_after += scene_stats.objects_after;
+            Some(out.into_inner())
+        }
+    };
+
     let catalog = dependencies
         .map(|dependencies| -> Result<_> {
-            let catalog = dependencies.catalog(env, &format!("{name}.bundle"), name)?;
+            let asset_file = format!("{name}.bundle");
+            let scene_file = format!("{scene_bundle_name}.bundle");
+            let catalog = dependencies.catalog(
+                env,
+                name,
+                Some(CatalogBundle {
+                    file: &asset_file,
+                    name,
+                }),
+                scene_bundle.is_some().then_some(CatalogBundle {
+                    file: &scene_file,
+                    name: &scene_bundle_name,
+                }),
+            )?;
             let files = dependencies
                 .files()
                 .into_iter()
@@ -253,6 +318,7 @@ fn repack_inner(
     Ok(RepackResult {
         stats,
         bundle: bundle.into_inner(),
+        scene_bundle,
         catalog,
     })
 }
@@ -285,6 +351,14 @@ pub unsafe extern "C" fn dependency_file_bundle(
             }
         }
     }
+}
+
+unsafe fn scenes(json: *const c_char) -> Result<Vec<String>> {
+    if json.is_null() {
+        return Ok(Vec::new());
+    }
+    let json = unsafe { CStr::from_ptr(json) }.to_str()?;
+    json5::from_str(json).context("error parsing the scenes")
 }
 
 /// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, to rewrite fields, or

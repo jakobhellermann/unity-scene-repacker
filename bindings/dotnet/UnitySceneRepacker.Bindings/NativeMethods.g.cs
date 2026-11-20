@@ -29,9 +29,10 @@ namespace UnitySceneRepacker
         ///
         ///  With `emit_catalog`, `catalog_data` receives the catalog and `dependencies` the
         ///  newline-separated game files the catalog references, otherwise they are set to null.
+        ///  `scene_bundle_data` receives the bundle of `RepackOptions::scenes`, or null without scenes.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "repack", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
-        internal static extern void repack(Game* game, byte* name, byte* objects_json, RepackOptions* options, byte** error, CStats* stats, int* bundle_size, byte** bundle_data, int* catalog_size, byte** catalog_data, byte** dependencies);
+        internal static extern void repack(Game* game, byte* name, byte* objects_json, RepackOptions* options, byte** error, CStats* stats, int* bundle_size, byte** bundle_data, int* scene_bundle_size, byte** scene_bundle_data, int* catalog_size, byte** catalog_data, byte** dependencies);
 
         /// <summary>
         ///  Builds the bundle `deps/&lt;file&gt;.bundle` referenced by repacked bundles and catalogs.
@@ -103,6 +104,11 @@ namespace UnitySceneRepacker
         ///  asset bundle: see [`rewrite_rules`]
         /// </summary>
         public byte* rewrite_rules;
+        /// <summary>
+        ///  asset bundle with `emit_catalog`: JSON5 array of scene names, repacked whole into the scene bundle
+        ///  `&lt;name&gt;.scenes`; null for none
+        /// </summary>
+        public byte* scenes;
     }
 
 
