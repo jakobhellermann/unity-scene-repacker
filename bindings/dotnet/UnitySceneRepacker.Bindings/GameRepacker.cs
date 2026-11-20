@@ -150,6 +150,24 @@ public sealed class RepackResult(byte[] bundle, byte[]? sceneBundle, byte[]? cat
     public RepackStats Stats { get; } = stats;
 }
 
+/// <summary>How <see cref="GameRepacker.BuildFileBundle"/> and <see cref="GameRepacker.BuildAddressablesBundle"/> build a bundle.</summary>
+public sealed class BuildBundleOptions {
+    public IReadOnlyList<RewriteRule> RewriteRules { get; set; } = [];
+
+    /// <summary>
+    /// List the assets from the ResourceManager in the container, by their <c>Resources.Load</c> path.
+    /// </summary>
+    public bool ListResources { get; set; }
+
+    /// <summary>Unity class names, e.g. <c>MonoScript</c>, whose objects the file references in other files get copied in.</summary>
+    public IReadOnlyList<string> InlineExternal { get; set; } = [];
+
+    /// <summary>The unity version the bundle should declare, if not the original.</summary>
+    public string? TargetVersion { get; set; }
+
+    public Compression Compression { get; set; } = Compression.Lz4;
+}
+
 /// <summary>The result of <see cref="GameRepacker.Info"/>.</summary>
 public sealed class GameInfo(string bundleVersion, string unityVersion) {
     /// <summary>The game's version from its player settings, <c>Application.version</c> at runtime.</summary>
@@ -250,6 +268,42 @@ public sealed unsafe class GameRepacker : IDisposable {
         fixed (byte* filePtr = Utf8(file))
         fixed (byte* rewriteRulesPtr = Utf8OrNull(RewriteRule.ToJson(rewriteRules ?? []))) {
             NativeMethods.dependency_file_bundle(handle, filePtr, (byte)compression, rewriteRulesPtr, &error, &size, &data);
+        }
+        ThrowIfError(error);
+        return TakeArray(size, data);
+    }
+
+    /// <summary>Bundles a serialized file of the player build on its own, keeping its references to other files.</summary>
+    /// <param name="file">The file, e.g. <c>resources.assets</c>.</param>
+    /// <param name="options">How to build the bundle.</param>
+    /// <exception cref="RepackException"/>
+    public byte[] BuildFileBundle(string file, BuildBundleOptions options) => BuildBundle(0, file, options);
+
+    /// <summary>Rebuilds one of the game's addressables bundles, keeping the name of its file.</summary>
+    /// <param name="bundle">Relative to the addressables build folder (<c>StreamingAssets/aa/&lt;platform&gt;</c>).</param>
+    /// <param name="options">How to build the bundle.</param>
+    /// <exception cref="RepackException"/>
+    public byte[] BuildAddressablesBundle(string bundle, BuildBundleOptions options) => BuildBundle(1, bundle, options);
+
+    private byte[] BuildBundle(byte sourceKind, string source, BuildBundleOptions options) {
+        var handle = Handle();
+        byte* error = null;
+        int size;
+        byte* data;
+        var inlineExternal = options.InlineExternal.Count == 0 ? null : string.Join("\n", options.InlineExternal);
+        fixed (byte* sourcePtr = Utf8(source))
+        fixed (byte* rewriteRulesPtr = Utf8OrNull(RewriteRule.ToJson(options.RewriteRules)))
+        fixed (byte* inlineExternalPtr = Utf8OrNull(inlineExternal))
+        fixed (byte* targetVersionPtr = Utf8OrNull(options.TargetVersion)) {
+            var nativeOptions = new CBuildBundleOptions {
+                source_kind = sourceKind,
+                compression = (byte)options.Compression,
+                list_resources = options.ListResources,
+                rewrite_rules = rewriteRulesPtr,
+                inline_external = inlineExternalPtr,
+                target_version = targetVersionPtr,
+            };
+            NativeMethods.build_bundle(handle, sourcePtr, &nativeOptions, &error, &size, &data);
         }
         ThrowIfError(error);
         return TakeArray(size, data);

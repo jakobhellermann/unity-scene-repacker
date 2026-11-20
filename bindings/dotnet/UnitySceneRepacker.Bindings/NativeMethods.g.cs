@@ -44,6 +44,12 @@ namespace UnitySceneRepacker
         internal static extern void dependency_file_bundle(Game* game, byte* file, byte compression, byte* rewrite_rules, byte** error, int* bundle_size, byte** bundle_data);
 
         /// <summary>
+        ///  Bundles the serialized file or addressables bundle `source` on its own (see `bundle_file`).
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "build_bundle", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern void build_bundle(Game* game, byte* source, CBuildBundleOptions* options, byte** error, int* bundle_size, byte** bundle_data);
+
+        /// <summary>
         ///  Patches that make the objects of the bundle at `bundle_path`, a bundle of `game`, readable
         ///  by Unity `target_version` (see `rabex_convert::compat`), to be freed with `free_patches`.
         /// </summary>
@@ -122,6 +128,40 @@ namespace UnitySceneRepacker
         ///  `&lt;name&gt;.scenes`; null for none
         /// </summary>
         public byte* scenes;
+    }
+
+    /// <summary>
+    ///  Options of [`build_bundle`].
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe partial struct CBuildBundleOptions
+    {
+        /// <summary>
+        ///  0 = serialized file of the player build, 1 = addressables bundle relative to the
+        ///  addressables build folder
+        /// </summary>
+        public byte source_kind;
+        /// <summary>
+        ///  0 = none, 2 = lz4
+        /// </summary>
+        public byte compression;
+        /// <summary>
+        ///  list the assets from the ResourceManager in the container, by their `Resources.Load` path
+        /// </summary>
+        [MarshalAs(UnmanagedType.U1)] public bool list_resources;
+        /// <summary>
+        ///  see [`rewrite_rules`]
+        /// </summary>
+        public byte* rewrite_rules;
+        /// <summary>
+        ///  newline-separated class names, e.g. `MonoScript`, whose objects the file references in
+        ///  other files get copied in; null for none
+        /// </summary>
+        public byte* inline_external;
+        /// <summary>
+        ///  the engine version the bundle declares, null for the game's
+        /// </summary>
+        public byte* target_version;
     }
 
     /// <summary>

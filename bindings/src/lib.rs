@@ -7,8 +7,10 @@ use anyhow::{Context as _, Result, bail, ensure};
 use indexmap::IndexMap;
 use rabex_env::Environment;
 use rabex_env::resolver::GameFiles;
+use unity_scene_repacker::bundle_file::{BundleOptions, BundleSource, bundle_file};
 use unity_scene_repacker::dependency_addressables::{CatalogBundle, Dependencies};
 use unity_scene_repacker::rabex::files::bundlefile::CompressionType;
+use unity_scene_repacker::rabex::objects::ClassId;
 use unity_scene_repacker::rabex::tpk::TpkTypeTreeBlob;
 use unity_scene_repacker::rabex::typetree::typetree_cache::sync::TypeTreeCache;
 use unity_scene_repacker::rewrite_rules::RewriteRule;
@@ -377,6 +379,86 @@ pub unsafe extern "C" fn dependency_file_bundle(
     }
 }
 
+/// Options of [`build_bundle`].
+#[repr(C)]
+pub struct CBuildBundleOptions {
+    /// 0 = serialized file of the player build, 1 = addressables bundle relative to the
+    /// addressables build folder
+    pub source_kind: u8,
+    /// 0 = none, 2 = lz4
+    pub compression: u8,
+    /// list the assets from the ResourceManager in the container, by their `Resources.Load` path
+    pub list_resources: bool,
+    /// see [`rewrite_rules`]
+    pub rewrite_rules: *const c_char,
+    /// newline-separated class names, e.g. `MonoScript`, whose objects the file references in
+    /// other files get copied in; null for none
+    pub inline_external: *const c_char,
+    /// the engine version the bundle declares, null for the game's
+    pub target_version: *const c_char,
+}
+
+/// Bundles the serialized file or addressables bundle `source` on its own (see `bundle_file`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn build_bundle(
+    game: *const Game,
+    source: *const c_char,
+    options: *const CBuildBundleOptions,
+    error: *mut *const c_char,
+    bundle_size: *mut c_int,
+    bundle_data: *mut *mut u8,
+) {
+    unsafe {
+        let game = &*game;
+        let options = &*options;
+        let result = (|| -> Result<_> {
+            let source = CStr::from_ptr(source).to_str()?;
+            let source = match options.source_kind {
+                0 => BundleSource::SerializedFile(source),
+                1 => BundleSource::AddressablesBundle(source),
+                kind => bail!(
+                    "Expected source kind 0=serialized file or 1=addressables bundle, got {kind}"
+                ),
+            };
+
+            let rewrite_rules = rewrite_rules(options.rewrite_rules)?;
+            let inline_external = match options.inline_external.is_null() {
+                true => Vec::new(),
+                false => CStr::from_ptr(options.inline_external)
+                    .to_str()?
+                    .lines()
+                    .map(|class| class.parse::<ClassId>())
+                    .collect::<Result<_, _>>()?,
+            };
+            let target_version = match options.target_version.is_null() {
+                true => None,
+                false => Some(CStr::from_ptr(options.target_version).to_str()?.parse()?),
+            };
+
+            let bundle_options = BundleOptions {
+                rewrite_rules: &rewrite_rules,
+                list_resources: options.list_resources,
+                inline_external: &inline_external,
+                target_version,
+                ..Default::default()
+            };
+
+            let compression = compression_type(options.compression)?;
+            let mut out = Cursor::new(Vec::new());
+            bundle_file(&game.env, source, &bundle_options)?.write(&mut out, compression)?;
+            Ok(out.into_inner())
+        })();
+
+        match result {
+            Ok(bundle) => write_array(bundle, bundle_size, bundle_data),
+            Err(e) => {
+                *error = error_string(e);
+                write_null(bundle_size, bundle_data);
+            }
+        }
+    }
+}
+
 unsafe fn scenes(json: *const c_char) -> Result<Vec<String>> {
     if json.is_null() {
         return Ok(Vec::new());
@@ -455,6 +537,7 @@ pub unsafe extern "C" fn free_patches(count: c_int, patches: *mut CPatch) {
 
 /// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, to rewrite fields, or
 /// `"remap": { "assembly": ..., "script": ... }` instead of field and value to bind another script.
+/// `{ "assembly": ..., "remap_assembly": ... }` binds every script of an assembly to another one.
 unsafe fn rewrite_rules(json: *const c_char) -> Result<Vec<RewriteRule>> {
     if json.is_null() {
         return Ok(Vec::new());
