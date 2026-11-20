@@ -14,15 +14,29 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Deserializer};
 use serde_derive::Deserialize;
 
-/// Change every MonoBehaviour of a script.
 #[derive(Debug, Clone, Deserialize)]
-pub struct RewriteRule {
+#[serde(untagged)]
+pub enum RewriteRule {
+    /// Change every MonoBehaviour of a script.
+    Script {
+        /// Without `.dll`
+        assembly: String,
+        /// `Namespace.Class`
+        script: String,
+        #[serde(flatten)]
+        action: RewriteAction,
+    },
+    /// Bind every script of an assembly to the same-named script in another assembly.
+    Assembly(AssemblyRemap),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AssemblyRemap {
     /// Without `.dll`
     pub assembly: String,
-    /// `Namespace.Class`
-    pub script: String,
-    #[serde(flatten)]
-    pub action: RewriteAction,
+    /// Without `.dll`
+    pub remap_assembly: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,23 +88,35 @@ pub(crate) fn apply<P: TypeTreeProvider>(
     if rules.is_empty() {
         return Ok(());
     }
+
     let mut fields_by_script: FxHashMap<(&str, &str), Vec<(FieldPath, Scalar)>> =
         FxHashMap::default();
-    let mut remaps: FxHashMap<(&str, &str), &ScriptName> = FxHashMap::default();
+    let mut remaps = Remaps::default();
     for rule in rules {
-        let key = (rule.assembly.as_str(), rule.script.as_str());
-        match &rule.action {
-            RewriteAction::Field { field, value } => fields_by_script
-                .entry(key)
+        match rule {
+            RewriteRule::Script {
+                assembly,
+                script,
+                action: RewriteAction::Field { field, value },
+            } => fields_by_script
+                .entry((assembly, script))
                 .or_default()
                 .push((field.clone(), *value)),
-            RewriteAction::Remap { remap } => {
-                if remaps.insert(key, remap).is_some() {
-                    bail!(
-                        "{}:{} is remapped more than once",
-                        rule.assembly,
-                        rule.script
-                    );
+            RewriteRule::Script {
+                assembly,
+                script,
+                action: RewriteAction::Remap { remap },
+            } => {
+                if remaps.scripts.insert((assembly, script), remap).is_some() {
+                    bail!("{assembly}:{script} is remapped more than once");
+                }
+            }
+            RewriteRule::Assembly(AssemblyRemap {
+                assembly,
+                remap_assembly,
+            }) => {
+                if remaps.assemblies.insert(assembly, remap_assembly).is_some() {
+                    bail!("{assembly} is remapped more than once");
                 }
             }
         }
@@ -151,14 +177,22 @@ fn rewrite_fields<P: TypeTreeProvider>(
     Ok(())
 }
 
+#[derive(Default)]
+struct Remaps<'a> {
+    scripts: FxHashMap<(&'a str, &'a str), &'a ScriptName>,
+    /// Applies to the scripts without a remap in `scripts`
+    assemblies: FxHashMap<&'a str, &'a str>,
+}
+
 /// Renames the MonoScripts of `builder`
 fn remap_scripts<P: TypeTreeProvider>(
     builder: &mut SerializedFileBuilder<'_, P>,
-    remaps: &FxHashMap<(&str, &str), &ScriptName>,
+    remaps: &Remaps,
 ) -> Result<()> {
-    if remaps.is_empty() {
+    if remaps.scripts.is_empty() && remaps.assemblies.is_empty() {
         return Ok(());
     }
+
     let script_ids: Vec<PathId> = builder
         .objects
         .values()
@@ -169,27 +203,35 @@ fn remap_scripts<P: TypeTreeProvider>(
     for path_id in script_ids {
         let mut script = read_local_script(builder, path_id)?;
         let full_name = script.full_name();
-        let Some(to) = remaps.get(&(script.assembly_name_base(), &*full_name)) else {
-            continue;
+        let (assembly, class_name) = match remaps
+            .scripts
+            .get(&(script.assembly_name_base(), &*full_name))
+        {
+            Some(to) => (&*to.assembly, Some(&*to.script)),
+            None => match remaps.assemblies.get(script.assembly_name_base()) {
+                Some(&to) => (to, None),
+                None => continue,
+            },
         };
-
-        let (namespace, class) = to.script.rsplit_once('.').unwrap_or(("", &to.script));
-        let (namespace, class) = (namespace.to_owned(), class.to_owned());
 
         // older unity versions include the extension
         let extension = match script.m_AssemblyName.ends_with(".dll") {
             true => ".dll",
             false => "",
         };
-        let assembly = format!("{}{extension}", to.assembly);
+        let assembly = format!("{assembly}{extension}");
 
-        script.m_Name = class.clone();
-        script.m_ClassName = class;
-        script.m_Namespace = namespace;
+        if let Some(to) = class_name {
+            let (namespace, class) = to.rsplit_once('.').unwrap_or(("", to));
+            script.m_Name = class.to_owned();
+            script.m_ClassName = class.to_owned();
+            script.m_Namespace = namespace.to_owned();
+        }
         script.m_AssemblyName = assembly;
 
         builder.replace_object_at(path_id, &script)?;
     }
+
     Ok(())
 }
 

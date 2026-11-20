@@ -17,14 +17,17 @@ public enum Compression : byte {
 public sealed class RepackException(string message) : Exception(message);
 
 /// <summary>
-/// A change to every MonoBehaviour of the script <c>Namespace.Class</c> in <c>assembly</c> (without <c>.dll</c>).
+/// A change to the MonoBehaviours of a script <c>Namespace.Class</c> or assembly (without <c>.dll</c>).
 /// </summary>
 public sealed class RewriteRule {
     private readonly string json;
 
-    private RewriteRule(string assembly, string script, string actionJson) {
-        json = $"{{\"assembly\":{Str(assembly)},\"script\":{Str(script)},{actionJson}}}";
+    private RewriteRule(string json) {
+        this.json = json;
     }
+
+    private RewriteRule(string assembly, string script, string actionJson)
+        : this($"{{\"assembly\":{Str(assembly)},\"script\":{Str(script)},{actionJson}}}") { }
 
     /// <summary>
     /// Write <paramref name="value"/> into <paramref name="field"/>, as field names separated by dots, e.g.
@@ -42,6 +45,13 @@ public sealed class RewriteRule {
     /// </summary>
     public static RewriteRule RemapScript(string assembly, string script, string toAssembly, string toScript) =>
         new(assembly, script, $"\"remap\":{{\"assembly\":{Str(toAssembly)},\"script\":{Str(toScript)}}}");
+
+    /// <summary>
+    /// Bind the MonoBehaviours of every script in <paramref name="assembly"/> to the same-named scripts in
+    /// <paramref name="toAssembly"/>.
+    /// </summary>
+    public static RewriteRule RemapAssembly(string assembly, string toAssembly) =>
+        new($"{{\"assembly\":{Str(assembly)},\"remap_assembly\":{Str(toAssembly)}}}");
 
     internal static string? ToJson(IReadOnlyList<RewriteRule> rules) {
         if (rules.Count == 0) return null;
