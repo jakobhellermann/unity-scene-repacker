@@ -2,7 +2,7 @@
 name = "bindings"
 edition.workspace = true
 # the nuget package version, released on its own when this changes on main
-version = "5.0.0"
+version = "5.1.0"
 
 [lib]
 name = "unityscenerepacker"
