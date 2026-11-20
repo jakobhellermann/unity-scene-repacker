@@ -40,12 +40,15 @@ class RepackResult {
 ```csharp
 using var hk = new RepackedAssets("/path/to/Hollow Knight", cacheDir, "hk-in-silksong");
 RepackedAsset crawler = hk.Request("Tutorial_01", "_Enemies/Crawler 2");
+RepackedScene kingsPass = hk.RequestScene("Tutorial_01");
 hk.Prepare();                       // optional: start repacking early, instead of on the first Load
 
 var handle = crawler.Load();        // AsyncOperationHandle<GameObject>
 yield return handle;
 Object.Instantiate(handle.Result);
 Addressables.Release(handle);
+
+yield return kingsPass.Load(LoadSceneMode.Additive); // AsyncOperationHandle<SceneInstance>
 ```
 
 Alternatively for more flexibility, the lower level `RepackedCatalog` can be used instead.

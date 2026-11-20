@@ -10,6 +10,8 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceProviders;
+using UnityEngine.SceneManagement;
 using Debug = UnityEngine.Debug;
 
 namespace UnitySceneRepacker;
@@ -27,20 +29,33 @@ public sealed class RepackedAssets(
     private static readonly object cacheLock = new();
 
     private readonly Dictionary<string, SortedSet<string>> requests = new();
+    private readonly SortedSet<string> scenes = new(StringComparer.Ordinal);
 
     private readonly List<AsyncOperationHandle> loaded = [];
     private AsyncOperationHandle<RepackedCatalog> processing;
 
     /// A gameobject to include. Everything has to be requested before the first Load or <see cref="Prepare"/>.
     public RepackedAsset Request(string scene, string path) {
-        if (processing.IsValid())
-            throw new InvalidOperationException($"can't request more from {name} after the first Load or Prepare");
+        ThrowIfProcessing();
 
         if (!requests.TryGetValue(scene, out var paths))
             requests[scene] = paths = new(StringComparer.Ordinal);
 
         paths.Add(path);
         return new(this, $"{name}/{scene}/{path}.prefab".ToLowerInvariant());
+    }
+
+    /// A whole scene to include. Everything has to be requested before the first Load or <see cref="Prepare"/>.
+    public RepackedScene RequestScene(string scene) {
+        ThrowIfProcessing();
+
+        scenes.Add(scene);
+        return new(this, $"{name}/{scene}");
+    }
+
+    private void ThrowIfProcessing() {
+        if (processing.IsValid())
+            throw new InvalidOperationException($"can't request more from {name} after the first Load or Prepare");
     }
 
     /// Starts repacking in the background, so the first Load doesn't have to wait for it.
@@ -58,12 +73,18 @@ public sealed class RepackedAssets(
                 : Failed<RepackedCatalog>($"repacking {name}", op.OperationException));
     }
 
-    internal AsyncOperationHandle<GameObject> Load(string key) {
+    internal AsyncOperationHandle<GameObject> Load(string key) =>
+        AfterProcessing(() => Addressables.LoadAssetAsync<GameObject>(key));
+
+    internal AsyncOperationHandle<SceneInstance> LoadScene(string key, LoadSceneMode mode) =>
+        AfterProcessing(() => Addressables.LoadSceneAsync(key, mode));
+
+    private AsyncOperationHandle<T> AfterProcessing<T>(Func<AsyncOperationHandle<T>> load) {
         Prepare();
         var handle = Addressables.ResourceManager.CreateChainOperation(processing,
             op => op.Status == AsyncOperationStatus.Succeeded
-                ? Addressables.LoadAssetAsync<GameObject>(key)
-                : Failed<GameObject>($"processing {name}", op.OperationException));
+                ? load()
+                : Failed<T>($"processing {name}", op.OperationException));
         loaded.RemoveAll(h => !h.IsValid());
         loaded.Add(handle);
         return handle;
@@ -104,11 +125,14 @@ public sealed class RepackedAssets(
         InvalidateIfStale(depsDir, rewriteRules);
 
         var json = ToJson(requests);
+        var requestsContent = $"{json}\n{string.Join("\n", scenes)}";
         var requestsPath = Path.Combine(cacheDir, name + ".requests.json");
         var bundlePath = Path.Combine(cacheDir, name + ".bundle");
+        var sceneBundlePath = Path.Combine(cacheDir, name + ".scenes.bundle");
         var catalogPath = Path.Combine(cacheDir, name + ".catalog.bin");
-        if (File.Exists(requestsPath) && File.ReadAllText(requestsPath) == json && File.Exists(bundlePath) && File.Exists(catalogPath))
-            return (catalogPath, $"{name} is up to date");
+        var upToDate = File.Exists(requestsPath) && File.ReadAllText(requestsPath) == requestsContent
+            && File.Exists(bundlePath) && (scenes.Count == 0 || File.Exists(sceneBundlePath)) && File.Exists(catalogPath);
+        if (upToDate) return (catalogPath, $"{name} is up to date");
 
         var total = Stopwatch.StartNew();
         using var game = new GameRepacker(gameDir);
@@ -117,6 +141,7 @@ public sealed class RepackedAssets(
             new RepackMode.AssetBundle {
                 EmitCatalog = true,
                 RewriteRules = rewriteRules,
+                Scenes = scenes.ToList(),
             });
         var repackTime = total.Elapsed;
 
@@ -130,9 +155,10 @@ public sealed class RepackedAssets(
         var dependencyTime = dependencies.Elapsed;
 
         WriteAtomic(bundlePath, result.Bundle);
+        if (result.SceneBundle != null) WriteAtomic(sceneBundlePath, result.SceneBundle);
         WriteAtomic(catalogPath, result.Catalog!);
         // written last, so an interrupted repack isn't taken as up to date
-        WriteAtomic(requestsPath, Encoding.UTF8.GetBytes(json));
+        WriteAtomic(requestsPath, Encoding.UTF8.GetBytes(requestsContent));
 
         var summary = $"repacked {name} in {total.ElapsedMilliseconds}ms: "
             + $"{result.Stats.ObjectsBefore} -> {result.Stats.ObjectsAfter} objects in {repackTime.TotalMilliseconds:0}ms, "
@@ -199,4 +225,18 @@ public sealed class RepackedAsset {
 
     /// Loads the prefab, to be released with <see cref="Addressables.Release(AsyncOperationHandle)"/>.
     public AsyncOperationHandle<GameObject> Load() => owner.Load(key);
+}
+
+/// A requested scene of <see cref="RepackedAssets"/>.
+public sealed class RepackedScene {
+    private readonly RepackedAssets owner;
+    private readonly string key;
+
+    internal RepackedScene(RepackedAssets owner, string key) {
+        this.owner = owner;
+        this.key = key;
+    }
+
+    /// Loads the scene, to be unloaded with <see cref="Addressables.UnloadSceneAsync(AsyncOperationHandle, bool)"/>.
+    public AsyncOperationHandle<SceneInstance> Load(LoadSceneMode mode = LoadSceneMode.Single) => owner.LoadScene(key, mode);
 }
