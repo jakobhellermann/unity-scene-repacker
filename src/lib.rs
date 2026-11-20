@@ -1,3 +1,4 @@
+pub mod bundle_file;
 pub mod dependency_addressables;
 pub mod game_info;
 mod merge_serialized;
@@ -668,7 +669,10 @@ fn finish_file<P: TypeTreeProvider>(
     Ok(())
 }
 
-fn fill_preload_table(asset_bundle: &mut AssetBundle, references: &FxHashMap<PathId, Vec<PathId>>) {
+pub(crate) fn fill_preload_table(
+    asset_bundle: &mut AssetBundle,
+    references: &FxHashMap<PathId, Vec<PathId>>,
+) {
     let roots: FxHashSet<PathId> = asset_bundle
         .m_Container
         .values()
