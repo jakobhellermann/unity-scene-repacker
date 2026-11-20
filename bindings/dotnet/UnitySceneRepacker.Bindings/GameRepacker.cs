@@ -148,6 +148,14 @@ public sealed class GameInfo(string bundleVersion, string unityVersion) {
     public string UnityVersion { get; } = unityVersion;
 }
 
+/// <summary>A change to a bundle's bytes that keeps their size.</summary>
+public readonly struct BytePatch(long offset, byte[] bytes) {
+    /// <summary>From the start of the bundle's data, past its header and blocks info.</summary>
+    public long Offset { get; } = offset;
+
+    public byte[] Bytes { get; } = bytes;
+}
+
 /// <summary>Main interface for generating repacks.</summary>
 public sealed unsafe class GameRepacker : IDisposable {
     private Game* game;
@@ -247,6 +255,31 @@ public sealed unsafe class GameRepacker : IDisposable {
         ThrowIfError(error);
 
         return new GameInfo(TakeString(bundleVersion), TakeString(unityVersion));
+    }
+
+    /// <summary>Patches that make the objects of one of the game's bundles readable by an older Unity, in the order of their offsets.</summary>
+    /// <param name="bundlePath">The bundle, which has to be stored uncompressed.</param>
+    /// <param name="targetVersion">The Unity version reading the bundle, e.g. <c>2020.2.2f1</c>.</param>
+    /// <exception cref="RepackException"/>
+    public BytePatch[] CompatPatches(string bundlePath, string targetVersion) {
+        var handle = Handle();
+        byte* error = null;
+        int count;
+        CPatch* patches;
+        fixed (byte* pathPtr = Utf8(bundlePath))
+        fixed (byte* versionPtr = Utf8(targetVersion)) {
+            NativeMethods.compat_patches(handle, pathPtr, versionPtr, &error, &count, &patches);
+        }
+        ThrowIfError(error);
+
+        var result = new BytePatch[count];
+        for (var i = 0; i < count; i++) {
+            var bytes = new byte[patches[i].size];
+            Marshal.Copy((IntPtr)patches[i].data, bytes, 0, bytes.Length);
+            result[i] = new BytePatch(patches[i].offset, bytes);
+        }
+        NativeMethods.free_patches(count, patches);
+        return result;
     }
 
     private Game* Handle() {

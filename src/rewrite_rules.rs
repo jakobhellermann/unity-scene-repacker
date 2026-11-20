@@ -8,7 +8,7 @@ use rabex::objects::pptr::{PPtr, PathId};
 use rabex::serde_typetree;
 use rabex::typetree::TypeTreeProvider;
 use rabex_env::Environment;
-use rabex_env::rewrite::{FieldPath, FieldRewriter, FieldValue};
+use rabex_env::rewrite::{FieldPath, Fields, Scalar};
 use rabex_env::unity::types::MonoScript;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Deserializer};
@@ -33,7 +33,7 @@ pub enum RewriteAction {
         #[serde(deserialize_with = "field_path")]
         field: FieldPath,
         #[serde(deserialize_with = "field_value")]
-        value: FieldValue,
+        value: Scalar,
     },
     /// Bind to another script, which reads the serialized fields by name.
     Remap { remap: ScriptName },
@@ -52,7 +52,7 @@ fn field_path<'de, D: Deserializer<'de>>(deserializer: D) -> Result<FieldPath, D
     path.parse().map_err(serde::de::Error::custom)
 }
 
-fn field_value<'de, D: Deserializer<'de>>(deserializer: D) -> Result<FieldValue, D::Error> {
+fn field_value<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Scalar, D::Error> {
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum Value {
@@ -60,8 +60,8 @@ fn field_value<'de, D: Deserializer<'de>>(deserializer: D) -> Result<FieldValue,
         Int(i64),
     }
     Ok(match Value::deserialize(deserializer)? {
-        Value::Bool(bool) => FieldValue::Bool(bool),
-        Value::Int(int) => FieldValue::Int(int),
+        Value::Bool(bool) => Scalar::Bool(bool),
+        Value::Int(int) => Scalar::Int(int),
     })
 }
 
@@ -74,7 +74,7 @@ pub(crate) fn apply<P: TypeTreeProvider>(
     if rules.is_empty() {
         return Ok(());
     }
-    let mut fields_by_script: FxHashMap<(&str, &str), Vec<(FieldPath, FieldValue)>> =
+    let mut fields_by_script: FxHashMap<(&str, &str), Vec<(FieldPath, Scalar)>> =
         FxHashMap::default();
     let mut remaps: FxHashMap<(&str, &str), &ScriptName> = FxHashMap::default();
     for rule in rules {
@@ -104,7 +104,7 @@ pub(crate) fn apply<P: TypeTreeProvider>(
 fn rewrite_fields<P: TypeTreeProvider>(
     env: &Environment,
     builder: &mut SerializedFileBuilder<'_, P>,
-    fields_by_script: &FxHashMap<(&str, &str), Vec<(FieldPath, FieldValue)>>,
+    fields_by_script: &FxHashMap<(&str, &str), Vec<(FieldPath, Scalar)>>,
 ) -> Result<()> {
     if fields_by_script.is_empty() {
         return Ok(());
@@ -132,15 +132,19 @@ fn rewrite_fields<P: TypeTreeProvider>(
             Some(tree) => tree,
             None => env.generate_typetree_for_script(&script)?,
         };
-        let rewriter =
-            FieldRewriter::new(tree, fields).with_context(|| format!("rewriting {full_name}"))?;
-        rewriters.insert(type_id as i32, rewriter);
+        let paths: Vec<FieldPath> = fields.iter().map(|(path, _)| path.clone()).collect();
+        let values: Vec<Scalar> = fields.iter().map(|(_, value)| *value).collect();
+        let fields = Fields::at(tree, &paths).with_context(|| format!("rewriting {full_name}"))?;
+        rewriters.insert(type_id as i32, (fields, values));
     }
 
     for (info, data) in builder.objects.values_mut() {
-        if let Some(rewriter) = rewriters.get(&info.m_TypeID) {
-            rewriter
-                .apply(data)
+        if let Some((fields, values)) = rewriters.get(&info.m_TypeID) {
+            fields
+                .rewrite(data, |current| {
+                    current.copy_from_slice(values);
+                    Ok(())
+                })
                 .with_context(|| format!("rewriting object {}", info.m_PathID))?;
         }
     }

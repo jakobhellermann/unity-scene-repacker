@@ -44,6 +44,16 @@ namespace UnitySceneRepacker
         internal static extern void dependency_file_bundle(Game* game, byte* file, byte compression, byte* rewrite_rules, byte** error, int* bundle_size, byte** bundle_data);
 
         /// <summary>
+        ///  Patches that make the objects of the bundle at `bundle_path`, a bundle of `game`, readable
+        ///  by Unity `target_version` (see `rabex_convert::compat`), to be freed with `free_patches`.
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "compat_patches", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern void compat_patches(Game* game, byte* bundle_path, byte* target_version, byte** error, int* patch_count, CPatch** patches);
+
+        [DllImport(__DllName, EntryPoint = "free_patches", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        internal static extern void free_patches(int count, CPatch* patches);
+
+        /// <summary>
         ///  Size and modification time of `globalgamemanagers`, or `data.unity3d` if the game is packed.
         /// </summary>
         [DllImport(__DllName, EntryPoint = "game_fingerprint", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
@@ -112,6 +122,20 @@ namespace UnitySceneRepacker
         ///  `&lt;name&gt;.scenes`; null for none
         /// </summary>
         public byte* scenes;
+    }
+
+    /// <summary>
+    ///  A change to a bundle's bytes that keeps their size.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal unsafe partial struct CPatch
+    {
+        /// <summary>
+        ///  From the start of the bundle's data, past its header and blocks info.
+        /// </summary>
+        public long offset;
+        public int size;
+        public byte* data;
     }
 
 

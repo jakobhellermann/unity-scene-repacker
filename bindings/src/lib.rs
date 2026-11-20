@@ -385,6 +385,74 @@ unsafe fn scenes(json: *const c_char) -> Result<Vec<String>> {
     json5::from_str(json).context("error parsing the scenes")
 }
 
+/// A change to a bundle's bytes that keeps their size.
+#[repr(C)]
+pub struct CPatch {
+    /// From the start of the bundle's data, past its header and blocks info.
+    pub offset: i64,
+    pub size: c_int,
+    pub data: *mut u8,
+}
+
+/// Patches that make the objects of the bundle at `bundle_path`, a bundle of `game`, readable
+/// by Unity `target_version` (see `rabex_convert::compat`), to be freed with `free_patches`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn compat_patches(
+    game: *const Game,
+    bundle_path: *const c_char,
+    target_version: *const c_char,
+    error: *mut *const c_char,
+    patch_count: *mut c_int,
+    patches: *mut *mut CPatch,
+) {
+    unsafe {
+        let game = &*game;
+        let result = (|| -> Result<_> {
+            let path = CStr::from_ptr(bundle_path).to_str()?;
+            let target = CStr::from_ptr(target_version).to_str()?.parse()?;
+
+            let file = std::fs::File::open(path).with_context(|| format!("opening {path}"))?;
+            // the bundle is a game file, which nothing writes while the game runs
+            let bundle = memmap2::Mmap::map(&file)?;
+
+            let source = game.env.unity_version()?;
+            rabex_convert::compat::bundle_patches(&bundle, source, &target, &game.env.tpk)
+                .with_context(|| format!("patching {path}"))
+        })();
+
+        match result {
+            Ok(result) => {
+                let out: Box<[CPatch]> = result
+                    .patches
+                    .into_iter()
+                    .map(|patch| CPatch {
+                        offset: patch.offset as i64,
+                        size: patch.bytes.len() as c_int,
+                        data: Box::into_raw(patch.bytes.into_boxed_slice()).cast(),
+                    })
+                    .collect();
+                *patch_count = out.len() as c_int;
+                *patches = Box::into_raw(out).cast();
+            }
+            Err(e) => {
+                *error = error_string(e);
+                *patch_count = 0;
+                *patches = std::ptr::null_mut();
+            }
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn free_patches(count: c_int, patches: *mut CPatch) {
+    unsafe {
+        let patches = Box::from_raw(std::ptr::slice_from_raw_parts_mut(patches, count as usize));
+        for patch in patches {
+            free_array(patch.size, patch.data);
+        }
+    }
+}
+
 /// JSON5 `[{ "assembly": "Assembly-CSharp", "script": "Namespace.Class", "field": "a.b", "value": 0 }]`, to rewrite fields, or
 /// `"remap": { "assembly": ..., "script": ... }` instead of field and value to bind another script.
 unsafe fn rewrite_rules(json: *const c_char) -> Result<Vec<RewriteRule>> {

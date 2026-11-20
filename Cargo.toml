@@ -51,7 +51,8 @@ rabex = { version = "0.3", default-features = false, features = [
   "embed-tpk",
   # "serde_path_to_error", nicer errors for debugging, at a 2x speed cost
 ] }
-rabex-env = { git = "https://github.com/jakobhellermann/rabex-env" }
+rabex-env = { git = "https://github.com/jakobhellermann/rabex-env", branch = "convert" }
+rabex-convert = { git = "https://github.com/jakobhellermann/rabex-env", branch = "convert", default-features = false }
 
 # smaller, and with lto not slower than the default opt-level 3
 [profile.release]

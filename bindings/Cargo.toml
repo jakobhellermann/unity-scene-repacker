@@ -15,6 +15,8 @@ json5 = "1.3"
 unity-scene-repacker = { version = "3.0", path = ".." }
 rabex = { workspace = true, default-features = false, features = ["embed-tpk", "compression-lz4"] }
 rabex-env.workspace = true
+rabex-convert.workspace = true
+memmap2 = "0.9"
 
 [build-dependencies]
 csbindgen = "1.9"

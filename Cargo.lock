@@ -96,7 +96,9 @@ dependencies = [
  "csbindgen",
  "indexmap",
  "json5",
+ "memmap2",
  "rabex",
+ "rabex-convert",
  "rabex-env",
  "unity-scene-repacker",
 ]
@@ -688,6 +690,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "ordered-float"
+version = "2.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68f19d67e5a2795c94e73e0bb1cc1a7edeb2e28efd39e2e1c9b7a40c1108b11c"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "paris"
 version = "1.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -852,9 +863,9 @@ dependencies = [
 
 [[package]]
 name = "rabex"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "671fd58b80dfd29ce1eadbaf6b57bd06a27615a522906a75eadb917047f5580f"
+checksum = "62451f4bd34edb4af563ba750299a6d783fb855c1078108b8ce1d8d7b60fbd19"
 dependencies = [
  "bitflags",
  "byteorder",
@@ -864,15 +875,30 @@ dependencies = [
  "lzma-rs",
  "md4",
  "num_enum",
+ "rayon",
  "rustc-hash",
  "serde",
  "serde_derive",
 ]
 
 [[package]]
+name = "rabex-convert"
+version = "0.1.0"
+source = "git+https://github.com/jakobhellermann/rabex-env?branch=convert#33995cddb79ee979d4c60e8a1ad83acb96e6dd16"
+dependencies = [
+ "anyhow",
+ "byteorder",
+ "indexmap",
+ "rabex",
+ "rabex-env",
+ "serde",
+ "serde-value",
+]
+
+[[package]]
 name = "rabex-env"
 version = "0.1.0"
-source = "git+https://github.com/jakobhellermann/rabex-env#d9c39822cbba60501d2f406a06876526184ef5fb"
+source = "git+https://github.com/jakobhellermann/rabex-env?branch=convert#33995cddb79ee979d4c60e8a1ad83acb96e6dd16"
 dependencies = [
  "anyhow",
  "base64",
@@ -1045,6 +1071,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "serde-value"
+version = "0.7.0"
+source = "git+https://github.com/jakobhellermann/serde-value?branch=preserve-order#d7a6443ef187355f27ff5be15e6a0c5f4ebd4d70"
+dependencies = [
+ "indexmap",
+ "ordered-float",
+ "serde",
 ]
 
 [[package]]
@@ -1294,9 +1330,9 @@ dependencies = [
 
 [[package]]
 name = "unity-typetree-gen"
-version = "0.4.1"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01115ade8a599ea2c58a1c30952554a2bfd6824b227873515a51089cf1c67fc3"
+checksum = "b3775fc9b1ff7eff2cb718760af999f085595340c853c30de69bb522f5eb0bbb"
 dependencies = [
  "dotnetdll",
  "elsa",

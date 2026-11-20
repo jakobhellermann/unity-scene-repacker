@@ -5,7 +5,7 @@ use rabex::files::serializedfile::ObjectInfo;
 use rabex::files::serializedfile::builder::SerializedFileBuilder;
 use rabex::objects::pptr::{FileId, PPtr, PathId};
 use rabex::typetree::{TypeTreeNode, TypeTreeProvider};
-use rabex_env::trace_pptr::map_pptrs_inplace;
+use rabex_env::trace_pptr::{NoRefTypes, map_pptrs_inplace};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::borrow::Cow;
 use std::fmt::Debug;
@@ -117,6 +117,7 @@ pub fn remap_objects(
             object_data.to_mut().as_mut_slice(),
             tt,
             file.m_Header.m_Endianess,
+            &NoRefTypes,
             |node, pptr| {
                 if pptr.is_null() {
                     return Ok(pptr);
