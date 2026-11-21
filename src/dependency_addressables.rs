@@ -318,11 +318,11 @@ fn bundle_key(file: &str) -> String {
     format!("deps/{file}.bundle")
 }
 
-/// The prefix of the bundle entries of `env`'s game files
+/// The prefix of the bundle entries of `env`'s game files, unique per game bundle version.
 fn game_prefix(env: &Environment) -> Result<String> {
-    Ok(env
-        .app_info()?
-        .name
+    let name = &env.app_info()?.name;
+    let version = crate::game_info::game_info(env)?.bundle_version;
+    Ok(format!("{name}_{version}")
         .to_lowercase()
         .replace(|c: char| !c.is_ascii_alphanumeric(), "_"))
 }

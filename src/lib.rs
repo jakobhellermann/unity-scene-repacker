@@ -35,7 +35,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// Version of the generated bundles and catalogs, bumped whenever repacking the same input produces different output.
-pub const FORMAT_VERSION: u32 = 1;
+pub const FORMAT_VERSION: u32 = 2;
 
 pub struct RepackSettings {
     pub scene_objects: IndexMap<String, Vec<String>>,
