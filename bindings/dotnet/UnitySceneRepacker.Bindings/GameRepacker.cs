@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -344,6 +345,25 @@ public sealed unsafe class GameRepacker : IDisposable {
         }
         NativeMethods.free_patches(count, patches);
         return result;
+    }
+
+    /// <summary>
+    /// Opens one of the game's UnityFS v8 bundles as v7 declaring <paramref name="targetVersion"/>, with its
+    /// <see cref="CompatPatches"/> applied, for a Unity that reads UnityFS only up to v7.
+    /// </summary>
+    /// <param name="bundlePath">The bundle, which has to be stored uncompressed.</param>
+    /// <param name="targetVersion">The Unity version reading the bundle, e.g. <c>2020.2.2f1</c>.</param>
+    /// <exception cref="RepackException"/>
+    public UnityFsV8AsV7Stream OpenV8AsV7(string bundlePath, string targetVersion) {
+        var patches = CompatPatches(bundlePath, targetVersion);
+
+        var file = new FileStream(bundlePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        try {
+            return new UnityFsV8AsV7Stream(file, UnityFsHeader.Read(file), targetVersion, patches);
+        } catch {
+            file.Dispose();
+            throw;
+        }
     }
 
     private Game* Handle() {
